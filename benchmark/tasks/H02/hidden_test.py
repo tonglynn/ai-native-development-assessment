@@ -9,7 +9,7 @@ from ledgerly.models import Invoice, LineItem, Payment, Subscription
 UTC = timezone.utc
 SGT = timezone(timedelta(hours=8))
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
-from ledgerly.parsing import parse_amount
+from ledgerly.importers import parse_amount
 
 
 def test_func_parses():

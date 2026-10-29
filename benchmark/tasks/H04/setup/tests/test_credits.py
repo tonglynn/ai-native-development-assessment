@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from ledgerly.credits import issue_credit_note
+from ledgerly.adjustments import issue_credit_note
 from ledgerly.models import Invoice, LineItem
 
 

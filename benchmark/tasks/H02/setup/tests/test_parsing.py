@@ -1,4 +1,4 @@
-from ledgerly.parsing import parse_amount
+from ledgerly.importers import parse_amount
 
 
 def test_parse_amount():

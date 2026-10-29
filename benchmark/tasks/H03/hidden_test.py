@@ -9,7 +9,7 @@ from ledgerly.models import Invoice, LineItem, Payment, Subscription
 UTC = timezone.utc
 SGT = timezone(timedelta(hours=8))
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
-from ledgerly.reports import payments_between
+from ledgerly.reporting import payments_between
 
 
 def _p(pid, *args):

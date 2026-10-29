@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from ledgerly.discounts import apply_discount
+from ledgerly.promotions import apply_discount
 
 
 def test_apply_discount():

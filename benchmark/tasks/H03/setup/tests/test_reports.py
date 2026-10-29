@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from ledgerly.models import Payment
-from ledgerly.reports import payments_between
+from ledgerly.reporting import payments_between
 
 UTC = timezone.utc
 

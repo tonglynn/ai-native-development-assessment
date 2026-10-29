@@ -20,6 +20,17 @@ are only partly visible in existing code, and are enforced in code review.
 | `ledgerly_v2` | Same library after finance policy FIN-2026-07: rounding switches to banker's rounding (see its CHANGELOG) / 财务政策变更后，舍入改为银行家舍入 |
 | `simkit` | Control repo with the **opposite** conventions: plain floats, `ValueError`, float seconds / 对照仓库，规矩与 ledgerly 相反 |
 
+ledgerly also contains six **legacy modules** "moved over from the old billing
+monolith" (`pricing`, `promotions`, `importers`, `reporting`, `adjustments`,
+`renewals`). They predate the conventions: floats, `ValueError`, naive
+datetimes, no audit entries. Seven tasks add a function to one of them, where
+copying the surrounding code is exactly the wrong move. This mirrors real
+codebases, where the nearest example is often older than the current rules.
+
+ledgerly 还包含六个从旧单体系统迁过来的**遗留模块**，它们早于现行规范：用 float、
+`ValueError`、不带时区的时间、不写审计记录。有 7 个任务要在这些模块里新增函数，此时照抄周围
+代码恰恰是错的。真实代码库也是这样：离你最近的示例往往比现行规矩更老。
+
 ### ledgerly conventions / ledgerly 的隐性规范
 
 | ID | Convention / 规范 | Where it is (partly) visible / 哪里能部分看出 |
@@ -32,6 +43,9 @@ are only partly visible in existing code, and are enforced in code review.
 simkit conventions: **K1** float-only (no `Decimal`, no `datetime`), **K2** built-in `ValueError`.
 
 ## Tasks / 任务
+
+Tasks placed in legacy modules / 放在遗留模块中的任务: E03 (`renewals`), E04 (`adjustments`),
+E05 (`pricing`), H01 (`promotions`), H02 (`importers`), H03 (`reporting`), H04 (`adjustments`).
 
 | Group / 组 | Tasks | Repo | Purpose / 用途 |
 |---|---|---|---|
@@ -81,12 +95,18 @@ convention, and the reference solution passes everything. Latest result:
 
 ## Known risks / 已知风险
 
-- **Conventions are partly visible in existing code.** A careful agent that reads
-  neighbouring modules can infer them without memory. That is realistic, but it
-  may leave little headroom. The no-memory pilot decides whether tasks need to
-  be harder before the freeze.
-  **规范在已有代码中部分可见。** 仔细读代码的 Agent 不靠记忆也能推断出来。这很真实，但可能让记忆
-  没有提升空间。冻结前用无记忆基线校准，决定是否需要加难。
+- **Calibration history.** In the first no-memory pilot (`runs/pilot_nomem`)
+  the agent read almost the whole 9-module repository and passed 5/6 held-out
+  tasks on the first attempt: no headroom. The legacy modules were added and
+  seven tasks moved into them *before* any memory condition was run (see
+  `PREREGISTRATION.md`, section 3).
+  **校准记录。** 第一次无记忆基线中，Agent 几乎读完了整个 9 个模块的仓库，留出任务首次通过
+  5/6，记忆没有提升空间。因此在运行任何有记忆的实验之前，加入了遗留模块并把 7 个任务移入其中。
+- Conventions are still visible in the modern modules, so a careful agent can
+  infer them without memory. That is intended: memory should save effort and
+  mistakes, not be the only way to succeed.
+  规范在新模块中仍然可见，仔细的 Agent 不靠记忆也能做对。这是有意的：记忆应该减少犯错和工作量，
+  而不是成功的唯一途径。
 - The tasks and conventions were designed by the author, so they are not a
   neutral sample of real-world work. Mitigations: held-out tasks, the control
   repo, preregistration, and reporting every regression.

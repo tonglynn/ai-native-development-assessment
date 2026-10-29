@@ -9,7 +9,7 @@ from ledgerly.models import Invoice, LineItem, Payment, Subscription
 UTC = timezone.utc
 SGT = timezone(timedelta(hours=8))
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
-from ledgerly.subscriptions import next_renewal
+from ledgerly.renewals import next_renewal
 
 
 SUB = Subscription("sub_1", "cus_1", Decimal("30.00"), 30, T0)

@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from ledgerly.tax import add_tax
+from ledgerly.pricing import add_tax
 
 
 def test_add_tax():

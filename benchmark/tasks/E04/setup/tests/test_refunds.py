@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from ledgerly.models import Payment
-from ledgerly.refunds import refund
+from ledgerly.adjustments import refund
 
 T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
 

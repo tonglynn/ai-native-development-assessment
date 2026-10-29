@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from ledgerly.models import Subscription
-from ledgerly.subscriptions import next_renewal
+from ledgerly.renewals import next_renewal
 
 
 def test_next_renewal():
