@@ -57,7 +57,9 @@ not kept; this applies to all three systems equally. Check 2
 (`runs/distill_check2`) no longer shows the problem. A third gate condition was
 then added to Attest before the freeze (decision D17): every note must point to
 the added line of the verified diff that applies it. Check 3
-(`runs/distill_check3`) shows what this costs.
+(`runs/distill_check3`) exposed a format bug in the new check (the model copies the
+diff's `+` markers into its snippet); after the fix, check 4 (`runs/distill_check4`)
+shows what the stricter gate costs.
 
 写入环节检查：冻结前，把第三次基线中 E01–E06 的无记忆轨迹交给三种记忆系统的学习步骤（真实模型），
 没有任何 Agent 带记忆运行。第一次检查发现有经验描述了只存在于未合并改动中的代码；修复方式是在三种

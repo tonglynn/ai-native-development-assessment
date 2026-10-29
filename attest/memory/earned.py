@@ -36,7 +36,7 @@ from .. import llm
 from ..benchmark import Task
 from .base import MemorySystem, Retrieved, experience_packet
 from .store import EventStore
-from .text import normalise, rank, related
+from .text import jaccard, normalise, rank, related
 
 MAX_SHOWN = 6
 VISIBLE = ("active", "suspect")
@@ -159,12 +159,25 @@ class EarnedMemory(MemorySystem):
             events.append(self.store.append("update", id=item_id, fields=fields, reason=reason))
         return events
 
+    def retract(self, item_id: str, reason: str, by: str = "human") -> dict:
+        """A person withdraws a note. It stays in the log as retired, with who and why."""
+        if item_id not in self.store.items():
+            raise KeyError(item_id)
+        return self.store.append("update", id=item_id, fields={"status": "retired", "retracted_by": by},
+                                 reason=f"retracted by {by}: {reason}")
+
     # ------------------------------------------------------------------ write path
 
-    def learn(self, task: Task, repo_version: str, run: dict, transcript: str, diff: str) -> list[dict]:
+    def learn(self, task: Task, repo_version: str, run: dict, transcript: str, diff: str,
+              candidates: list[dict] | None = None) -> list[dict]:
+        """Distill (or accept proposed) candidates and admit those that pass the gate.
+
+        ``candidates`` lets a caller that is itself a model (e.g. an agent using the MCP
+        server) propose notes; they go through exactly the same gate."""
         if self.gate and not run["final_pass"]:
             return [self.store.append("reject", task_id=task.id, candidate=None, reason="task not verified: nothing is learned")]
-        data = llm.complete_json(DISTILL_SYSTEM, experience_packet(task, repo_version, run, transcript, diff))
+        data = ({"candidates": candidates} if candidates is not None
+                else llm.complete_json(DISTILL_SYSTEM, experience_packet(task, repo_version, run, transcript, diff)))
         corpus = normalise("\n".join(run["attempts"][0]["review_comments"]) + "\n" + diff)
         added = normalise("\n".join(line[1:] for line in diff.splitlines() if line.startswith("+") and not line.startswith("+++")))
         events = []
@@ -192,7 +205,9 @@ class EarnedMemory(MemorySystem):
             return "missing evidence quote"
         if quote not in corpus:
             return "evidence quote not found verbatim in the review comments or the diff"
-        applied = normalise(cand.get("applied_in_diff") or "")
+        # Accept the snippet with or without the diff's "+" markers (models often copy them).
+        snippet = "\n".join(line[1:] if line.startswith("+") else line for line in (cand.get("applied_in_diff") or "").splitlines())
+        applied = normalise(snippet)
         if len(applied) < 10 or applied not in added:
             return "not applied in the verified change: no added line of the diff matches applied_in_diff"
         return ""
@@ -204,7 +219,11 @@ class EarnedMemory(MemorySystem):
         if existing:
             listing = [{"id": it["id"], "title": it["title"], "content": it["content"]} for it in existing]
             prompt = json.dumps({"new": {"title": cand.get("title"), "content": cand["content"]}, "existing": listing}, ensure_ascii=False)
-            data = llm.complete_json(RELATE_SYSTEM, prompt)
+            try:
+                data = llm.complete_json(RELATE_SYSTEM, prompt)
+            except Exception:  # noqa: BLE001 - no model available: fall back to lexical duplicate detection
+                data = {"relations": [{"id": it["id"], "relation": "duplicate"} for it in existing
+                                      if jaccard(cand["content"], it["content"]) >= 0.6]}
             relations = {r.get("id"): r.get("relation") for r in data.get("relations") or [] if isinstance(r, dict)}
         evidence = {"task_id": task.id, "version": repo_version, "quote": cand.get("evidence_quote", ""), "verified": run["final_pass"]}
 

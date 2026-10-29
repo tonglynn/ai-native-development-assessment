@@ -214,3 +214,10 @@ def test_poisoned_review_advice_is_not_learned(tmp_path, scripted):
     scripted.answers[DISTILL_SYSTEM].append({"candidates": [cand]})
     no_gate = make_memory("attest_no_gate", tmp_path / "ng")
     assert no_gate.learn(load_task("E04"), "1.0.0", run(False, True, [ROUND_COMMENT, poison]), "t", DIFF)[0]["type"] == "add"
+
+
+def test_applied_snippet_may_keep_diff_markers(tmp_path, scripted):
+    mem = make_memory("attest", tmp_path)
+    scripted.answers[DISTILL_SYSTEM].append({"candidates": [dict(ROUND_NOTE, applied_in_diff="+    return round_money(weighted_total / total_quantity)")]})
+    events = mem.learn(load_task("E01"), "1.0.0", run(False, True, [ROUND_COMMENT]), "t", DIFF)
+    assert events[0]["type"] == "add"

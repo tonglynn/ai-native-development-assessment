@@ -89,6 +89,21 @@ def cmd_stress(args) -> int:
     return 0
 
 
+def cmd_notes(args) -> int:
+    from . import mcp_server
+
+    for note in mcp_server.list_notes(args.repo, include_inactive=True):
+        print(f"{note['id']}  [{note['status']}]  {note['title']}: {note['content']}")
+    return 0
+
+
+def cmd_retract(args) -> int:
+    from . import mcp_server
+
+    print(json.dumps(mcp_server.retract(args.repo, args.note, args.reason)))
+    return 0
+
+
 def cmd_summary(args) -> int:
     results = [json.loads(p.read_text()) for p in sorted(Path(args.path).rglob("result.json"))]
     if not results:
@@ -149,6 +164,16 @@ def main(argv=None) -> int:
     p.add_argument("--parallel", type=int, default=5)
     p.add_argument("--thinking", default=Settings().thinking, choices=["off", "low", "high"])
     p.set_defaults(fn=cmd_stress)
+
+    p = sub.add_parser("notes", help="list the Attest notes kept for a git repository (MCP prototype store)")
+    p.add_argument("--repo", required=True)
+    p.set_defaults(fn=cmd_notes)
+
+    p = sub.add_parser("retract", help="a person withdraws a note (kept in the log as retired)")
+    p.add_argument("--repo", required=True)
+    p.add_argument("--note", required=True)
+    p.add_argument("--reason", required=True)
+    p.set_defaults(fn=cmd_retract)
 
     p = sub.add_parser("summary", help="summarise results under a runs/ directory")
     p.add_argument("path")
