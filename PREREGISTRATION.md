@@ -46,7 +46,7 @@ run before the freeze. Changes made because of the pilots:
 | `runs/pilot_nomem` | 5/6 | The 9-module repository was small enough to read whole; the agent copied conventions from neighbouring code | Added six legacy modules that predate the conventions; moved E03–E05 and H01–H04 into them |
 | `runs/pilot2_nomem` | 5/6 | The agent searched for conventions (`grep -rn round_money`) rather than copying legacy code: conventions visible anywhere in the code are discovered | Added review-only conventions C5 (idempotency) and C6 (approval threshold) to E04, E06, H04, H06; added stale task S04 |
 | `runs/pilot3_nomem` | **3/6** | Target reached. Discoverable conventions C1–C4 satisfied in 23/27 first-attempt checks; review-only C5–C6 in 0/7. H06 failed even after review because the agent read "must accept a keyword-only `idempotency_key`" as *required* | Reworded the C5 review comment to "optional keyword-only `idempotency_key=None`" (affects attempt 2 only). Added held-out tasks H07–H10 (6 → 10) to reduce the small-sample problem |
-| `runs/pilot4_nomem` (held-out only) | *(pending)* | | |
+| `runs/pilot4_nomem` (held-out only) | **4/10** | Still in range. Discoverable C1–C4 satisfied in 20/21 first-attempt checks, review-only C5–C6 in 0/7; every failure was fixed after one review | None. Benchmark frozen as is |
 
 **Write-path check.** Before freezing, the no-memory trajectories of E01–E06
 from pilot 3 were fed through each memory system's `learn()` step with the real
