@@ -1,0 +1,14 @@
+--- a/ledgerly/payments.py
++++ b/ledgerly/payments.py
+@@ -20,4 +20,10 @@
+ 
+ def capture(payment: Payment, at: datetime) -> Payment:
+     """Capture an authorized payment."""
+-    raise NotImplementedError
++    if payment.status != "authorized":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    captured_at = ensure_utc(at)
++    payment.status = "captured"
++    payment.captured_at = captured_at
++    audit.record("payment_captured", payment_id=payment.id, amount=payment.amount)
++    return payment
