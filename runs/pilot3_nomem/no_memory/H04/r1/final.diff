@@ -1,0 +1,63 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,14 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from decimal import Decimal
++
++from . import audit
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money
++
++# Finance policy FIN-2026-03: credits above this amount need a second approver.
++APPROVAL_THRESHOLD = Decimal("500.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +23,42 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def issue_credit_note(invoice, amount, reason):
+-    """Credit part of an issued invoice back to the customer."""
+-    raise NotImplementedError
++def issue_credit_note(invoice, amount, reason, *, idempotency_key=None, approved_by=None):
++    """Credit part of an issued invoice back to the customer.
++
++    ``idempotency_key`` makes the operation safe to retry: if an audit entry
++    with the same key already exists, the operation is not applied again.
++    ``approved_by`` is required for credits above ``APPROVAL_THRESHOLD``
++    (finance policy FIN-2026-03).
++    """
++    if idempotency_key is not None:
++        for event in audit.events():
++            if event.get("idempotency_key") == idempotency_key:
++                return {
++                    "invoice_id": event.get("invoice_id"),
++                    "amount": event.get("amount"),
++                    "reason": event.get("reason"),
++                }
++
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    total = invoice_total(invoice)
++    if amount > total:
++        raise BillingError("amount_exceeds_total", f"{amount} > {total}")
++    if not reason:
++        raise BillingError("missing_reason", "a reason is required")
++    if amount > APPROVAL_THRESHOLD and not approved_by:
++        raise BillingError("approval_required")
++
++    audit.record(
++        "credit_note_issued",
++        invoice_id=invoice.id,
++        amount=amount,
++        reason=reason,
++        idempotency_key=idempotency_key,
++        approved_by=approved_by,
++    )
++    return {"invoice_id": invoice.id, "amount": amount, "reason": reason}
