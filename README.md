@@ -35,6 +35,16 @@ Each run writes `runs/<name>/<condition>/<task>/r<rep>/`: one mini-swe-agent
 trajectory per attempt, the final diff, and `result.json` with verification
 results, simulated review comments, token usage and leak checks.
 
+### Running experiments on GitHub Actions / 在 GitHub Actions 上运行
+
+Long runs use `.github/workflows/experiment.yml` on GitHub's servers (repository
+secret `DEEPSEEK_API_KEY`). Start one from the Actions tab, or push
+`.github/run-request.json`, e.g. `{"command": "pilot", "name": "pilot_nomem"}`.
+Results and a console log are committed back to `runs/<name>/`.
+
+长时间实验在 GitHub 服务器上运行（仓库的 Actions secret `DEEPSEEK_API_KEY`）。可以在 Actions
+页面手动启动，也可以推送 `.github/run-request.json` 启动；结果和控制台日志会自动提交回 `runs/<name>/`。
+
 ## Repository map / 仓库结构
 
 | Path | What it is |
