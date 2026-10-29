@@ -47,7 +47,8 @@
 
 | 模块 | 职责 | AI / 确定性 |
 |---|---|---|
-| `agent.py` | 继承 mini-swe-agent 的 `DefaultAgent`：把检索到的记忆注入提示词，并要求 Agent 标注用了哪条；工作目录限定在任务副本内 | AI（决策）+ 确定性（循环控制，复用） |
+| `runner.py` | 直接使用 mini-swe-agent 未修改的 `DefaultAgent`（无需子类）：记忆和评审意见通过提示词模板变量注入，Agent 提交时报告用了哪些笔记；工作区放在项目目录之外；检测是否读取了基准答案 | AI（决策）+ 确定性（循环控制，复用） |
+| `config/agent.yaml` | 改编自 mini-swe-agent 的 `mini.yaml`：增加笔记区、评审区和提交格式 | 确定性 |
 | `verify.py` | 运行隐藏测试；把失败映射为自然语言评审意见（模拟评审） | 确定性 |
 | `memory/store.py` | 追加写入的事件日志（JSONL），当前状态由事件重放得出，撤回可审计 | 确定性 |
 | `memory/distill.py` | 从"已验证通过"的任务轨迹 + 评审意见中提炼候选经验（结构化 JSON） | AI |
