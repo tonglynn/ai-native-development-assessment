@@ -32,16 +32,20 @@ out of date — compared with no memory and with two published memory designs?
 1. *learn* — E01–E06 in order; memory may be written.
 2. *heldout* — H01–H06; memory frozen (read-only).
 3. *control* — B01–B03; memory frozen.
-4. *stale* — S01–S03 in order; memory may be updated.
+4. *stale* — S01–S04 in order; memory may be updated.
 
 ## 3. Pilot disclosure / 基线校准说明
 
-Before freezing, every task was run **without memory only** (`runs/pilot_nomem`)
-to check difficulty. The pilot is used for exactly one decision: whether
-held-out tasks leave room for improvement (no-memory pass@1 on H clearly below
-100%). If tasks were changed because of the pilot, the changes are listed here:
+Before freezing, tasks were run **without memory only** to check difficulty.
+Pilots are used for exactly one decision: whether held-out tasks leave room for
+improvement (no-memory pass@1 on H clearly below 100%). No memory condition was
+run before the freeze. Changes made because of the pilots:
 
-- *(to be filled in after the pilot)*
+| Pilot | No-memory pass@1 on H | What it showed | Change before the next pilot |
+|---|---|---|---|
+| `runs/pilot_nomem` | 5/6 | The 9-module repository was small enough to read whole; the agent copied conventions from neighbouring code | Added six legacy modules that predate the conventions; moved E03–E05 and H01–H04 into them |
+| `runs/pilot2_nomem` | 5/6 | The agent searched for conventions (`grep -rn round_money`) rather than copying legacy code: conventions visible anywhere in the code are discovered | Added review-only conventions C5 (idempotency) and C6 (approval threshold) to E04, E06, H04, H06; added stale task S04 |
+| `runs/pilot3_nomem` | *(pending)* | | |
 
 ## 4. Hypotheses / 假设
 
@@ -62,6 +66,7 @@ All numbers are computed by `attest/analysis.py` from `runs/<experiment>/**/resu
 - **Secondary:** pass@2 (after one simulated review), steps, estimated cost, notes shown and cited.
 - **Regression:** a task whose pass@1 under a memory condition is lower than under `no_memory` (all repetitions pooled). Every regression is listed, not only counted.
 - **Contamination:** notes learned on ledgerly that are shown on simkit tasks.
+- **Convention hit rate:** for each convention, the share of first attempts that satisfy it, reported separately for discoverable (C1–C4) and review-only (C5–C6) conventions. Exploratory.
 - **Spread:** min and max pass@1 across the 3 repetitions is reported next to every pooled rate.
 - With 6 held-out tasks × 3 repetitions the sample is small. Results are reported as counts and per-task tables; no significance tests are claimed.
 

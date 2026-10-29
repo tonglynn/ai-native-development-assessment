@@ -88,6 +88,27 @@ def regressions(results: list[dict], baseline: str = "no_memory") -> list[dict]:
     return out
 
 
+TIERS = {"discoverable": ("C1", "C2", "C3", "C4"), "review_only": ("C5", "C6")}
+
+
+def convention_hits(results: list[dict]) -> list[dict]:
+    """Per condition and convention: how often the first attempt satisfied it (crashes excluded)."""
+    counts = defaultdict(lambda: [0, 0])  # (condition, convention) -> [satisfied, checked]
+    for r in results:
+        first = r["attempts"][0]
+        if first.get("crashed"):
+            continue
+        for conv in r.get("conventions", []):
+            cell = counts[(r["condition"], conv)]
+            cell[1] += 1
+            cell[0] += conv not in first["conv_failed"]
+    rows = []
+    for (cond, conv), (ok, n) in sorted(counts.items()):
+        tier = next((t for t, cs in TIERS.items() if conv in cs), "simkit")
+        rows.append({"condition": cond, "convention": conv, "tier": tier, "satisfied": ok, "checked": n, "rate": ok / n})
+    return rows
+
+
 def contamination(results: list[dict]) -> list[dict]:
     """For control tasks (simkit): how many notes learned on another repository were shown, per condition."""
     rows = defaultdict(lambda: {"runs": 0, "foreign_notes_shown": 0, "pass1": 0})
@@ -130,6 +151,7 @@ def summarise(root: Path) -> dict:
         "per_task": per_task(results),
         "regressions": regressions(results),
         "contamination": contamination(results),
+        "convention_hits": convention_hits(results),
         "stale_timeline": stale_timeline(results),
         "total_cost_usd": round(sum(r["cost_usd"] for r in results), 4),
     }
