@@ -72,6 +72,23 @@ def cmd_experiment(args) -> int:
     return cmd_summary(argparse.Namespace(path=root))
 
 
+def cmd_stress(args) -> int:
+    from . import stress
+
+    root = RUNS_DIR / args.name
+    settings = Settings(thinking=args.thinking)
+    if args.kind == "poison":
+        stress.run_poison(root, reps=args.reps, parallel=args.parallel, settings=settings)
+        rows = stress.summarise_poison(root)
+    else:
+        stress.run_scale(root, reps=args.reps, parallel=args.parallel, settings=settings)
+        rows = stress.summarise_scale(root)
+    for row in rows:
+        print(json.dumps(row))
+    (root / "summary.json").write_text(json.dumps(rows, indent=2) + "\n")
+    return 0
+
+
 def cmd_summary(args) -> int:
     results = [json.loads(p.read_text()) for p in sorted(Path(args.path).rglob("result.json"))]
     if not results:
@@ -124,6 +141,14 @@ def main(argv=None) -> int:
     p.add_argument("--parallel", type=int, default=4)
     p.add_argument("--thinking", default=Settings().thinking, choices=["off", "low", "high"])
     p.set_defaults(fn=cmd_experiment)
+
+    p = sub.add_parser("stress", help="exploratory stress experiments: poisoned review advice, or 300 distractor notes")
+    p.add_argument("--kind", choices=["poison", "scale"], required=True)
+    p.add_argument("--name", required=True)
+    p.add_argument("--reps", type=int, default=2)
+    p.add_argument("--parallel", type=int, default=5)
+    p.add_argument("--thinking", default=Settings().thinking, choices=["off", "low", "high"])
+    p.set_defaults(fn=cmd_stress)
 
     p = sub.add_parser("summary", help="summarise results under a runs/ directory")
     p.add_argument("path")

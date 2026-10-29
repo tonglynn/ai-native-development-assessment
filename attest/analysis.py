@@ -7,6 +7,8 @@ so a reviewer can recompute it. Nothing here calls a model.
 from __future__ import annotations
 
 import json
+import random
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -141,6 +143,118 @@ def stale_timeline(results: list[dict]) -> list[dict]:
     return rows
 
 
+# ---------------------------------------------------------------- tiers, paired comparison, attribution
+
+REVIEW_ONLY = set(TIERS["review_only"])
+
+
+def task_tier(r: dict) -> str:
+    convs = set(r.get("conventions", []))
+    if not convs or convs <= {"K1", "K2"}:
+        return "simkit"
+    return "review_only" if convs & REVIEW_ONLY else "discoverable"
+
+
+def _tokens(r: dict) -> int:
+    return sum((a.get("tokens") or {}).get("prompt", 0) + (a.get("tokens") or {}).get("completion", 0) for a in r["attempts"])
+
+
+def tier_split(results: list[dict], group: str = "heldout") -> list[dict]:
+    """pass@1, steps and tokens per condition, for tasks that need review-only knowledge vs tasks that do not."""
+    by = defaultdict(list)
+    for r in results:
+        if r["group"] == group:
+            by[(r["condition"], task_tier(r))].append(r)
+    rows = []
+    for (cond, tier), rs in sorted(by.items(), key=lambda kv: (CONDITIONS.index(kv[0][0]) if kv[0][0] in CONDITIONS else 99, kv[0][1])):
+        rows.append({"condition": cond, "tier": tier, "runs": len(rs), "pass1": _rate(rs, "first_pass"),
+                     "steps": sum(r["steps"] for r in rs) / len(rs), "tokens": sum(_tokens(r) for r in rs) / len(rs)})
+    return rows
+
+
+def paired(results: list[dict], group: str = "heldout", baseline: str = "no_memory",
+           resamples: int = 10000, seed: int = 0) -> list[dict]:
+    """Per-task pass@1 difference against the baseline, with a bootstrap 95% interval over tasks.
+
+    Repetitions of the same task are averaged first, so the unit of analysis is the task.
+    """
+    rates: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+    for r in results:
+        if r["group"] == group:
+            rates[r["condition"]][r["task_id"]].append(bool(r["first_pass"]))
+    base = {t: sum(v) / len(v) for t, v in rates.get(baseline, {}).items()}
+    rng = random.Random(seed)
+    rows = []
+    for cond, per_task in rates.items():
+        if cond == baseline:
+            continue
+        tasks = sorted(set(per_task) & set(base))
+        if not tasks:
+            continue
+        diffs = [sum(per_task[t]) / len(per_task[t]) - base[t] for t in tasks]
+        boots = sorted(sum(rng.choice(diffs) for _ in diffs) / len(diffs) for _ in range(resamples))
+        rows.append({
+            "condition": cond, "tasks": len(tasks), "mean_diff": sum(diffs) / len(diffs),
+            "ci_low": boots[int(0.025 * resamples)], "ci_high": boots[int(0.975 * resamples) - 1],
+            "wins": sum(d > 0 for d in diffs), "losses": sum(d < 0 for d in diffs), "ties": sum(d == 0 for d in diffs),
+        })
+    return sorted(rows, key=lambda x: CONDITIONS.index(x["condition"]) if x["condition"] in CONDITIONS else 99)
+
+
+CONVENTION_PATTERNS = {
+    "C1": r"round_money|half[- ]up|ROUND_HALF|quantiz|two decimal|2 decimal|Decimal",
+    "C2": r"BillingError",
+    "C3": r"ensure_utc|time[- ]?zone|tz-aware|aware UTC|naive",
+    "C4": r"audit\.record|audit entr|audit trail|audit log",
+    "C5": r"idempoten",
+    "C6": r"approv",
+}
+NOTE_RE = re.compile(r"\[((?:at|rb|ace)-\d{4})\](.*?)(?=\n\s*-?\s*\[(?:at|rb|ace)-\d{4}\]|\n## |\Z)", re.S)
+
+
+def _notes_by_id(context: str) -> dict[str, str]:
+    return {m.group(1): m.group(2) for m in NOTE_RE.finditer(context or "")}
+
+
+def attribution(results: list[dict]) -> list[dict]:
+    """Was a note about convention X shown or cited, and did the first attempt actually satisfy X?
+
+    Judged from behaviour (the hidden test for X), not from the agent's own claim.
+    """
+    cells = defaultdict(lambda: defaultdict(int))
+    for r in results:
+        first = r["attempts"][0]
+        if first.get("crashed") or r["condition"] == "no_memory":
+            continue
+        notes = _notes_by_id(r.get("notes_context", ""))
+        cited = set(r.get("cited_notes", []))
+        for conv in r.get("conventions", []):
+            pattern = CONVENTION_PATTERNS.get(conv)
+            if not pattern:
+                continue
+            related = {i for i, text in notes.items() if re.search(pattern, text, re.I)}
+            ok = conv not in first["conv_failed"]
+            c = cells[(r["condition"], conv)]
+            c["checked"] += 1
+            if related:
+                c["shown"] += 1
+                c["shown_ok"] += ok
+                if related & cited:
+                    c["cited"] += 1
+                    c["cited_ok"] += ok
+                elif ok:
+                    c["followed_uncited"] += 1
+            else:
+                c["not_shown"] += 1
+                c["not_shown_ok"] += ok
+    rows = []
+    for (cond, conv), c in sorted(cells.items(), key=lambda kv: (CONDITIONS.index(kv[0][0]) if kv[0][0] in CONDITIONS else 99, kv[0][1])):
+        rows.append({"condition": cond, "convention": conv, **dict(c),
+                     "ok_when_shown": c["shown_ok"] / c["shown"] if c["shown"] else None,
+                     "ok_when_not_shown": c["not_shown_ok"] / c["not_shown"] if c["not_shown"] else None})
+    return rows
+
+
 def summarise(root: Path) -> dict:
     results, excluded = usable(load_results(root))
     return {
@@ -152,6 +266,9 @@ def summarise(root: Path) -> dict:
         "regressions": regressions(results),
         "contamination": contamination(results),
         "convention_hits": convention_hits(results),
+        "tier_split": tier_split(results),
+        "paired": paired(results),
+        "attribution": attribution(results),
         "stale_timeline": stale_timeline(results),
         "total_cost_usd": round(sum(r["cost_usd"] for r in results), 4),
     }

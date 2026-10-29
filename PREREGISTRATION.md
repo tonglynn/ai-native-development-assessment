@@ -54,7 +54,10 @@ model (`scripts/distill_check.py`); no agent ran with memory. Check 1
 (`runs/distill_check1`) found notes describing code that existed only in an
 earlier task's unmerged diff. The shared experience packet now says the diff is
 not kept; this applies to all three systems equally. Check 2
-(`runs/distill_check`) no longer shows the problem.
+(`runs/distill_check2`) no longer shows the problem. A third gate condition was
+then added to Attest before the freeze (decision D17): every note must point to
+the added line of the verified diff that applies it. Check 3
+(`runs/distill_check3`) shows what this costs.
 
 写入环节检查：冻结前，把第三次基线中 E01–E06 的无记忆轨迹交给三种记忆系统的学习步骤（真实模型），
 没有任何 Agent 带记忆运行。第一次检查发现有经验描述了只存在于未合并改动中的代码；修复方式是在三种
@@ -73,6 +76,15 @@ not kept; this applies to all three systems equally. Check 2
 
 Exploratory, no prediction: steps and cost per task; which conventions are learned; whether baselines leak ledgerly habits into simkit; how many notes each Attest variant stores and how many candidates the gate rejects.
 
+## 4b. Exploratory follow-ups (not hypotheses) / 探索性研究（不属于假设）
+
+Run after the main experiment and reported separately: (1) **poison**, a wrong
+review comment added to E04 and E06; is it learned, shown and applied on
+held-out tasks; (2) **scale**, 300 notes from twenty other repositories in
+memory before learning; (3) a case study on review comments from a real
+open-source repository, used by a real agent through an MCP server. No
+decision rule is fixed for these.
+
 ## 5. Measures and analysis / 指标与分析
 
 All numbers are computed by `attest/analysis.py` from `runs/<experiment>/**/result.json`.
@@ -81,6 +93,9 @@ All numbers are computed by `attest/analysis.py` from `runs/<experiment>/**/resu
 - **Secondary:** pass@2 (after one simulated review), steps, estimated cost, notes shown and cited.
 - **Regression:** a task whose pass@1 under a memory condition is lower than under `no_memory` (all repetitions pooled). Every regression is listed, not only counted.
 - **Contamination:** notes learned on ledgerly that are shown on simkit tasks.
+- **Paired comparison:** per held-out task, pass@1 under each memory condition minus no memory (repetitions averaged), with wins / losses / ties and a bootstrap 95% interval over tasks.
+- **Tier split:** pass@1, steps and tokens on held-out tasks that need review-only knowledge (C5–C6) versus tasks that do not.
+- **Behavioural attribution:** whether a note about a convention was shown or cited, against whether the first attempt actually satisfied that convention (hidden test), instead of trusting the agent's own citation.
 - **Convention hit rate:** for each convention, the share of first attempts that satisfy it, reported separately for discoverable (C1–C4) and review-only (C5–C6) conventions. Exploratory.
 - **Spread:** min and max pass@1 across the 3 repetitions is reported next to every pooled rate.
 - With 10 held-out tasks × 3 repetitions the sample is still small. Results are reported as counts and per-task tables; no significance tests are claimed.

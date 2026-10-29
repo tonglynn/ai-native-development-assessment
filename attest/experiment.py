@@ -23,11 +23,16 @@ from .runner import Settings, run_task
 PHASES = [("learn", "experience", True), ("heldout", "heldout", False), ("control", "control", False), ("stale", "stale", True)]
 
 
-def run_sequence(condition: str, rep: int, root: Path, settings: Settings, log=print) -> list[dict]:
+def run_sequence(condition: str, rep: int, root: Path, settings: Settings, log=print,
+                 phases=PHASES, before_phase=None) -> list[dict]:
+    """Run the protocol for one condition and repetition. ``before_phase(phase, memory)`` lets
+    exploratory experiments change the memory between phases (e.g. add distractor notes)."""
     base = root / condition / f"r{rep}"
     memory = make_memory(condition, base / "memory")
     results = []
-    for phase, group, update in PHASES:
+    for phase, group, update in phases:
+        if before_phase is not None:
+            before_phase(phase, memory)
         for task in load_tasks(group):
             out = base / task.id
             if (out / "result.json").exists():

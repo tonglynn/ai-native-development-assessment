@@ -16,7 +16,7 @@ import os
 import re
 import shutil
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -41,6 +41,9 @@ class Settings:
     model: str = os.environ.get("ATTEST_MODEL", "deepseek/deepseek-flash")
     thinking: str = os.environ.get("ATTEST_THINKING", "off")  # off | low | high
     max_attempts: int = 2  # first attempt + one round of simulated review
+    # Exploratory poisoning experiment only: task id -> an extra (wrong) review comment
+    # added whenever that task's attempt fails verification. Empty in the main experiment.
+    extra_review: dict = field(default_factory=dict)
 
 
 def load_config() -> dict:
@@ -206,6 +209,8 @@ def run_task(
             info = {"exit_status": f"crash:{type(exc).__name__}", "submission": ""}
         restore_tests(task, workspace)
         verification = verify(workspace, task)
+        if not verification["passed"] and task.id in settings.extra_review:
+            verification["review_comments"].append(settings.extra_review[task.id])
         tokens = token_usage(agent.messages)
         attempts.append({
             "n": n,
@@ -247,6 +252,7 @@ def run_task(
         "cost_usd": round(sum(a["cost_usd"] for a in attempts), 6),
         "seconds": round(time.time() - started, 1),
         "shown_notes": retrieved.ids,
+        "notes_context": retrieved.context,
         "cited_notes": cited,
         "retrieval_debug": retrieved.debug,
         "leaks": sorted({x for a in attempts for x in a["leaks"]}),

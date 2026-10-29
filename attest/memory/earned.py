@@ -3,9 +3,12 @@
 Design rules (each one is enforced by deterministic code; the model only proposes):
 
 1. Write gate.   Only tasks whose final result passed the hidden tests may write
-                 memory, and every candidate must quote its evidence verbatim from
-                 the review comments or the final diff. Rejected candidates are kept
-                 in the log with the reason.
+                 memory. Every candidate must (a) quote its evidence verbatim from
+                 the review comments or the final diff, and (b) point to the line
+                 of the verified change that applies it, checked verbatim against
+                 the added lines of the diff. A rule someone merely said, but the
+                 verified code never did, is not learned (this also blocks poisoned
+                 review advice). Rejected candidates stay in the log with the reason.
 2. Scope.        Every item records the repository and version it was learned on.
                  Retrieval only considers items from the task's repository.
 3. Version.      Items learned on an older major version are still shown, but with
@@ -45,12 +48,14 @@ Return JSON: {"candidates": [...]} with at most 3 candidates. Each candidate has
   "topic": short kebab-case label, e.g. "money-rounding",
   "title": at most 8 words,
   "content": one or two imperative sentences a developer can act on; name the exact modules and functions,
-  "evidence_quote": an exact, verbatim excerpt (10-200 characters) copied from the REVIEW COMMENTS or the FINAL DIFF that proves the candidate.
+  "evidence_quote": an exact, verbatim excerpt (10-200 characters) copied from the REVIEW COMMENTS or the FINAL DIFF that proves the candidate,
+  "applied_in_diff": an exact, verbatim piece (10-200 characters) of one added line ("+") of the FINAL DIFF where the accepted change applies this rule.
 
 Rules:
 - Only include knowledge specific to this repository that the issue text alone would not tell a competent developer.
 - Do not restate the issue or describe this task's feature.
 - Prefer what the review comments corrected.
+- Only include rules that the accepted change actually applies; if you cannot point to an added line that applies it, leave it out.
 - If nothing qualifies, return {"candidates": []}."""
 
 RELATE_SYSTEM = """You compare a NEW piece of repository experience with EXISTING items from the same repository.
@@ -161,9 +166,10 @@ class EarnedMemory(MemorySystem):
             return [self.store.append("reject", task_id=task.id, candidate=None, reason="task not verified: nothing is learned")]
         data = llm.complete_json(DISTILL_SYSTEM, experience_packet(task, repo_version, run, transcript, diff))
         corpus = normalise("\n".join(run["attempts"][0]["review_comments"]) + "\n" + diff)
+        added = normalise("\n".join(line[1:] for line in diff.splitlines() if line.startswith("+") and not line.startswith("+++")))
         events = []
         for cand in (data.get("candidates") or [])[:3]:
-            problem = self._gate(cand, corpus, require_evidence=self.gate)
+            problem = self._gate(cand, corpus, added, require_evidence=self.gate)
             if problem:
                 events.append(self.store.append("reject", task_id=task.id, candidate=cand, reason=problem))
                 continue
@@ -171,7 +177,7 @@ class EarnedMemory(MemorySystem):
         return events
 
     @staticmethod
-    def _gate(cand: dict, corpus: str, require_evidence: bool = True) -> str:
+    def _gate(cand: dict, corpus: str, added: str = "", require_evidence: bool = True) -> str:
         if not isinstance(cand, dict):
             return "malformed candidate"
         if cand.get("kind") not in ("project_fact", "lesson"):
@@ -186,6 +192,9 @@ class EarnedMemory(MemorySystem):
             return "missing evidence quote"
         if quote not in corpus:
             return "evidence quote not found verbatim in the review comments or the diff"
+        applied = normalise(cand.get("applied_in_diff") or "")
+        if len(applied) < 10 or applied not in added:
+            return "not applied in the verified change: no added line of the diff matches applied_in_diff"
         return ""
 
     def _admit(self, task: Task, repo_version: str, run: dict, cand: dict) -> list[dict]:

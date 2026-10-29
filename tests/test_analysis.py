@@ -35,3 +35,20 @@ def test_per_task_regressions_contamination():
     assert analysis.regressions(kept) == [{"task_id": "H02", "condition": "ace", "memory": "0/1", "baseline": "1/1"}]
     cont = {c["condition"]: c for c in analysis.contamination(kept)}
     assert cont["ace"]["foreign_notes_shown"] == 2 and cont["attest"]["foreign_notes_shown"] == 0
+
+
+def test_paired_tier_and_attribution():
+    base = [r(t, "no_memory", "heldout", ok) for t, ok in [("H01", True), ("H04", False), ("H06", False)]]
+    mem = [r(t, "attest", "heldout", ok) for t, ok in [("H01", True), ("H04", True), ("H06", False)]]
+    for x in base + mem:
+        x["conventions"] = ["C1"] if x["task_id"] == "H01" else ["C2", "C5"]
+        x["attempts"][0]["tokens"] = {"prompt": 100, "completion": 10}
+    mem[1]["notes_context"] = "- [at-0001] Idempotency: accept idempotency_key\n- [at-0002] Use BillingError"
+    mem[1]["cited_notes"] = ["at-0001"]
+    p = {row["condition"]: row for row in analysis.paired(base + mem, resamples=200)}["attest"]
+    assert (p["wins"], p["losses"], p["ties"]) == (1, 0, 2) and round(p["mean_diff"], 3) == 0.333
+    tiers = {(x["condition"], x["tier"]): x for x in analysis.tier_split(base + mem)}
+    assert tiers[("attest", "review_only")]["pass1"] == 0.5 and tiers[("no_memory", "discoverable")]["tokens"] == 110
+    att = {(x["condition"], x["convention"]): x for x in analysis.attribution(base + mem)}
+    c5 = att[("attest", "C5")]
+    assert c5["shown"] == 1 and c5["cited"] == 1 and c5["cited_ok"] == 1 and c5["not_shown"] == 1

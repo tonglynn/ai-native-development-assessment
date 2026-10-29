@@ -13,9 +13,9 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: smoke | pilot | experiment | distill_check
+        description: smoke | pilot | experiment | distill_check | poison | scale
         type: choice
-        options: [smoke, pilot, experiment, distill_check]
+        options: [smoke, pilot, experiment, distill_check, poison, scale]
         default: pilot
       name:
         description: results go to runs/<name>
@@ -66,7 +66,7 @@ jobs:
           else:
               req = json.load(open(".github/run-request.json"))
           command = req.get("command", "pilot")
-          assert command in {"smoke", "pilot", "experiment", "distill_check"}, command
+          assert command in {"smoke", "pilot", "experiment", "distill_check", "poison", "scale"}, command
           name = str(req.get("name", "pilot_nomem"))
           assert re.fullmatch(r"[A-Za-z0-9_-]+", name), name
           print(f"command={command}")
@@ -99,6 +99,7 @@ jobs:
             pilot)      python -m attest pilot --name "$NAME" --parallel "$PARALLEL" --groups "$GROUPS" ;;
             experiment) python -m attest experiment --name "$NAME" --reps "$REPS" --parallel "$PARALLEL" ;;
             distill_check) python scripts/distill_check.py runs/pilot3_nomem "runs/$NAME" ;;
+            poison|scale) python -m attest stress --kind "$COMMAND" --name "$NAME" --reps "$REPS" --parallel "$PARALLEL" ;;
           esac 2>&1 | tee -a "runs/$NAME/console.log"
 
       - name: Commit results
