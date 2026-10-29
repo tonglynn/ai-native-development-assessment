@@ -1,8 +1,8 @@
 """Command line entry point.
 
-    python -m earned_memory run --task E01                 # one task, no memory
-    python -m earned_memory pilot --name pilot_nomem       # every task, no memory, no learning
-    python -m earned_memory summary runs/pilot_nomem       # table of results
+    python -m attest run --task E01                 # one task, no memory
+    python -m attest pilot --name pilot_nomem       # every task, no memory, no learning
+    python -m attest summary runs/pilot_nomem       # table of results
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ def cmd_summary(args) -> int:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m earned_memory")
+    parser = argparse.ArgumentParser(prog="python -m attest")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("run", help="run one task")

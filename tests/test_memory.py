@@ -2,10 +2,10 @@
 
 import pytest
 
-from earned_memory import llm
-from earned_memory.benchmark import load_task
-from earned_memory.memory import make_memory
-from earned_memory.memory.earned import DISTILL_SYSTEM, RELATE_SYSTEM
+from attest import llm
+from attest.benchmark import load_task
+from attest.memory import make_memory
+from attest.memory.earned import DISTILL_SYSTEM, RELATE_SYSTEM
 
 ROUND_COMMENT = ("[team convention] Round money only with ledgerly.money.round_money (half-up to the cent). "
                  "Python's round() and a bare Decimal.quantize() use banker's rounding and give wrong invoice totals.")
@@ -57,7 +57,7 @@ def learn_round_note(mem, scripted):
 
 
 def test_write_gate(tmp_path, scripted):
-    mem = make_memory("earned_memory", tmp_path)
+    mem = make_memory("attest", tmp_path)
     # an unverified task writes nothing and does not even call the model
     events = mem.learn(load_task("E01"), "1.0.0", run(False, False, [ROUND_COMMENT]), "t", "d")
     assert events[0]["type"] == "reject" and not scripted.calls
@@ -69,46 +69,46 @@ def test_write_gate(tmp_path, scripted):
     # a grounded candidate from a verified task is admitted
     events = learn_round_note(mem, scripted)
     assert events[0]["type"] == "add"
-    assert mem.store.items()["em-0001"]["scope"] == {"repo": "ledgerly", "observed_version": "1.0.0"}
+    assert mem.store.items()["at-0001"]["scope"] == {"repo": "ledgerly", "observed_version": "1.0.0"}
 
 
 def test_scope_and_version_warning(tmp_path, scripted):
-    mem = make_memory("earned_memory", tmp_path)
+    mem = make_memory("attest", tmp_path)
     learn_round_note(mem, scripted)
-    assert mem.retrieve(load_task("H01"), "1.0.0").ids == ["em-0001"]
+    assert mem.retrieve(load_task("H01"), "1.0.0").ids == ["at-0001"]
     simkit = mem.retrieve(load_task("B01"), "0.4.0")
-    assert simkit.ids == [] and simkit.debug["out_of_scope"] == ["em-0001"]
+    assert simkit.ids == [] and simkit.debug["out_of_scope"] == ["at-0001"]
     v2 = mem.retrieve(load_task("S01"), "2.0.0")
-    assert v2.debug["version_warnings"] == ["em-0001"] and "CHANGELOG" in v2.context
+    assert v2.debug["version_warnings"] == ["at-0001"] and "CHANGELOG" in v2.context
 
 
 def test_blame_suspect_retire_and_recover(tmp_path, scripted):
-    mem = make_memory("earned_memory", tmp_path)
+    mem = make_memory("attest", tmp_path)
     learn_round_note(mem, scripted)
     s01 = load_task("S01")
     # cited, but the failure is about errors, not rounding: no blame
-    mem.feedback(s01, "2.0.0", run(False, comments=[ERROR_COMMENT], shown=["em-0001"], cited=["em-0001"]))
-    assert mem.store.items()["em-0001"]["status"] == "active"
+    mem.feedback(s01, "2.0.0", run(False, comments=[ERROR_COMMENT], shown=["at-0001"], cited=["at-0001"]))
+    assert mem.store.items()["at-0001"]["status"] == "active"
     # cited and failed a rounding review check: suspect, then retired
-    mem.feedback(s01, "2.0.0", run(False, comments=[ROUND_V2_COMMENT], shown=["em-0001"], cited=["em-0001"]))
-    assert mem.store.items()["em-0001"]["status"] == "suspect"
+    mem.feedback(s01, "2.0.0", run(False, comments=[ROUND_V2_COMMENT], shown=["at-0001"], cited=["at-0001"]))
+    assert mem.store.items()["at-0001"]["status"] == "suspect"
     assert "WARNING: a recent task" in mem.retrieve(load_task("S02"), "2.0.0").context
-    mem.feedback(s01, "2.0.0", run(False, comments=[ROUND_V2_COMMENT], shown=["em-0001"], cited=["em-0001"]))
-    assert mem.store.items()["em-0001"]["status"] == "retired"
+    mem.feedback(s01, "2.0.0", run(False, comments=[ROUND_V2_COMMENT], shown=["at-0001"], cited=["at-0001"]))
+    assert mem.store.items()["at-0001"]["status"] == "retired"
     assert mem.retrieve(load_task("S02"), "2.0.0").ids == []
 
 
 def test_suspicion_cleared_by_verified_success(tmp_path, scripted):
-    mem = make_memory("earned_memory", tmp_path)
+    mem = make_memory("attest", tmp_path)
     learn_round_note(mem, scripted)
-    mem.feedback(load_task("H01"), "1.0.0", run(False, comments=[ROUND_COMMENT], shown=["em-0001"], cited=["em-0001"]))
-    mem.feedback(load_task("H05"), "1.0.0", run(True, shown=["em-0001"], cited=["em-0001"]))
-    item = mem.store.items()["em-0001"]
+    mem.feedback(load_task("H01"), "1.0.0", run(False, comments=[ROUND_COMMENT], shown=["at-0001"], cited=["at-0001"]))
+    mem.feedback(load_task("H05"), "1.0.0", run(True, shown=["at-0001"], cited=["at-0001"]))
+    item = mem.store.items()["at-0001"]
     assert item["status"] == "active" and item["usage"]["cited_pass"] == 1 and item["usage"]["fail_streak"] == 0
 
 
 def test_supersede_and_duplicate(tmp_path, scripted):
-    mem = make_memory("earned_memory", tmp_path)
+    mem = make_memory("attest", tmp_path)
     learn_round_note(mem, scripted)
     new_rule = {
         "kind": "project_fact", "topic": "money-rounding", "title": "Rounding policy is banker's since 2.0",
@@ -116,33 +116,33 @@ def test_supersede_and_duplicate(tmp_path, scripted):
         "evidence_quote": "since 2.0.0 this is banker's rounding, see CHANGELOG",
     }
     scripted.answers[DISTILL_SYSTEM].append({"candidates": [new_rule]})
-    scripted.answers[RELATE_SYSTEM].append({"relations": [{"id": "em-0001", "relation": "supersedes"}]})
+    scripted.answers[RELATE_SYSTEM].append({"relations": [{"id": "at-0001", "relation": "supersedes"}]})
     mem.learn(load_task("S01"), "2.0.0", run(False, True, [ROUND_V2_COMMENT]), "t", "d")
     items = mem.store.items()
-    assert items["em-0001"]["status"] == "superseded" and items["em-0001"]["superseded_by"] == "em-0002"
-    assert items["em-0002"]["supersedes"] == ["em-0001"]
+    assert items["at-0001"]["status"] == "superseded" and items["at-0001"]["superseded_by"] == "at-0002"
+    assert items["at-0002"]["supersedes"] == ["at-0001"]
     # the same rule confirmed again becomes extra evidence, not a second item
     scripted.answers[DISTILL_SYSTEM].append({"candidates": [new_rule]})
-    scripted.answers[RELATE_SYSTEM].append({"relations": [{"id": "em-0002", "relation": "duplicate"}]})
+    scripted.answers[RELATE_SYSTEM].append({"relations": [{"id": "at-0002", "relation": "duplicate"}]})
     mem.learn(load_task("S02"), "2.0.0", run(False, True, [ROUND_V2_COMMENT]), "t", "d")
     items = mem.store.items()
-    assert len(items) == 2 and len(items["em-0002"]["evidence"]) == 2
+    assert len(items) == 2 and len(items["at-0002"]["evidence"]) == 2
 
 
 def test_old_evidence_cannot_supersede_newer_rule(tmp_path, scripted):
-    mem = make_memory("earned_memory", tmp_path)
+    mem = make_memory("attest", tmp_path)
     scripted.answers[DISTILL_SYSTEM].append({"candidates": [ROUND_NOTE]})
     mem.learn(load_task("S01"), "2.0.0", run(False, True, [ROUND_COMMENT]), "t", "d")
     scripted.answers[DISTILL_SYSTEM].append({"candidates": [dict(ROUND_NOTE, title="Old rule")]})
-    scripted.answers[RELATE_SYSTEM].append({"relations": [{"id": "em-0001", "relation": "supersedes"}]})
+    scripted.answers[RELATE_SYSTEM].append({"relations": [{"id": "at-0001", "relation": "supersedes"}]})
     mem.learn(load_task("E01"), "1.0.0", run(False, True, [ROUND_COMMENT]), "t", "d")
-    assert mem.store.items()["em-0001"]["status"] == "active"
+    assert mem.store.items()["at-0001"]["status"] == "active"
 
 
 def test_event_log_replays_from_disk(tmp_path, scripted):
-    mem = make_memory("earned_memory", tmp_path)
+    mem = make_memory("attest", tmp_path)
     learn_round_note(mem, scripted)
-    again = make_memory("earned_memory", tmp_path)
+    again = make_memory("attest", tmp_path)
     assert again.store.items() == mem.store.items()
 
 

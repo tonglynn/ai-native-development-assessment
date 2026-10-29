@@ -3,7 +3,7 @@
 Usage (inside the Codespace):
     python scripts/check_model.py
 
-Optional: EM_MODEL=deepseek/<model-id> python scripts/check_model.py
+Optional: ATTEST_MODEL=deepseek/<model-id> python scripts/check_model.py
 The key is read from the DEEPSEEK_API_KEY environment variable and is never printed.
 """
 
@@ -22,7 +22,7 @@ if not key:
         "then rebuild or restart the codespace."
     )
 
-model = os.environ.get("EM_MODEL", "deepseek/deepseek-flash")
+model = os.environ.get("ATTEST_MODEL", "deepseek/deepseek-flash")
 
 # 1. Which models does this key see?
 resp = requests.get(
@@ -37,7 +37,7 @@ print("Available models:", ", ".join(ids) or "(none)")
 
 name = model.split("/", 1)[-1]
 if name not in ids:
-    print(f"WARNING: '{name}' is not in the list. Rerun with EM_MODEL=deepseek/<one of the above>.")
+    print(f"WARNING: '{name}' is not in the list. Rerun with ATTEST_MODEL=deepseek/<one of the above>.")
 
 # 2. One tiny real call through litellm, the same path mini-swe-agent uses.
 start = time.time()

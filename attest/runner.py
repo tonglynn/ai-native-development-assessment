@@ -26,7 +26,7 @@ from .memory import MemorySystem
 from .verify import verify
 
 CONFIG_PATH = Path(__file__).with_name("config") / "agent.yaml"
-WORKSPACE_ROOT = Path(os.environ.get("EM_WORKSPACE_ROOT", "/tmp/em_workspaces"))
+WORKSPACE_ROOT = Path(os.environ.get("ATTEST_WORKSPACE_ROOT", "/tmp/attest_workspaces"))
 
 # USD per 1M tokens for deepseek-flash, off-peak. Source: third-party price page
 # checked 2026-10-29 (DeepSeek's own page was not reachable). Estimates only.
@@ -38,8 +38,8 @@ LEAK_PATTERNS = ["hidden_test", "benchmark/tasks", "validation.json", "/referenc
 
 @dataclass
 class Settings:
-    model: str = os.environ.get("EM_MODEL", "deepseek/deepseek-flash")
-    thinking: str = os.environ.get("EM_THINKING", "off")  # off | low | high
+    model: str = os.environ.get("ATTEST_MODEL", "deepseek/deepseek-flash")
+    thinking: str = os.environ.get("ATTEST_THINKING", "off")  # off | low | high
     max_attempts: int = 2  # first attempt + one round of simulated review
 
 

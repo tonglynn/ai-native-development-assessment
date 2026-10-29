@@ -30,9 +30,9 @@ def complete_json(system: str, user: str) -> dict:
         return _override(system, user)
     import litellm
 
-    model = os.environ.get("EM_MODEL", "deepseek/deepseek-flash")
+    model = os.environ.get("ATTEST_MODEL", "deepseek/deepseek-flash")
     kwargs: dict = {"temperature": 0.0, "drop_params": True, "response_format": {"type": "json_object"}}
-    if os.environ.get("EM_THINKING", "off") == "off":
+    if os.environ.get("ATTEST_THINKING", "off") == "off":
         kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     for _ in range(2):

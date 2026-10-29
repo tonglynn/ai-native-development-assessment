@@ -2,7 +2,7 @@
 
 import json
 
-from earned_memory import experiment
+from attest import experiment
 
 
 def test_protocol_order_frozen_phases_and_resume(tmp_path, monkeypatch):
@@ -16,7 +16,7 @@ def test_protocol_order_frozen_phases_and_resume(tmp_path, monkeypatch):
         return result
 
     monkeypatch.setattr(experiment, "run_task", fake_run_task)
-    experiment.run_sequence("earned_memory", 1, tmp_path, settings=None, log=lambda m: None)
+    experiment.run_sequence("attest", 1, tmp_path, settings=None, log=lambda m: None)
 
     order = [c[0] for c in calls]
     assert order == ["E01", "E02", "E03", "E04", "E05", "E06", "H01", "H02", "H03", "H04", "H05", "H06",
@@ -24,9 +24,9 @@ def test_protocol_order_frozen_phases_and_resume(tmp_path, monkeypatch):
     frozen = {c[0] for c in calls if not c[1]}
     assert frozen == {"H01", "H02", "H03", "H04", "H05", "H06", "B01", "B02", "B03"}
     for phase in ("learn", "heldout", "control", "stale"):
-        assert (tmp_path / "earned_memory" / "r1" / "memory" / f"after_{phase}.json").exists()
+        assert (tmp_path / "attest" / "r1" / "memory" / f"after_{phase}.json").exists()
 
     # a second invocation resumes from saved results instead of rerunning
     calls.clear()
-    experiment.run_sequence("earned_memory", 1, tmp_path, settings=None, log=lambda m: None)
+    experiment.run_sequence("attest", 1, tmp_path, settings=None, log=lambda m: None)
     assert calls == []

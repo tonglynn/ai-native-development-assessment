@@ -20,8 +20,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from earned_memory.benchmark import load_tasks, materialize  # noqa: E402
-from earned_memory.verify import verify  # noqa: E402
+from attest.benchmark import load_tasks, materialize  # noqa: E402
+from attest.verify import verify  # noqa: E402
 
 
 def check(task, tmp: Path) -> dict:

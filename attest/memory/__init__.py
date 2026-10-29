@@ -14,7 +14,7 @@ from .base import MemorySystem, NoMemory, Retrieved
 from .earned import EarnedMemory
 from .reasoningbank import ReasoningBankMemory
 
-CONDITIONS = ("no_memory", "reasoningbank", "ace", "earned_memory")
+CONDITIONS = ("no_memory", "reasoningbank", "ace", "attest")
 
 __all__ = ["CONDITIONS", "MemorySystem", "NoMemory", "Retrieved", "make_memory"]
 
@@ -26,6 +26,6 @@ def make_memory(condition: str, store_dir: Path | None) -> MemorySystem:
         return ReasoningBankMemory(store_dir)
     if condition == "ace":
         return AcePlaybookMemory(store_dir)
-    if condition == "earned_memory":
+    if condition == "attest":
         return EarnedMemory(store_dir)
     raise ValueError(f"unknown memory condition {condition!r}; choose from {CONDITIONS}")

@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from earned_memory import runner
-from earned_memory.benchmark import TASKS_DIR, load_task
-from earned_memory.memory import NoMemory
+from attest import runner
+from attest.benchmark import TASKS_DIR, load_task
+from attest.memory import NoMemory
 
 
 def _call(i: int, command: str) -> dict:

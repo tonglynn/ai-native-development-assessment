@@ -1,4 +1,4 @@
-"""Earned Memory: experience that is verified, scoped, versioned and retractable.
+"""Attest's memory: experience that is verified, scoped, versioned and retractable.
 
 Design rules (each one is enforced by deterministic code; the model only proposes):
 
@@ -64,7 +64,7 @@ def _version_tuple(version: str) -> tuple:
 
 
 class EarnedMemory(MemorySystem):
-    name = "earned_memory"
+    name = "attest"
 
     def __init__(self, store_dir: Path | None):
         self.store = EventStore(store_dir / "events.jsonl" if store_dir else None)
@@ -202,7 +202,7 @@ class EarnedMemory(MemorySystem):
             if relations.get(it["id"]) == "supersedes"
             and _version_tuple(repo_version) >= _version_tuple(it["scope"]["observed_version"])
         ]
-        new_id = self.store.next_id("em")
+        new_id = self.store.next_id("at")
         item = {
             "id": new_id,
             "kind": cand["kind"],

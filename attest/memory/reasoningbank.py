@@ -6,7 +6,7 @@ consolidation, and retrieved by similarity to the new task.
 
 Simplifications: lexical instead of embedding retrieval; the verified outcome is
 given to the extractor instead of an LLM-as-judge self-assessment (this is
-generous to the baseline: it receives the same ground truth as Earned Memory).
+generous to the baseline: it receives the same ground truth as Attest).
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# Earned Memory — 实施计划
+# Attest — 实施计划
 
 > 工作文档，记录方案、实验设计与时间表。截止：2026-11-02 23:59（UTC+8）。
 > 题目原文保密，不提交到本仓库；这里只用自己的话描述问题。
@@ -91,7 +91,7 @@
   - C1 金额用 `Decimal`，quantize 到 0.01，`ROUND_HALF_UP`
   - C2 非法输入抛 `ledgerly.errors.BillingError`
   - C3 时间必须是带时区的 UTC，拒绝 naive datetime
-  - C4（待定）
+  - C4 动钱的操作必须调用 `ledgerly.audit.record(...)` 写审计记录
 - **ledgerly v2**：财务政策变更，舍入改为 `ROUND_HALF_EVEN`，CHANGELOG 有记录。用来制造**过期记忆**。
 - **simkit**（对照仓库，数值模拟）：规范与 ledgerly 相反，float 是正确的，非法输入抛标准 `ValueError`。ledgerly 的经验在这里**不应该**生效。
 
@@ -111,7 +111,7 @@
 | `no_memory` | 基线 |
 | `reasoningbank_style` | 已有设计 1：从成功和失败中提炼条目（标题 / 描述 / 内容），直接追加，按相关度检索 |
 | `ace_style` | 已有设计 2：手册条目 + 有用 / 有害计数 + 增量更新，整本手册注入 |
-| `earned_memory` | 本项目：验证门槛 + 结构化 + 作用域 + 生命周期 |
+| `attest` | 本项目：验证门槛 + 结构化 + 作用域 + 生命周期 |
 
 两个已有设计为精简复现，README 中标注"复现，非官方代码"。
 
@@ -126,8 +126,8 @@
 
 ### 3.5 预期假设（预注册时冻结）
 
-1. H 组：`earned_memory` 的通过率高于 `no_memory`。
-2. B 组：`earned_memory` 不低于 `no_memory`（作用域隔离有效）；两种已有设计可能出现污染导致的回归。
+1. H 组：`attest` 的通过率高于 `no_memory`。
+2. B 组：`attest` 不低于 `no_memory`（作用域隔离有效）；两种已有设计可能出现污染导致的回归。
 3. S 组：过期记忆最初会导致失败；经过生命周期降级后，重跑能恢复。
 4. 如果假设不成立，如实报告，不修改任务去迎合结果。
 
@@ -160,7 +160,7 @@
 - 代价：同义改写的召回差。
 - 换来：可解释、可复现、零依赖，并且能保证不跨仓库误用。
 
-**设计迭代**：先试已有设计（ReasoningBank 式直接追加、ACE 式手册），在数据里观察到跨场景污染和过期问题，再引出 `earned_memory`。已有设计本身就是实验条件，迭代的依据来自数据，而不是主观判断。
+**设计迭代**：先试已有设计（ReasoningBank 式直接追加、ACE 式手册），在数据里观察到跨场景污染和过期问题，再引出 `attest`。已有设计本身就是实验条件，迭代的依据来自数据，而不是主观判断。
 
 ## 6. 演示（约 6 分钟，三幕）
 
@@ -194,7 +194,7 @@
 |---|---|
 | 用户、核心问题、完成边界 | README 第 1 节 |
 | 复用来源与自研部分 | README "来源与贡献"：mini-swe-agent 原样复用；ACE、ReasoningBank 为精简复现；记忆生命周期、任务集、实验与报告为自研 |
-| 可复现入口、版本、依赖、运行方式 | README "快速开始"：Codespaces 一键环境；`requirements.txt` 固定版本；`python -m earned_memory ...` |
+| 可复现入口、版本、依赖、运行方式 | README "快速开始"：Codespaces 一键环境；`requirements.txt` 固定版本；`python -m attest ...` |
 | 真实执行 / 模拟 / 预生成 / 回放的标注 | README + 报告中的标签；评审意见标为模拟 |
 | 模块与状态流说明、两项架构决策 | README 架构一节 + 本计划第 5 节 |
 | 设计主张与一次设计迭代 | "记忆是挣来的"；v1 → v2 及实验数据 |
@@ -219,6 +219,6 @@
 - [x] 底座 Agent：mini-swe-agent（不从零写，也不复用 tiny-agent-harness）
 - [x] 运行环境：GitHub Codespaces
 - [x] DeepSeek 模型名：`deepseek-flash`（10/29 实测连通，延迟 1.3s；可用模型还有 `deepseek-v4-pro`）
-- [ ] 思考模式：关闭 + temperature 0，还是开启 + 低强度（思考模式下 temperature 不生效）
-- [ ] 项目名是否就用 Earned Memory
-- [ ] C4 规范的具体内容
+- [x] 思考模式：关闭 + temperature 0（D5）
+- [x] 项目名：Attest，代码包 `attest`（D12）
+- [x] C4 规范：动钱的操作必须写审计记录 `audit.record(...)`（D13）
