@@ -47,6 +47,18 @@ run before the freeze. Changes made because of the pilots:
 | `runs/pilot2_nomem` | 5/6 | The agent searched for conventions (`grep -rn round_money`) rather than copying legacy code: conventions visible anywhere in the code are discovered | Added review-only conventions C5 (idempotency) and C6 (approval threshold) to E04, E06, H04, H06; added stale task S04 |
 | `runs/pilot3_nomem` | **3/6** | Target reached. Discoverable conventions C1–C4 satisfied in 23/27 first-attempt checks; review-only C5–C6 in 0/7. H06 failed even after review because the agent read "must accept a keyword-only `idempotency_key`" as *required* | Reworded the C5 review comment to "optional keyword-only `idempotency_key=None`" (affects attempt 2 only). Benchmark frozen as is |
 
+**Write-path check.** Before freezing, the no-memory trajectories of E01–E06
+from pilot 3 were fed through each memory system's `learn()` step with the real
+model (`scripts/distill_check.py`); no agent ran with memory. Check 1
+(`runs/distill_check1`) found notes describing code that existed only in an
+earlier task's unmerged diff. The shared experience packet now says the diff is
+not kept; this applies to all three systems equally. Check 2
+(`runs/distill_check`) no longer shows the problem.
+
+写入环节检查：冻结前，把第三次基线中 E01–E06 的无记忆轨迹交给三种记忆系统的学习步骤（真实模型），
+没有任何 Agent 带记忆运行。第一次检查发现有经验描述了只存在于未合并改动中的代码；修复方式是在三种
+系统共用的输入中说明"改动不会保留"，第二次检查确认问题消失。
+
 ## 4. Hypotheses / 假设
 
 | | Hypothesis | Supported if |
