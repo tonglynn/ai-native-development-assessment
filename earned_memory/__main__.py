@@ -15,7 +15,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from .benchmark import PROJECT_ROOT, load_task, load_tasks
-from .memory import make_memory
+from .experiment import run_experiment
+from .memory import CONDITIONS, make_memory
 from .runner import Settings, run_task
 
 RUNS_DIR = PROJECT_ROOT / "runs"
@@ -34,7 +35,7 @@ def cmd_run(args) -> int:
     task = load_task(args.task)
     out = RUNS_DIR / args.name / args.condition / task.id / f"r{args.rep}"
     memory = make_memory(args.condition, RUNS_DIR / args.name / args.condition / "memory")
-    result = run_task(task, memory, out, settings=Settings(thinking=args.thinking), learn=not args.no_learn)
+    result = run_task(task, memory, out, settings=Settings(thinking=args.thinking), update_memory=not args.no_learn)
     print(_one_line(result))
     print(f"trajectories and result.json: {out}")
     return 0
@@ -51,7 +52,7 @@ def cmd_pilot(args) -> int:
         out = RUNS_DIR / args.name / "no_memory" / task.id / f"r{rep}"
         if (out / "result.json").exists() and not args.force:
             return json.loads((out / "result.json").read_text())
-        return run_task(task, make_memory("no_memory", None), out, settings=settings, learn=False)
+        return run_task(task, make_memory("no_memory", None), out, settings=settings, update_memory=False)
 
     with ThreadPoolExecutor(max_workers=args.parallel) as pool:
         futures = {pool.submit(job, t, rep): (t, rep) for t, rep in jobs}
@@ -62,6 +63,13 @@ def cmd_pilot(args) -> int:
             except Exception as exc:  # noqa: BLE001
                 print(f"{t.id} rep={rep} ERROR {type(exc).__name__}: {exc}", flush=True)
     return cmd_summary(argparse.Namespace(path=RUNS_DIR / args.name))
+
+
+def cmd_experiment(args) -> int:
+    root = RUNS_DIR / args.name
+    run_experiment(root, conditions=args.conditions.split(","), reps=args.reps, parallel=args.parallel,
+                   settings=Settings(thinking=args.thinking))
+    return cmd_summary(argparse.Namespace(path=root))
 
 
 def cmd_summary(args) -> int:
@@ -108,6 +116,14 @@ def main(argv=None) -> int:
     p.add_argument("--thinking", default=Settings().thinking, choices=["off", "low", "high"])
     p.add_argument("--force", action="store_true", help="rerun even if result.json exists")
     p.set_defaults(fn=cmd_pilot)
+
+    p = sub.add_parser("experiment", help="the preregistered experiment: every condition x repetition")
+    p.add_argument("--name", default="main")
+    p.add_argument("--conditions", default=",".join(CONDITIONS))
+    p.add_argument("--reps", type=int, default=3)
+    p.add_argument("--parallel", type=int, default=4)
+    p.add_argument("--thinking", default=Settings().thinking, choices=["off", "low", "high"])
+    p.set_defaults(fn=cmd_experiment)
 
     p = sub.add_parser("summary", help="summarise results under a runs/ directory")
     p.add_argument("path")

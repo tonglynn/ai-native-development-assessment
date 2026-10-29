@@ -7,12 +7,25 @@ block injected into the prompt differs.
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from .ace import AcePlaybookMemory
 from .base import MemorySystem, NoMemory, Retrieved
+from .earned import EarnedMemory
+from .reasoningbank import ReasoningBankMemory
 
-__all__ = ["MemorySystem", "NoMemory", "Retrieved", "make_memory"]
+CONDITIONS = ("no_memory", "reasoningbank", "ace", "earned_memory")
+
+__all__ = ["CONDITIONS", "MemorySystem", "NoMemory", "Retrieved", "make_memory"]
 
 
-def make_memory(condition: str, store_dir) -> MemorySystem:
+def make_memory(condition: str, store_dir: Path | None) -> MemorySystem:
     if condition == "no_memory":
         return NoMemory()
-    raise ValueError(f"memory condition {condition!r} is not implemented yet")
+    if condition == "reasoningbank":
+        return ReasoningBankMemory(store_dir)
+    if condition == "ace":
+        return AcePlaybookMemory(store_dir)
+    if condition == "earned_memory":
+        return EarnedMemory(store_dir)
+    raise ValueError(f"unknown memory condition {condition!r}; choose from {CONDITIONS}")

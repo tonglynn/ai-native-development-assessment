@@ -173,7 +173,7 @@ def run_task(
     out_dir: Path,
     *,
     settings: Settings | None = None,
-    learn: bool = True,
+    update_memory: bool = True,
     mock_outputs: list[list[dict]] | None = None,
 ) -> dict:
     """Run ``task`` with ``memory`` and write trajectories and result.json into ``out_dir``."""
@@ -247,8 +247,9 @@ def run_task(
         "leaks": sorted({x for a in attempts for x in a["leaks"]}),
         "attempts": attempts,
     }
-    result["memory_events"] = memory.feedback(task, version, retrieved.ids, cited, result["final_pass"])
-    if learn:
+    result["memory_events"] = []
+    if update_memory:  # frozen evaluation phases pass False: memory is read-only there
+        result["memory_events"] += memory.feedback(task, version, result)
         result["memory_events"] += memory.learn(task, version, result, transcript_text(all_messages), diff)
     (out_dir / "result.json").write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str) + "\n")
     shutil.rmtree(tmp_root, ignore_errors=True)
