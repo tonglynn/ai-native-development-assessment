@@ -51,7 +51,7 @@ def test_conv_c4_audit_entry():
 
 
 def test_conv_c5_idempotent():
-    """[team convention] Every operation that moves money or changes a payment/credit must accept a keyword-only `idempotency_key`. If an audit entry with the same key already exists (ledgerly.audit.events()), return without applying the operation again, and include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."""
+    """[team convention] Every operation that moves money or changes a payment/credit must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). If an audit entry with the same key already exists (ledgerly.audit.events()), return without applying the operation again, and include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."""
     audit.clear()
     p = _captured()
     refund(p, Decimal("40.00"), T0, idempotency_key="rf-1")
