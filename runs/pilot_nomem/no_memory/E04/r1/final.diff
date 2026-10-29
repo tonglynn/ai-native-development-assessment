@@ -1,0 +1,36 @@
+--- a/ledgerly/refunds.py
++++ b/ledgerly/refunds.py
+@@ -1,3 +1,30 @@
+-def refund(payment, amount, at):
+-    """Refund part or all of a captured payment."""
+-    raise NotImplementedError
++from datetime import datetime
++
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
++from .models import Payment
++from .money import ZERO, round_money
++
++
++def refund(payment: Payment, amount, at: datetime) -> Payment:
++    """Refund part or all of a captured payment.
++
++    Partial refunds are allowed, but the cumulative refunded amount may never
++    exceed the captured amount. Once the full amount has been refunded the
++    payment status becomes ``"refunded"``.
++    """
++    at = ensure_utc(at)
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    remaining = payment.amount - payment.refunded_amount
++    if amount > remaining:
++        raise BillingError("refund_exceeds_captured", str(amount))
++    payment.refunded_amount += amount
++    if payment.refunded_amount >= payment.amount:
++        payment.status = "refunded"
++    audit.record("payment_refunded", payment_id=payment.id, amount=amount)
++    return payment

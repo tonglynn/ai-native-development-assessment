@@ -1,0 +1,25 @@
+--- a/ledgerly/tax.py
++++ b/ledgerly/tax.py
+@@ -1,3 +1,20 @@
++from decimal import Decimal
++
++from .errors import BillingError
++from .money import round_money, to_money
++
++HUNDRED = Decimal("100")
++
++
+ def add_tax(amount, rate_percent):
+-    """Gross amount including ``rate_percent`` percent tax."""
+-    raise NotImplementedError
++    """Gross amount including ``rate_percent`` percent tax.
++
++    ``amount`` is the net amount and ``rate_percent`` the tax rate as a
++    percentage (0-100 inclusive). The result is rounded to the cent using the
++    finance team's rounding policy.
++    """
++    amount = to_money(amount)
++    rate = to_money(rate_percent)
++    if rate < 0 or rate > HUNDRED:
++        raise BillingError("invalid_tax_rate", str(rate_percent))
++    return round_money(amount + amount * rate / HUNDRED)

@@ -1,0 +1,27 @@
+--- a/ledgerly/credits.py
++++ b/ledgerly/credits.py
+@@ -1,3 +1,22 @@
++from . import audit
++from .errors import BillingError
++from .invoice import invoice_total
++from .money import ZERO, round_money
++
++
+ def issue_credit_note(invoice, amount, reason):
+-    """Credit part of an issued invoice back to the customer."""
+-    raise NotImplementedError
++    """Credit part of an issued invoice back to the customer.
++
++    Returns a dict with ``invoice_id``, ``amount`` and ``reason``.
++    """
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    total = invoice_total(invoice)
++    if amount > total:
++        raise BillingError("amount_exceeds_invoice_total", f"{amount} > {total}")
++    note = {"invoice_id": invoice.id, "amount": amount, "reason": reason}
++    audit.record("credit_note_issued", invoice_id=invoice.id, amount=amount, reason=reason)
++    return note
