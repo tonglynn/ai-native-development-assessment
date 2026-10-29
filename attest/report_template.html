@@ -110,7 +110,7 @@ footer { border-top: 1px solid var(--rule); padding-top: var(--s2); display: gri
 </style>
 
 <nav class="index" aria-label="Sections"><div class="inner">
-  <a href="#verdicts">Hypotheses</a><a href="#rates">Pass rates</a><a href="#tasks">Per task</a>
+  <a href="#verdicts">Hypotheses</a><a href="#insight">Where memory matters</a><a href="#rates">Pass rates</a><a href="#tasks">Per task</a>
   <a href="#leaks">Regressions &amp; leakage</a><a href="#stale">Stale phase</a><a href="#ledger">Memory ledger</a><a href="#runs">Runs</a>
 </div></nav>
 
@@ -133,6 +133,12 @@ footer { border-top: 1px solid var(--rule); padding-top: var(--s2); display: gri
     <div class="verdicts" id="verdict-list"></div>
   </section>
 
+  <section id="insight" aria-labelledby="h-insight">
+    <h2 id="h-insight">Where memory matters</h2>
+    <p class="muted">Held-out tasks split by what they need. Discoverable conventions can be read from the code, so a capable agent finds them without memory; review-only conventions exist only in review comments. Memory should change pass rates on the second kind, and at most effort on the first.</p>
+    <div class="scroll"><table id="tiers"></table></div>
+  </section>
+
   <section id="rates" aria-labelledby="h-rates">
     <h2 id="h-rates">Pass rates</h2>
     <div class="charts">
@@ -140,12 +146,21 @@ footer { border-top: 1px solid var(--rule); padding-top: var(--s2); display: gri
       <div class="chart"><h3>Conventions satisfied on the first attempt</h3><p class="small">Discoverable (C1–C4) can be read from the code; review-only (C5–C6) exist only in review comments.</p><div id="chart-tiers"></div></div>
     </div>
     <div class="scroll"><table id="headline"></table></div>
+    <h3>Paired by task</h3>
+    <p class="small">Each held-out task's pass@1 under a memory condition minus no memory (repetitions averaged). Interval: bootstrap 95% over tasks.</p>
+    <div class="scroll"><table id="paired"></table></div>
   </section>
 
   <section id="tasks" aria-labelledby="h-tasks">
     <h2 id="h-tasks">Per task</h2>
     <p class="muted">First-attempt passes out of runs, with the conventions missed most often.</p>
     <div class="scroll"><table class="matrix" id="matrix"></table></div>
+  </section>
+
+  <section id="attribution" aria-labelledby="h-attr">
+    <h2 id="h-attr">Did the agent follow the notes?</h2>
+    <p class="muted">Judged from behaviour: the hidden test for each convention, not the agent's own citation. "Shown" means a note about the convention was in the prompt.</p>
+    <div class="scroll"><table id="attr"></table></div>
   </section>
 
   <section id="leaks" aria-labelledby="h-leaks">
@@ -253,6 +268,30 @@ python -m attest.report runs/main report/index.html</pre>
     if (n) tierRows.push({label: `${name(c)} · ${t === "review_only" ? "review-only" : "discoverable"}`, v: ok / n, color: t === "review_only" ? "var(--stamp)" : "var(--off)"});
   }));
   hbar(tierRows, $("chart-tiers"));
+
+  // Tier split.
+  const tierName = {discoverable: "Discoverable only", review_only: "Needs review-only knowledge", simkit: "simkit"};
+  const ts = D.summary.tier_split || [];
+  $("tiers").innerHTML = ts.length
+    ? `<thead><tr><th>Condition</th><th>Held-out tasks</th><th class="num">Runs</th><th class="num">pass@1</th><th class="num">Steps</th><th class="num">Tokens / run</th></tr></thead><tbody>` +
+      ts.map((r) => `<tr><td>${esc(name(r.condition))}</td><td>${esc(tierName[r.tier] || r.tier)}</td><td class="num">${r.runs}</td><td class="num">${pct(r.pass1)}</td><td class="num">${r.steps.toFixed(1)}</td><td class="num">${Math.round(r.tokens).toLocaleString("en-US")}</td></tr>`).join("") + "</tbody>"
+    : `<tbody><tr><td class="muted">No held-out runs.</td></tr></tbody>`;
+
+  const pp = (x) => (x > 0 ? "+" : "") + Math.round(x * 100) + " pp";
+  const pr = D.summary.paired || [];
+  $("paired").innerHTML = pr.length
+    ? `<thead><tr><th>Condition</th><th class="num">Tasks</th><th class="num">Mean difference</th><th class="num">95% interval</th><th class="num">Better / worse / same</th></tr></thead><tbody>` +
+      pr.map((r) => `<tr><td>${esc(name(r.condition))}</td><td class="num">${r.tasks}</td><td class="num">${pp(r.mean_diff)}</td><td class="num">${pp(r.ci_low)} to ${pp(r.ci_high)}</td><td class="num">${r.wins} / ${r.losses} / ${r.ties}</td></tr>`).join("") + "</tbody>"
+    : `<tbody><tr><td class="muted">Needs a no-memory baseline and at least one memory condition.</td></tr></tbody>`;
+
+  const at = D.summary.attribution || [];
+  const frac = (a, b) => b ? `${a}/${b}` : "–";
+  $("attr").innerHTML = at.length
+    ? `<thead><tr><th>Condition</th><th>Convention</th><th class="num">Shown</th><th class="num">Satisfied when shown</th><th class="num">Satisfied when not shown</th><th class="num">Cited, then satisfied</th><th class="num">Followed without citing</th></tr></thead><tbody>` +
+      at.map((r) => `<tr><td>${esc(name(r.condition))}</td><td class="mono">${esc(r.convention)}</td><td class="num">${frac(r.shown || 0, r.checked)}</td>
+        <td class="num">${frac(r.shown_ok || 0, r.shown || 0)}</td><td class="num">${frac(r.not_shown_ok || 0, r.not_shown || 0)}</td>
+        <td class="num">${frac(r.cited_ok || 0, r.cited || 0)}</td><td class="num">${r.followed_uncited || 0}</td></tr>`).join("") + "</tbody>"
+    : `<tbody><tr><td class="muted">No memory-condition runs.</td></tr></tbody>`;
 
   // Per-task matrix.
   const pt = D.summary.per_task;
