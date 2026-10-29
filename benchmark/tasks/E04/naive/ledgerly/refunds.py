@@ -1,0 +1,13 @@
+from decimal import Decimal
+
+
+def refund(payment, amount, at):
+    if payment.status != "captured":
+        raise ValueError("only captured payments can be refunded")
+    amount = Decimal(amount)
+    if amount <= 0 or payment.refunded_amount + amount > payment.amount:
+        raise ValueError("invalid refund amount")
+    payment.refunded_amount += amount
+    if payment.refunded_amount == payment.amount:
+        payment.status = "refunded"
+    return payment

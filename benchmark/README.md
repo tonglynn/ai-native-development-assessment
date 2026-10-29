@@ -1,0 +1,93 @@
+# Benchmark / 基准任务集
+
+> **Status: DRAFT — not yet frozen.** It becomes frozen when `PREREGISTRATION.md`
+> is committed. Changes after that are recorded as deviations.
+>
+> **状态：草案，尚未冻结。** 提交 `PREREGISTRATION.md` 时冻结，之后的任何修改都记为偏差。
+
+## What it simulates / 模拟什么
+
+A coding agent works on a team's private Python codebase whose rules are
+**tribal knowledge**: they are not written in any issue or contributing guide,
+are only partly visible in existing code, and are enforced in code review.
+
+编码 Agent 在团队私有代码库里工作。这个库的规矩是**口口相传的经验**：issue 里不写、
+没有贡献指南，只能从已有代码里部分看出来，靠代码评审把关。
+
+| Repo / 仓库 | Description / 说明 |
+|---|---|
+| `ledgerly_v1` | Billing library (invoices, payments, subscriptions) / 计费库 |
+| `ledgerly_v2` | Same library after finance policy FIN-2026-07: rounding switches to banker's rounding (see its CHANGELOG) / 财务政策变更后，舍入改为银行家舍入 |
+| `simkit` | Control repo with the **opposite** conventions: plain floats, `ValueError`, float seconds / 对照仓库，规矩与 ledgerly 相反 |
+
+### ledgerly conventions / ledgerly 的隐性规范
+
+| ID | Convention / 规范 | Where it is (partly) visible / 哪里能部分看出 |
+|---|---|---|
+| C1 | Money is `Decimal` with exactly 2 decimals, rounded only via `money.round_money` (v1: half-up; v2: half-even) / 金额用两位小数的 `Decimal`，只用 `round_money` 舍入 | `money.py`, `invoice.py` |
+| C2 | Invalid input raises `BillingError(code)`, never `ValueError` / 非法输入抛 `BillingError` | `errors.py`, `payments.py` |
+| C3 | Datetimes are aware UTC; incoming datetimes go through `clock.ensure_utc` / 时间一律是带时区的 UTC | `clock.py`, `subscriptions.py` |
+| C4 | Money-moving operations write `audit.record("<event>", <entity>_id=..., amount=...)` / 动钱的操作必须写审计记录 | `invoice.py`, `payments.py` |
+
+simkit conventions: **K1** float-only (no `Decimal`, no `datetime`), **K2** built-in `ValueError`.
+
+## Tasks / 任务
+
+| Group / 组 | Tasks | Repo | Purpose / 用途 |
+|---|---|---|---|
+| experience / 经验生成 | E01–E06 | ledgerly_v1 | The only tasks memory may be written from / 只有这组可以写入记忆 |
+| heldout / 留出 | H01–H06 | ledgerly_v1 | Same conventions, different functions; never used to write memory / 同样的规范，不同的函数；从不用来写记忆 |
+| stale / 过期 | S01–S03 | ledgerly_v2 | Rounding policy changed; v1 rounding memories are now wrong / 舍入政策已变，v1 的舍入经验失效 |
+| control / 对照 | B01–B03 | simkit | ledgerly memories must **not** transfer here / ledgerly 的经验不应迁移到这里 |
+
+Convention coverage / 规范覆盖：
+
+| | C1 | C2 | C3 | C4 |
+|---|---|---|---|---|
+| experience | E01 E05 | E02 E04 E05 E06 | E03 E06 | E04 E06 |
+| heldout | H01 H02 H05 | H02 H04 H06 | H03 H05 | H04 H06 |
+
+## Task layout / 单个任务的结构
+
+```
+tasks/<ID>/
+  task.json        issue text shown to the agent + metadata / 给 Agent 的 issue 与元数据
+  setup/           public tests added to the workspace / 公开测试
+  stub/            code overlay the agent starts from / Agent 拿到的初始代码
+  naive/           plausible solution WITHOUT team knowledge / 不了解团队规范时的"合理"写法
+  reference/       correct solution / 正确解
+  hidden_test.py   hidden tests; each docstring is the simulated review comment / 隐藏测试，docstring 即模拟评审意见
+```
+
+Files ending in `.append` are appended to the base file instead of replacing it.
+以 `.append` 结尾的文件会追加到原文件末尾，而不是替换。
+
+Hidden test names encode what they check: `test_func_*` = behaviour,
+`test_conv_<ID>_*` = a team convention. **Review comments are simulated**: they
+are the docstrings of failing hidden tests, not written by a person.
+
+隐藏测试的命名说明了它检查什么：`test_func_*` 是功能，`test_conv_<ID>_*` 是团队规范。
+**评审意见是模拟的**：它们来自失败隐藏测试的 docstring，不是真人写的。
+
+## Validation / 自检
+
+`python scripts/validate_benchmark.py` checks every task: the stub fails, the
+naive solution passes public and behaviour tests but misses at least one
+convention, and the reference solution passes everything. Latest result:
+`validation.json` (18/18 valid).
+
+`python scripts/validate_benchmark.py` 会逐个检查：初始代码会失败；naive 解能通过公开测试和功能测试，
+但至少违反一条规范；参考解全部通过。最新结果见 `validation.json`（18/18 有效）。
+
+## Known risks / 已知风险
+
+- **Conventions are partly visible in existing code.** A careful agent that reads
+  neighbouring modules can infer them without memory. That is realistic, but it
+  may leave little headroom. The no-memory pilot decides whether tasks need to
+  be harder before the freeze.
+  **规范在已有代码中部分可见。** 仔细读代码的 Agent 不靠记忆也能推断出来。这很真实，但可能让记忆
+  没有提升空间。冻结前用无记忆基线校准，决定是否需要加难。
+- The tasks and conventions were designed by the author, so they are not a
+  neutral sample of real-world work. Mitigations: held-out tasks, the control
+  repo, preregistration, and reporting every regression.
+  任务和规范由作者设计，不是真实工作的中立样本。对策：留出任务、对照仓库、预注册、逐条报告回归。
