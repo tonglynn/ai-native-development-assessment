@@ -23,7 +23,7 @@ out of date — compared with no memory and with two published memory designs?
 | Agent | mini-swe-agent 2.4.6 `DefaultAgent`, unmodified; prompt `attest/config/agent.yaml` |
 | Model | `deepseek/deepseek-flash`, thinking disabled, temperature 0 |
 | Limits | 30 steps and 600 s per attempt; at most 2 attempts per task (2nd after simulated review) |
-| Tasks | `benchmark/` at the freeze commit: 6 experience (E), 6 held-out (H), 3 control (B, simkit), 3 stale (S, ledgerly 2.0.0) |
+| Tasks | `benchmark/` at the freeze commit: 6 experience (E), 6 held-out (H), 3 control (B, simkit), 4 stale (S, ledgerly 2.0.0) |
 | Conditions | `no_memory`, `reasoningbank`, `ace`, `attest` (same prompt; only the notes section differs) |
 | Repetitions | 3 per condition, each starting from an empty memory store |
 
@@ -49,7 +49,7 @@ held-out tasks leave room for improvement (no-memory pass@1 on H clearly below
 |---|---|---|
 | H1 | Attest improves held-out tasks | pass@1 on H: `attest` > `no_memory` (pooled over 3 repetitions) |
 | H2 | Attest does not leak across repositories | on B, `attest` shows 0 ledgerly notes and its pass@1 ≥ `no_memory` |
-| H3 | Outdated experience does not make Attest worse than having none | pass@1 on S: `attest` ≥ `no_memory`. Mechanism check (reported, not a hypothesis): every note cited in an S task that failed a related review check ends S03 as suspect, retired or superseded |
+| H3 | Outdated experience does not make Attest worse than having none | pass@1 on S: `attest` ≥ `no_memory`. Mechanism check (reported, not a hypothesis): every note cited in an S task that failed a related review check ends S04 as suspect, retired or superseded |
 | H4 | Attest is at least as good as published designs on H, with fewer regressions | pass@1 on H: `attest` ≥ `reasoningbank` and ≥ `ace`; number of H/B regressions: `attest` ≤ each baseline |
 
 Exploratory, no prediction: steps and cost per task; which conventions are learned; whether baselines leak ledgerly habits into simkit.

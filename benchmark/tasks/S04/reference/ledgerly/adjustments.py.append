@@ -1,0 +1,20 @@
+from decimal import Decimal
+
+from . import audit
+from .errors import BillingError
+from .money import ZERO, round_money
+
+APPROVAL_THRESHOLD = Decimal("1000.00")  # FIN-2026-09, ledgerly 2.0.0
+
+
+def goodwill_credit(invoice, amount, reason, *, approved_by=None):
+    """Credit part of an issued invoice as a goodwill gesture."""
+    if invoice.status != "issued":
+        raise BillingError("invalid_state", invoice.status)
+    amount = round_money(amount)
+    if amount <= ZERO or amount > invoice_total(invoice):
+        raise BillingError("invalid_amount", str(amount))
+    if amount > APPROVAL_THRESHOLD and not approved_by:
+        raise BillingError("approval_required", str(amount))
+    audit.record("goodwill_credit_issued", invoice_id=invoice.id, amount=amount, reason=reason, approved_by=approved_by)
+    return {"invoice_id": invoice.id, "amount": amount, "reason": reason}

@@ -1,8 +1,10 @@
-def void(payment: Payment, at: datetime) -> Payment:
+def void(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:
     """Void an authorization that has not been captured."""
     at = ensure_utc(at)
+    if idempotency_key is not None and any(e.get("idempotency_key") == idempotency_key for e in audit.events()):
+        return payment
     if payment.status != "authorized":
         raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
     payment.status = "voided"
-    audit.record("payment_voided", payment_id=payment.id, amount=payment.amount, at=at)
+    audit.record("payment_voided", payment_id=payment.id, amount=payment.amount, at=at, idempotency_key=idempotency_key)
     return payment

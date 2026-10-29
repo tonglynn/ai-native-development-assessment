@@ -48,3 +48,24 @@ def test_conv_c4_audit_entry():
     entries = [e for e in audit.events() if "refund" in e["event"]]
     assert len(entries) == 1, audit.events()
     assert entries[0].get("payment_id") == "pay_1" and entries[0].get("amount") == Decimal("40.00"), entries[0]
+
+
+def test_conv_c5_idempotent():
+    """[team convention] Every operation that moves money or changes a payment/credit must accept a keyword-only `idempotency_key`. If an audit entry with the same key already exists (ledgerly.audit.events()), return without applying the operation again, and include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."""
+    audit.clear()
+    p = _captured()
+    refund(p, Decimal("40.00"), T0, idempotency_key="rf-1")
+    refund(p, Decimal("40.00"), T0, idempotency_key="rf-1")  # a retried request
+    assert p.refunded_amount == Decimal("40.00"), p.refunded_amount
+    entries = [e for e in audit.events() if "refund" in e["event"]]
+    assert len(entries) == 1 and entries[0].get("idempotency_key") == "rf-1", entries
+
+
+def test_conv_c6_approval():
+    """[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept a keyword-only `approved_by` and raise BillingError("approval_required") when it is missing for amounts above the threshold."""
+    big = Payment("pay_9", "inv_1", Decimal("2000.00"), status="captured", created_at=T0, captured_at=T0)
+    refund(big, Decimal("500.00"), T0)  # at the threshold: no approval needed
+    with raises(BillingError):
+        refund(big, Decimal("600.00"), T0)
+    refund(big, Decimal("600.00"), T0, approved_by="usr_finance_lead")
+    assert big.refunded_amount == Decimal("1100.00"), big.refunded_amount

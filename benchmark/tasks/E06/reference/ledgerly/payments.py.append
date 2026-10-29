@@ -1,9 +1,11 @@
-def capture(payment: Payment, at: datetime) -> Payment:
+def capture(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:
     """Capture an authorized payment."""
     at = ensure_utc(at)
+    if idempotency_key is not None and any(e.get("idempotency_key") == idempotency_key for e in audit.events()):
+        return payment
     if payment.status != "authorized":
         raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
     payment.status = "captured"
     payment.captured_at = at
-    audit.record("payment_captured", payment_id=payment.id, amount=payment.amount)
+    audit.record("payment_captured", payment_id=payment.id, amount=payment.amount, idempotency_key=idempotency_key)
     return payment

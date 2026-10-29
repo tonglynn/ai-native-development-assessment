@@ -23,11 +23,11 @@ first; it is never stored in the repository.
 ```bash
 pip install --user -r requirements.txt     # done automatically when the codespace is created
 python -m pytest -q                         # pipeline tests with a scripted model, no API calls
-python scripts/validate_benchmark.py        # checks that all 18 tasks measure what they claim
+python scripts/validate_benchmark.py        # checks that all 19 tasks measure what they claim
 python scripts/check_model.py               # one tiny real call to verify the key and model
 
 python -m attest run --task E01 --name smoke     # one real agent run (no memory)
-python -m attest pilot --name pilot_nomem        # all 18 tasks, no memory
+python -m attest pilot --name pilot_nomem        # all 19 tasks, no memory
 python -m attest summary runs/pilot_nomem        # results table
 ```
 
@@ -49,7 +49,7 @@ Results and a console log are committed back to `runs/<name>/`.
 
 | Path | What it is |
 |---|---|
-| `benchmark/` | Simulated team repositories and 18 tasks — see `benchmark/README.md` |
+| `benchmark/` | Simulated team repositories and 19 tasks — see `benchmark/README.md` |
 | `attest/` | Runner, verifier and memory systems |
 | `attest/config/agent.yaml` | mini-swe-agent prompt, adapted from its `mini.yaml` |
 | `scripts/` | Benchmark validation and model check |

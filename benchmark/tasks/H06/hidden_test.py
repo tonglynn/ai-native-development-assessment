@@ -42,3 +42,13 @@ def test_conv_c4_audit_entry():
     entries = [e for e in audit.events() if "void" in e["event"]]
     assert len(entries) == 1, audit.events()
     assert entries[0].get("payment_id") == "pay_1", entries[0]
+
+
+def test_conv_c5_idempotent():
+    """[team convention] Every operation that moves money or changes a payment/credit must accept a keyword-only `idempotency_key`. If an audit entry with the same key already exists (ledgerly.audit.events()), return without applying the operation again, and include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."""
+    audit.clear()
+    p = _payment()
+    void(p, T0, idempotency_key="vd-1")
+    void(p, T0, idempotency_key="vd-1")  # a retried request must not fail or void twice
+    entries = [e for e in audit.events() if "void" in e["event"]]
+    assert len(entries) == 1 and entries[0].get("idempotency_key") == "vd-1", entries
