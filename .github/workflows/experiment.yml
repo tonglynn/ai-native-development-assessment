@@ -1,0 +1,110 @@
+# Runs agent experiments on GitHub's servers, so nothing depends on a browser
+# session staying connected. The DeepSeek key comes from the repository's
+# Actions secret DEEPSEEK_API_KEY and never appears in the repository or logs.
+#
+# Two ways to start a run:
+#   1. Actions tab -> "experiment" -> Run workflow (choose command and name)
+#   2. push a change to .github/run-request.json, e.g.
+#      {"command": "pilot", "name": "pilot_nomem", "reps": 1, "parallel": 4}
+# Results (trajectories, result.json, console log) are committed back to runs/.
+name: experiment
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: smoke | pilot | experiment
+        type: choice
+        options: [smoke, pilot, experiment]
+        default: pilot
+      name:
+        description: results go to runs/<name>
+        default: pilot_nomem
+      reps:
+        default: "3"
+      parallel:
+        default: "4"
+  push:
+    branches: [main]
+    paths: [".github/run-request.json"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: experiment
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Read request
+        id: req
+        env:
+          IN_COMMAND: ${{ inputs.command }}
+          IN_NAME: ${{ inputs.name }}
+          IN_REPS: ${{ inputs.reps }}
+          IN_PARALLEL: ${{ inputs.parallel }}
+        run: |
+          python - <<'EOF' >> "$GITHUB_OUTPUT"
+          import json, os, re
+          if os.environ.get("IN_COMMAND"):
+              req = {"command": os.environ["IN_COMMAND"], "name": os.environ["IN_NAME"],
+                     "reps": os.environ["IN_REPS"], "parallel": os.environ["IN_PARALLEL"]}
+          else:
+              req = json.load(open(".github/run-request.json"))
+          command = req.get("command", "pilot")
+          assert command in {"smoke", "pilot", "experiment"}, command
+          name = str(req.get("name", "pilot_nomem"))
+          assert re.fullmatch(r"[A-Za-z0-9_-]+", name), name
+          print(f"command={command}")
+          print(f"name={name}")
+          print(f"reps={int(req.get('reps', 3))}")
+          print(f"parallel={int(req.get('parallel', 4))}")
+          EOF
+
+      - name: Offline tests
+        run: python -m pytest -q
+
+      - name: Run agents
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          MSWEA_COST_TRACKING: ignore_errors
+          COMMAND: ${{ steps.req.outputs.command }}
+          NAME: ${{ steps.req.outputs.name }}
+          REPS: ${{ steps.req.outputs.reps }}
+          PARALLEL: ${{ steps.req.outputs.parallel }}
+        run: |
+          test -n "$DEEPSEEK_API_KEY" || { echo "Actions secret DEEPSEEK_API_KEY is missing"; exit 1; }
+          mkdir -p "runs/$NAME"
+          python scripts/check_model.py 2>&1 | tee "runs/$NAME/console.log"
+          case "$COMMAND" in
+            smoke)      python -m attest run --task E01 --name "$NAME" ;;
+            pilot)      python -m attest pilot --name "$NAME" --parallel "$PARALLEL" ;;
+            experiment) python -m attest experiment --name "$NAME" --reps "$REPS" --parallel "$PARALLEL" ;;
+          esac 2>&1 | tee -a "runs/$NAME/console.log"
+
+      - name: Commit results
+        if: always()
+        env:
+          NAME: ${{ steps.req.outputs.name }}
+          COMMAND: ${{ steps.req.outputs.command }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add runs
+          git commit -m "Results: $COMMAND $NAME (workflow run ${{ github.run_id }})" || { echo "nothing to commit"; exit 0; }
+          for i in 1 2 3; do git pull --rebase && git push && exit 0; sleep 5; done
+          exit 1
