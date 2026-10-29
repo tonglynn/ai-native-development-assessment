@@ -83,7 +83,7 @@ def _apply_overlay(src: Path, dest: Path) -> None:
             target = dest / rel.parent / f.name[: -len(".append")]
             target.parent.mkdir(parents=True, exist_ok=True)
             existing = target.read_text() if target.exists() else ""
-            target.write_text(existing.rstrip("\n") + "\n" + f.read_text())
+            target.write_text(existing.rstrip("\n") + "\n\n\n" + f.read_text())
         else:
             target = dest / rel
             target.parent.mkdir(parents=True, exist_ok=True)
