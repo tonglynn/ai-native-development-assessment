@@ -24,15 +24,19 @@ def set_llm(fn: LLMFn | None) -> None:
     _override = fn
 
 
-def complete_json(system: str, user: str) -> dict:
-    """Ask the model for a JSON object. Returns {} if no valid JSON comes back after one retry."""
+def complete_json(system: str, user: str, model: str | None = None, thinking: str | None = None) -> dict:
+    """Ask the model for a JSON object. Returns {} if no valid JSON comes back after one retry.
+
+    ``model``/``thinking`` override the defaults, e.g. to use a different model as an
+    independent judge."""
     if _override is not None:
         return _override(system, user)
     import litellm
 
-    model = os.environ.get("ATTEST_MODEL", "deepseek/deepseek-flash")
+    model = model or os.environ.get("ATTEST_MODEL", "deepseek/deepseek-flash")
+    thinking = thinking or os.environ.get("ATTEST_THINKING", "off")
     kwargs: dict = {"temperature": 0.0, "drop_params": True, "response_format": {"type": "json_object"}}
-    if os.environ.get("ATTEST_THINKING", "off") == "off":
+    if thinking == "off":
         kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     for _ in range(2):

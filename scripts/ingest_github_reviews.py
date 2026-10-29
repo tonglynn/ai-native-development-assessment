@@ -15,54 +15,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
-import time
 from pathlib import Path
 from types import SimpleNamespace
 
-import requests
-
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from attest.github_reviews import gh, reviewed_merged_prs  # noqa: E402
 from attest.memory import make_memory  # noqa: E402
-
-API = "https://api.github.com"
-
-
-def gh(path: str, accept: str = "application/vnd.github+json", **params):
-    headers = {"Accept": accept, "X-GitHub-Api-Version": "2022-11-28"}
-    if os.environ.get("GITHUB_TOKEN"):
-        headers["Authorization"] = f"Bearer {os.environ['GITHUB_TOKEN']}"
-    for _ in range(3):
-        resp = requests.get(f"{API}{path}", headers=headers, params=params, timeout=30)
-        if resp.status_code == 403 and resp.headers.get("X-RateLimit-Remaining") == "0":
-            time.sleep(30)
-            continue
-        resp.raise_for_status()
-        return resp.text if accept.endswith("diff") else resp.json()
-    raise RuntimeError(f"GitHub API kept refusing {path}")
-
-
-def reviewed_merged_prs(repo: str, limit: int) -> list[dict]:
-    found = []
-    for page in range(1, 11):
-        for pr in gh(f"/repos/{repo}/pulls", state="closed", sort="updated", direction="desc", per_page=50, page=page):
-            if not pr.get("merged_at") or pr["user"]["type"] == "Bot":
-                continue
-            author = pr["user"]["login"]
-            comments = [c["body"] for c in gh(f"/repos/{repo}/pulls/{pr['number']}/comments", per_page=100)
-                        if c["user"]["login"] != author and c["user"]["type"] != "Bot" and c["body"].strip()]
-            comments += [r["body"] for r in gh(f"/repos/{repo}/pulls/{pr['number']}/reviews", per_page=100)
-                         if r["user"] and r["user"]["login"] != author and r["user"]["type"] != "Bot" and (r["body"] or "").strip()]
-            if not comments:
-                continue
-            found.append({"number": pr["number"], "title": pr["title"], "body": (pr["body"] or "")[:1500],
-                          "url": pr["html_url"], "merged_at": pr["merged_at"], "comments": [c[:1200] for c in comments[:12]]})
-            if len(found) >= limit:
-                return sorted(found, key=lambda p: p["merged_at"])
-    return sorted(found, key=lambda p: p["merged_at"])
-
 
 def main() -> None:
     ap = argparse.ArgumentParser()
@@ -77,10 +37,7 @@ def main() -> None:
     systems = {cond: make_memory(cond, args.out / cond) for cond in ("attest", "reasoningbank")}
     log = []
     for pr in prs:
-        diff = gh(f"/repos/{args.repo}/pulls/{pr['number']}", accept="application/vnd.github.v3.diff")
-        if len(diff) > 120_000:
-            log.append({"pr": pr["number"], "skipped": "diff too large"})
-            continue
+        diff = pr["diff"]
         task = SimpleNamespace(id=f"PR#{pr['number']}", title=pr["title"], issue=f"{pr['title']}\n\n{pr['body']}", repo_name=name)
         run = {"first_pass": False, "final_pass": True, "shown_notes": [], "cited_notes": [],
                "attempts": [{"passed": False, "review_comments": pr["comments"]}]}

@@ -13,9 +13,9 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: smoke | pilot | experiment | distill_check | poison | scale | case_study
+        description: smoke | pilot | experiment | distill_check | poison | scale | case_study | retro
         type: choice
-        options: [smoke, pilot, experiment, distill_check, poison, scale, case_study]
+        options: [smoke, pilot, experiment, distill_check, poison, scale, case_study, retro]
         default: pilot
       name:
         description: results go to runs/<name>
@@ -66,7 +66,7 @@ jobs:
           else:
               req = json.load(open(".github/run-request.json"))
           command = req.get("command", "pilot")
-          assert command in {"smoke", "pilot", "experiment", "distill_check", "poison", "scale", "case_study"}, command
+          assert command in {"smoke", "pilot", "experiment", "distill_check", "poison", "scale", "case_study", "retro"}, command
           name = str(req.get("name", "pilot_nomem"))
           assert re.fullmatch(r"[A-Za-z0-9_-]+", name), name
           print(f"command={command}")
@@ -108,6 +108,7 @@ jobs:
             distill_check) python scripts/distill_check.py runs/pilot3_nomem "runs/$NAME" ;;
             poison|scale) python -m attest stress --kind "$COMMAND" --name "$NAME" --reps "$REPS" --parallel "$PARALLEL" ;;
             case_study) python scripts/ingest_github_reviews.py --repo "$REPO" --prs "$PRS" --out "runs/$NAME" ;;
+            retro) python scripts/retro_eval.py --repo "$REPO" --prs "$PRS" --out "runs/$NAME" ;;
           esac 2>&1 | tee -a "runs/$NAME/console.log"
 
       - name: Commit results
