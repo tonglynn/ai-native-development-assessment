@@ -53,6 +53,8 @@ def experience_packet(task: Task, repo_version: str, run: dict, transcript: str,
     first = run["attempts"][0]
     review = "\n".join(f"- {c}" for c in first["review_comments"]) or "(none: the first attempt was accepted)"
     return "\n".join([
+        "NOTE: every future task starts again from the original repository. The changes in FINAL DIFF are not kept, "
+        "so never describe a function, constant or file introduced by this diff as if it exists.",
         f"REPOSITORY: {task.repo_name} {repo_version}",
         f"ISSUE: {task.issue}",
         f"OUTCOME: first attempt {'accepted' if run['first_pass'] else 'rejected'}; "
