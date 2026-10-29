@@ -1,0 +1,61 @@
+--- a/ledgerly/payments.py
++++ b/ledgerly/payments.py
+@@ -7,17 +7,54 @@
+ from .money import ZERO, round_money
+ 
+ 
+-def authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -> Payment:
++def _already_applied(idempotency_key) -> bool:
++    if idempotency_key is None:
++        return False
++    return any(e.get("idempotency_key") == idempotency_key for e in audit.events())
++
++
++def authorize(
++    payment_id: str,
++    invoice: Invoice,
++    amount,
++    at: datetime,
++    *,
++    idempotency_key=None,
++) -> Payment:
++    if _already_applied(idempotency_key):
++        return Payment(
++            id=payment_id,
++            invoice_id=invoice.id,
++            amount=round_money(amount),
++            created_at=ensure_utc(at),
++        )
+     amount = round_money(amount)
+     if amount <= ZERO:
+         raise BillingError("non_positive_amount", str(amount))
+     if invoice.status != "issued":
+         raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
+     payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))
+-    audit.record("payment_authorized", payment_id=payment.id, amount=amount)
++    audit.record(
++        "payment_authorized",
++        payment_id=payment.id,
++        amount=amount,
++        idempotency_key=idempotency_key,
++    )
+     return payment
+ 
+ 
+-def void(payment: Payment, at: datetime) -> Payment:
++def void(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:
+     """Void an authorization that has not been captured."""
+-    raise NotImplementedError
++    if _already_applied(idempotency_key):
++        return payment
++    if payment.status != "authorized":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    ensure_utc(at)
++    payment.status = "voided"
++    audit.record(
++        "payment_voided",
++        payment_id=payment.id,
++        amount=payment.amount,
++        idempotency_key=idempotency_key,
++    )
++    return payment
