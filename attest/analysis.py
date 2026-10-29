@@ -66,8 +66,9 @@ def per_task(results: list[dict]) -> dict[str, dict[str, dict]]:
         cell = table[r["task_id"]].setdefault(r["condition"], {"pass1": 0, "runs": 0, "missed": defaultdict(int)})
         cell["runs"] += 1
         cell["pass1"] += bool(r["first_pass"])
-        for c in r["attempts"][0]["conv_failed"]:
-            cell["missed"][c] += 1
+        if not r["attempts"][0].get("crashed"):  # a crash is a failure, but not a convention miss
+            for c in r["attempts"][0]["conv_failed"]:
+                cell["missed"][c] += 1
     return {t: {c: dict(v, missed=dict(v["missed"])) for c, v in conds.items()} for t, conds in sorted(table.items())}
 
 

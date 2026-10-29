@@ -60,7 +60,11 @@ def make_model(settings: Settings, config: dict, mock_outputs: list[dict] | None
         kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
     else:
         kwargs["reasoning_effort"] = settings.thinking
-    return LitellmModel(model_name=settings.model, model_kwargs=kwargs, cost_tracking="ignore_errors", **model_cfg)
+    model = LitellmModel(model_name=settings.model, model_kwargs=kwargs, cost_tracking="ignore_errors", **model_cfg)
+    # Environment errors will not fix themselves: fail at once instead of retrying for minutes
+    # (the first smoke run spent ~12 minutes retrying a missing-module error).
+    model.abort_exceptions = [*model.abort_exceptions, ImportError]
+    return model
 
 
 # ----------------------------------------------------------------- trajectory helpers
@@ -206,6 +210,7 @@ def run_task(
         attempts.append({
             "n": n,
             "exit_status": info.get("exit_status", ""),
+            "crashed": str(info.get("exit_status", "")).startswith("crash:"),
             "steps": agent.n_calls,
             "seconds": round(time.time() - t0, 1),
             "tokens": tokens,
