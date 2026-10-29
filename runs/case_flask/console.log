@@ -1,0 +1,53 @@
+Available models: deepseek-flash, deepseek-v4-pro
+Model: deepseek/deepseek-flash
+Reply: pong
+Usage: Usage(completion_tokens=13, prompt_tokens=38, total_tokens=51, completion_tokens_details=CompletionTokensDetailsWrapper(accepted_prediction_tokens=None, audio_tokens=None, reasoning_tokens=10, rejected_prediction_tokens=None, text_tokens=None, image_tokens=None, video_tokens=None), prompt_tokens_details=PromptTokensDetailsWrapper(audio_tokens=None, cached_tokens=0, text_tokens=None, image_tokens=None, video_tokens=None), prompt_cache_hit_tokens=0, prompt_cache_miss_tokens=38)
+Latency: 1.0s
+{"pr": 2635, "url": "https://github.com/pallets/flask/pull/2635", "title": "Require opt-in for subdomain matching", "review_comments": 1, "attest": {"added": 0, "rejected": ["evidence quote not found verbatim in the review comments or the diff", "evidence quote not found verbatim in the review comments or the diff"]}, "reasoningbank": {"added": 3, "rejected": []}}
+{"pr": 5270, "url": "https://github.com/pallets/flask/pull/5270", "title": "Don't set the cli attribute in the sansio scaffold", "review_comments": 1, "attest": {"added": 1, "rejected": []}, "reasoningbank": {"added": 3, "rejected": []}}
+{"pr": 5818, "url": "https://github.com/pallets/flask/pull/5818", "title": "pass context through dispatch methods", "review_comments": 1, "attest": {"added": 0, "rejected": ["evidence quote not found verbatim in the review comments or the diff", "evidence quote not found verbatim in the review comments or the diff"]}, "reasoningbank": {"added": 3, "rejected": []}}
+{"pr": 6095, "url": "https://github.com/pallets/flask/pull/6095", "title": "Replace the use of private `monkeypatch` fixture API", "review_comments": 1, "attest": {"added": 1, "rejected": ["evidence quote not found verbatim in the review comments or the diff"]}, "reasoningbank": {"added": 3, "rejected": []}}
+{"pr": 6096, "url": "https://github.com/pallets/flask/pull/6096", "title": "Fix `.partition(\":\")` usage on potential IPv6 addresses", "review_comments": 1, "attest": {"added": 2, "rejected": []}, "reasoningbank": {"added": 3, "rejected": []}}
+# Case study: learning from code review on pallets/flask
+
+6 merged pull requests with reviewer comments, oldest first. Verified = merged by the maintainers. Real data; nothing simulated.
+
+## attest: 4 notes kept, 5 candidates rejected
+
+- `at-0001` (PR#5270) **Sansio scaffold must not import click**: Keep the sansio modules (src/flask/sansio/scaffold.py, sansio/app.py) free of Click imports; declare `cli: Group` only under `t.TYPE_CHECKING` and initialize the actual AppGroup in the concrete Flask and Blueprint classes.  
+  evidence: “from ..cli import AppGroup”
+- `at-0002` (PR#6095) **Use monkeypatch.delenv for env cleanup**: In tests, clear environment variables with monkeypatch.delenv(key, False) rather than touching private monkeypatch internals like _setitem or _pytest.monkeypatch.notset.  
+  evidence: “monkeypatch._setitem.append((os.environ, item, notset))”
+- `at-0003` (PR#6096) **Parse hosts with urlsplit, not partition**: To split a host/port that may be an IPv6 literal, use urlsplit(f"//{value}") and read .hostname/.port instead of .partition(":"), which breaks on bracketed IPv6 addresses.  
+  evidence: “sn_host, _, sn_port = server_name.partition(":")”
+- `at-0004` (PR#6096) **Check port is not None, not truthy**: When deriving a port from a parsed URL, test `sn_port is not None` rather than truthiness so that port 0 is preserved.  
+  evidence: “elif sn_port is not None:”
+
+Rejected candidates by reason:
+- 5× evidence quote not found verbatim in the review comments or the diff
+
+## reasoningbank: 15 notes kept, 0 candidates rejected
+
+- `rb-0001` (PR#2635) **Verify syntax before submitting**: Always run a syntax check (e.g., python -m py_compile or import the module) on edited Python files before submitting. A single missing parenthesis can cause rejection even when the logic is correct.
+- `rb-0002` (PR#2635) **Gate behavior changes behind explicit opt-in flags**: When changing default behavior that could break existing apps, introduce an explicit opt-in parameter defaulting to the old behavior, and document the change in CHANGES.rst and docstrings with versionchanged notes.
+- `rb-0003` (PR#2635) **Update docs and changelog alongside code**: For behavior changes, update the changelog entry, the relevant config docs, and the constructor docstring (with versionchanged/versionadded directives) so the new opt-in flag is discoverable.
+- `rb-0004` (PR#5270) **Move framework-specific attributes out of shared sansio base classes**: Remove the attribute initialization from the sansio base and re-add it in each concrete subclass (Flask app, Blueprint) that needs it. Keep a type-only annotation (e.g. `cli: Group` under TYPE_CHECKING) on the base so type checkers still see the attribute without importing the framework dependency.
+- `rb-0005` (PR#5270) **Override __init__ in subclasses when base no longer sets an attribute**: When the base class no longer creates the attribute, add an explicit __init__ in the concrete subclass that calls super().__init__(...) with all args and then sets the attribute. Mirror the base signature exactly (including sentinel defaults like `cli_group: str | None = _sentinel`) so behavior is unchanged.
+- `rb-0006` (PR#5270) **Update CHANGES.rst and versionchanged docs for refactors**: Add a CHANGES.rst entry summarizing the move and linking the PR/issue, and add `.. versionchanged::` notes in the affected class docstrings so users know where the attribute is now initialized.
+- `rb-0007` (PR#5818) **Backward-compatible signature changes via __init_subclass__**: Inspect the second parameter of overridden methods (first is self). Accept the new signature if the param is named 'ctx' (unannotated) or annotated as AppContext (string or class). Otherwise warn with DeprecationWarning and wrap the override to strip the new arg, and wrap the base method to inject it so super() calls still work.
+- `rb-0008` (PR#5818) **Wrap both directions for super() compatibility**: Use a remove_ctx wrapper on the subclass override (drops the ctx arg if present) and an add_ctx wrapper on the base method (injects app_ctx._get_current_object() when missing). Use functools.update_wrapper to preserve metadata. This keeps old-style super().method() calls working during the deprecation period.
+- `rb-0009` (PR#5818) **Pass context explicitly only for internal dispatch methods**: Methods like dispatch_request, full_dispatch_request, preprocess_request, process_response, and teardown hooks are internal dispatch paths, so passing ctx explicitly speeds them up. But url_for and make_response are commonly called from user code that only has proxy access, so keep them proxy-based to avoid breaking callers.
+- `rb-0010` (PR#6095) **Use pytest.MonkeyPatch.context() instead of private monkeypatch internals**: If a fixture needs to set up and tear down environment state, wrap the body in `with pytest.MonkeyPatch.context() as mp:` and yield inside it. This gives automatic undo via public API without touching `_setitem` or `monkeypatch.notset`.
+- `rb-0011` (PR#6095) **Replace monkeypatch._setitem with monkeypatch.delenv(key, False)**: For clearing env vars that may not exist, use `monkeypatch.delenv(key, False)` instead of appending to `_setitem` with `notset`. This is the standard public invocation and works across pytest versions.
+- `rb-0012` (PR#6095) **Make tests self-sufficient rather than relying on prior test side effects**: Add explicit `monkeypatch.delenv("VAR", False)` at the top of any test that assumes a variable is unset, so it passes in isolation. Don't rely on session-scoped fixtures or ordering to establish preconditions.
+- `rb-0013` (PR#6096) **Use urlsplit for host/port parsing instead of partition**: urlsplit handles bracketed IPv6 literals correctly and returns hostname without brackets and port as int. This avoids splitting on the first colon inside an IPv6 address. Apply the same pattern to any code extracting host from a URL or host string.
+- `rb-0014` (PR#6096) **Check parsed port with 'is not None' not truthiness**: urlsplit().port returns int or None; port 0 is falsy but valid. Use explicit None checks so port 0 is preserved, and drop redundant int() casts since .port is already an int.
+- `rb-0015` (PR#6096) **Add IPv6 test cases alongside existing parametrized tests**: Hidden tests likely check IPv6 handling in both run() and session_transaction(). Add cases like (None, None, '[::1]:8080', '::1', 8080) to existing parametrization and a session_transaction test using base_url='http://[::1]:8000/' to demonstrate the fix.
+
+## What would be recalled for open issues
+
+### [Add Cloudflare to Flask Hosting Platforms docs?](https://github.com/pallets/flask/issues/6146)
+
+- **attest**: at-0001, at-0002, at-0003, at-0004
+- **reasoningbank**: rb-0002, rb-0004, rb-0003, rb-0006, rb-0001, rb-0005
+
