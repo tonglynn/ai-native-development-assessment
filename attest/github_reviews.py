@@ -1,8 +1,12 @@
 """Fetch merged pull requests with reviewer comments from a public GitHub repository.
 
 Used by the real-repository case study and the retrospective evaluation. Needs
-network access to api.github.com (GitHub Actions; a GITHUB_TOKEN raises the
-rate limit).
+network access to api.github.com and a GITHUB_TOKEN (GitHub Actions provides one).
+
+One GraphQL query returns 50 pull requests together with their reviews and
+review comments, so finding reviewed PRs costs a handful of requests instead of
+two per PR; only the diffs of selected PRs are fetched separately. A time budget
+stops the search instead of letting it wait on rate limits indefinitely.
 """
 
 from __future__ import annotations
@@ -14,54 +18,91 @@ import requests
 
 API = "https://api.github.com"
 
+QUERY = """
+query($q: String!, $cursor: String) {
+  search(query: $q, type: ISSUE, first: 50, after: $cursor) {
+    pageInfo { hasNextPage endCursor }
+    nodes {
+      ... on PullRequest {
+        number title body url mergedAt
+        author { login __typename }
+        reviews(first: 20) {
+          nodes {
+            body
+            author { login __typename }
+            comments(first: 30) { nodes { body author { login __typename } } }
+          }
+        }
+      }
+    }
+  }
+}
+"""
 
-def gh(path: str, accept: str = "application/vnd.github+json", **params):
+
+def _headers(accept: str = "application/vnd.github+json") -> dict:
     headers = {"Accept": accept, "X-GitHub-Api-Version": "2022-11-28"}
     if os.environ.get("GITHUB_TOKEN"):
         headers["Authorization"] = f"Bearer {os.environ['GITHUB_TOKEN']}"
-    for attempt in range(4):
-        resp = requests.get(f"{API}{path}", headers=headers, params=params, timeout=30)
-        if resp.status_code in (403, 429) and (resp.headers.get("X-RateLimit-Remaining") == "0" or "rate limit" in resp.text.lower()):
-            time.sleep(20 * (attempt + 1))
+    return headers
+
+
+def gh(path: str, accept: str = "application/vnd.github+json", **params):
+    for attempt in range(3):
+        resp = requests.get(f"{API}{path}", headers=_headers(accept), params=params, timeout=30)
+        if resp.status_code in (403, 429) and "rate limit" in resp.text.lower():
+            time.sleep(15 * (attempt + 1))
             continue
         resp.raise_for_status()
         return resp.text if accept.endswith("diff") else resp.json()
     raise RuntimeError(f"GitHub API kept refusing {path}")
 
 
-def _reviewer_comments(repo: str, number: int, author: str) -> list[str]:
-    def keep(user, body):
-        return user and user["login"] != author and user["type"] != "Bot" and (body or "").strip()
+def _graphql(variables: dict) -> dict:
+    resp = requests.post(f"{API}/graphql", json={"query": QUERY, "variables": variables}, headers=_headers(), timeout=60)
+    resp.raise_for_status()
+    data = resp.json()
+    if data.get("errors"):
+        raise RuntimeError(data["errors"])
+    return data["data"]["search"]
 
-    inline = [c["body"] for c in gh(f"/repos/{repo}/pulls/{number}/comments", per_page=100) if keep(c["user"], c["body"])]
-    reviews = [r["body"] for r in gh(f"/repos/{repo}/pulls/{number}/reviews", per_page=100) if keep(r["user"], r["body"])]
-    return [c.strip()[:1200] for c in inline + reviews][:15]
+
+def _human(actor: dict | None, author: str) -> bool:
+    return bool(actor) and actor.get("login") != author and actor.get("__typename") != "Bot" and not actor.get("login", "").endswith("[bot]")
 
 
-def reviewed_merged_prs(repo: str, limit: int, max_diff: int = 120_000) -> list[dict]:
+def reviewed_merged_prs(repo: str, limit: int, max_diff: int = 120_000, budget_seconds: int = 900) -> list[dict]:
     """Merged PRs that reviewers (not the author, not bots) commented on, oldest first, with their diffs."""
-    seen, found = set(), []
-    for review_state in ("changes_requested", "approved", "none"):
-        for page in range(1, 6):
-            q = f"repo:{repo} is:pr is:merged review:{review_state}"
-            items = gh("/search/issues", q=q, sort="updated", order="desc", per_page=100, page=page).get("items", [])
-            time.sleep(2)  # search API allows 30 requests per minute
-            if not items:
+    started = time.time()
+    found, cursor = [], None
+    q = f"repo:{repo} is:pr is:merged sort:created-desc"
+    while len(found) < limit and time.time() - started < budget_seconds:
+        page = _graphql({"q": q, "cursor": cursor})
+        for pr in page["nodes"]:
+            if not pr or not pr.get("number"):
+                continue
+            author = (pr.get("author") or {}).get("login", "")
+            if (pr.get("author") or {}).get("__typename") == "Bot":
+                continue
+            comments = []
+            for review in pr["reviews"]["nodes"]:
+                if _human(review.get("author"), author) and (review.get("body") or "").strip():
+                    comments.append(review["body"].strip())
+                for c in review["comments"]["nodes"]:
+                    if _human(c.get("author"), author) and (c.get("body") or "").strip():
+                        comments.append(c["body"].strip())
+            if not comments:
+                continue
+            diff = gh(f"/repos/{repo}/pulls/{pr['number']}", accept="application/vnd.github.v3.diff")
+            if len(diff) > max_diff:
+                continue
+            found.append({"number": pr["number"], "title": pr["title"], "body": (pr.get("body") or "")[:1500],
+                          "url": pr["url"], "merged_at": pr.get("mergedAt") or "",
+                          "comments": [c[:1200] for c in comments][:15], "diff": diff})
+            print(f"found PR#{pr['number']} ({len(comments)} reviewer comments), {len(found)}/{limit}", flush=True)
+            if len(found) >= limit:
                 break
-            for it in items:
-                number = it["number"]
-                if number in seen or it["user"]["type"] == "Bot":
-                    continue
-                seen.add(number)
-                comments = _reviewer_comments(repo, number, it["user"]["login"])
-                if not comments:
-                    continue
-                pr = gh(f"/repos/{repo}/pulls/{number}")
-                diff = gh(f"/repos/{repo}/pulls/{number}", accept="application/vnd.github.v3.diff")
-                if len(diff) > max_diff:
-                    continue
-                found.append({"number": number, "title": it["title"], "body": (it.get("body") or "")[:1500],
-                              "url": it["html_url"], "merged_at": pr.get("merged_at") or "", "comments": comments, "diff": diff})
-                if len(found) >= limit:
-                    return sorted(found, key=lambda p: p["merged_at"])
+        if not page["pageInfo"]["hasNextPage"]:
+            break
+        cursor = page["pageInfo"]["endCursor"]
     return sorted(found, key=lambda p: p["merged_at"])
