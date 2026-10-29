@@ -16,6 +16,12 @@ Design rules (each one is enforced by deterministic code; the model only propose
                  verified success that cites it clears the suspicion.
 5. Supersede.    When new verified evidence replaces an old rule, the old item is
                  marked "superseded" (never deleted) and points to its replacement.
+
+Ablations (same class, one mechanism switched off; preregistered):
+  gate=False   learn from every finished task, verified or not, and admit any
+               well-formed candidate without an evidence quote (rule 1 off)
+  scope=False  retrieve across repositories and drop version warnings (rules 2-3 off)
+Accounting and supersede (rules 4-5) stay on in both.
 """
 
 from __future__ import annotations
@@ -64,20 +70,24 @@ def _version_tuple(version: str) -> tuple:
 
 
 class EarnedMemory(MemorySystem):
-    name = "attest"
-
-    def __init__(self, store_dir: Path | None):
+    def __init__(self, store_dir: Path | None, *, gate: bool = True, scope: bool = True):
         self.store = EventStore(store_dir / "events.jsonl" if store_dir else None)
+        self.gate, self.scope = gate, scope
+        self.name = "attest" + ("" if gate else "_no_gate") + ("" if scope else "_no_scope")
+
+    def _same_scope(self, item: dict, task: Task) -> bool:
+        return not self.scope or item["scope"]["repo"] == task.repo_name
 
     # ------------------------------------------------------------------ read path
 
     def retrieve(self, task: Task, repo_version: str) -> Retrieved:
         items = self.store.items()
         visible = {i: it for i, it in items.items() if it["status"] in VISIBLE}
-        in_scope = {i: it for i, it in visible.items() if it["scope"]["repo"] == task.repo_name}
+        in_scope = {i: it for i, it in visible.items() if self._same_scope(it, task)}
         ranked = rank(f"{task.title} {task.issue}", {i: f"{it['title']} {it['content']}" for i, it in in_scope.items()}, MAX_SHOWN)
         chosen = [items[i] for i, _ in ranked]
-        version_warnings = [it["id"] for it in chosen if _major(it["scope"]["observed_version"]) != _major(repo_version)]
+        version_warnings = [it["id"] for it in chosen
+                            if self.scope and _major(it["scope"]["observed_version"]) != _major(repo_version)]
         debug = {
             "in_scope": sorted(in_scope),
             "out_of_scope": sorted(set(visible) - set(in_scope)),
@@ -147,13 +157,13 @@ class EarnedMemory(MemorySystem):
     # ------------------------------------------------------------------ write path
 
     def learn(self, task: Task, repo_version: str, run: dict, transcript: str, diff: str) -> list[dict]:
-        if not run["final_pass"]:
+        if self.gate and not run["final_pass"]:
             return [self.store.append("reject", task_id=task.id, candidate=None, reason="task not verified: nothing is learned")]
         data = llm.complete_json(DISTILL_SYSTEM, experience_packet(task, repo_version, run, transcript, diff))
         corpus = normalise("\n".join(run["attempts"][0]["review_comments"]) + "\n" + diff)
         events = []
         for cand in (data.get("candidates") or [])[:3]:
-            problem = self._gate(cand, corpus)
+            problem = self._gate(cand, corpus, require_evidence=self.gate)
             if problem:
                 events.append(self.store.append("reject", task_id=task.id, candidate=cand, reason=problem))
                 continue
@@ -161,7 +171,7 @@ class EarnedMemory(MemorySystem):
         return events
 
     @staticmethod
-    def _gate(cand: dict, corpus: str) -> str:
+    def _gate(cand: dict, corpus: str, require_evidence: bool = True) -> str:
         if not isinstance(cand, dict):
             return "malformed candidate"
         if cand.get("kind") not in ("project_fact", "lesson"):
@@ -169,6 +179,8 @@ class EarnedMemory(MemorySystem):
         content = (cand.get("content") or "").strip()
         if not 20 <= len(content) <= 400:
             return "content must be 20-400 characters"
+        if not require_evidence:
+            return ""
         quote = normalise(cand.get("evidence_quote") or "")
         if len(quote) < 10:
             return "missing evidence quote"
@@ -178,14 +190,14 @@ class EarnedMemory(MemorySystem):
 
     def _admit(self, task: Task, repo_version: str, run: dict, cand: dict) -> list[dict]:
         items = self.store.items()
-        existing = [it for it in items.values() if it["status"] in VISIBLE and it["scope"]["repo"] == task.repo_name]
+        existing = [it for it in items.values() if it["status"] in VISIBLE and self._same_scope(it, task)]
         relations = {}
         if existing:
             listing = [{"id": it["id"], "title": it["title"], "content": it["content"]} for it in existing]
             prompt = json.dumps({"new": {"title": cand.get("title"), "content": cand["content"]}, "existing": listing}, ensure_ascii=False)
             data = llm.complete_json(RELATE_SYSTEM, prompt)
             relations = {r.get("id"): r.get("relation") for r in data.get("relations") or [] if isinstance(r, dict)}
-        evidence = {"task_id": task.id, "version": repo_version, "quote": cand["evidence_quote"]}
+        evidence = {"task_id": task.id, "version": repo_version, "quote": cand.get("evidence_quote", ""), "verified": run["final_pass"]}
 
         duplicate = next((it for it in existing if relations.get(it["id"]) == "duplicate"), None)
         if duplicate:

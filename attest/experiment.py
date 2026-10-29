@@ -1,7 +1,7 @@
 """The experiment protocol (identical for every condition and repetition).
 
     phase 1  learn     E01-E06 on ledgerly 1.0.0, in order, memory may be written
-    phase 2  heldout   H01-H06 on ledgerly 1.0.0, memory frozen (read-only)
+    phase 2  heldout   H01-H10 on ledgerly 1.0.0, memory frozen (read-only)
     phase 3  control   B01-B03 on simkit, memory frozen
     phase 4  stale     S01-S04 on ledgerly 2.0.0, in order, memory may be updated
                        (this is where outdated experience must be noticed and replaced)
@@ -52,7 +52,7 @@ def run_sequence(condition: str, rep: int, root: Path, settings: Settings, log=p
 def run_experiment(root: Path, conditions=CONDITIONS, reps: int = 3, parallel: int = 4, settings: Settings | None = None):
     settings = settings or Settings()
     jobs = [(c, r) for r in range(1, reps + 1) for c in conditions]
-    print(f"{len(jobs)} sequences x 19 tasks, {parallel} sequences in parallel -> {root}")
+    print(f"{len(jobs)} sequences x {len(load_tasks())} tasks, {parallel} sequences in parallel -> {root}")
     with ThreadPoolExecutor(max_workers=parallel) as pool:
         futures = {pool.submit(run_sequence, c, r, root, settings, lambda m: print(m, flush=True)): (c, r) for c, r in jobs}
         for f in as_completed(futures):

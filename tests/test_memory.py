@@ -172,3 +172,21 @@ def test_ace_counters_prune_and_dedupe(tmp_path):
         assert mem.retrieve(load_task("H01"), "1.0.0").ids == []
     finally:
         llm.set_llm(None)
+
+
+def test_ablation_without_gate_learns_unverified_and_ungrounded(tmp_path, scripted):
+    mem = make_memory("attest_no_gate", tmp_path)
+    assert mem.name == "attest_no_gate"
+    bad = dict(ROUND_NOTE, evidence_quote="")
+    scripted.answers[DISTILL_SYSTEM].append({"candidates": [bad]})
+    events = mem.learn(load_task("E01"), "1.0.0", run(False, False, [ROUND_COMMENT]), "t", "d")
+    assert [e["type"] for e in events] == ["add"]
+    assert mem.store.items()["at-0001"]["evidence"][0]["verified"] is False
+
+
+def test_ablation_without_scope_leaks_and_drops_version_warning(tmp_path, scripted):
+    mem = make_memory("attest_no_scope", tmp_path)
+    learn_round_note(mem, scripted)
+    assert mem.retrieve(load_task("B01"), "0.4.0").ids == ["at-0001"]
+    v2 = mem.retrieve(load_task("S01"), "2.0.0")
+    assert v2.debug["version_warnings"] == [] and "CHANGELOG" not in v2.context.split("\n", 1)[1]

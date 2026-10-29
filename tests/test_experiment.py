@@ -20,9 +20,9 @@ def test_protocol_order_frozen_phases_and_resume(tmp_path, monkeypatch):
 
     order = [c[0] for c in calls]
     assert order == ["E01", "E02", "E03", "E04", "E05", "E06", "H01", "H02", "H03", "H04", "H05", "H06",
-                     "B01", "B02", "B03", "S01", "S02", "S03", "S04"]
+                     "H07", "H08", "H09", "H10", "B01", "B02", "B03", "S01", "S02", "S03", "S04"]
     frozen = {c[0] for c in calls if not c[1]}
-    assert frozen == {"H01", "H02", "H03", "H04", "H05", "H06", "B01", "B02", "B03"}
+    assert frozen == {"H01", "H02", "H03", "H04", "H05", "H06", "H07", "H08", "H09", "H10", "B01", "B02", "B03"}
     for phase in ("learn", "heldout", "control", "stale"):
         assert (tmp_path / "attest" / "r1" / "memory" / f"after_{phase}.json").exists()
 

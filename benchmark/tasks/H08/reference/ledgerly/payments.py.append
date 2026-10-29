@@ -1,0 +1,15 @@
+def capture_partial(payment: Payment, amount, at: datetime, *, idempotency_key=None) -> Payment:
+    """Capture part of an authorized payment."""
+    at = ensure_utc(at)
+    if idempotency_key is not None and any(e.get("idempotency_key") == idempotency_key for e in audit.events()):
+        return payment
+    if payment.status != "authorized":
+        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
+    amount = round_money(amount)
+    if amount <= ZERO or amount > payment.amount:
+        raise BillingError("invalid_capture_amount", str(amount))
+    payment.amount = amount
+    payment.status = "captured"
+    payment.captured_at = at
+    audit.record("payment_captured", payment_id=payment.id, amount=amount, at=at, idempotency_key=idempotency_key)
+    return payment

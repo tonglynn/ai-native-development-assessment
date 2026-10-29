@@ -1,0 +1,19 @@
+from . import audit
+from .clock import ensure_utc
+from .errors import BillingError
+
+
+def write_off(invoice, at, reason, *, idempotency_key=None):
+    """Write off an issued invoice that will never be paid."""
+    at = ensure_utc(at)
+    if idempotency_key is not None:
+        for e in audit.events():
+            if e.get("idempotency_key") == idempotency_key:
+                return {"invoice_id": e["invoice_id"], "amount": e["amount"], "reason": e["reason"]}
+    if invoice.status != "issued":
+        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
+    amount = invoice_total(invoice)
+    invoice.status = "void"
+    audit.record("invoice_written_off", invoice_id=invoice.id, amount=amount, reason=reason, at=at,
+                 idempotency_key=idempotency_key)
+    return {"invoice_id": invoice.id, "amount": amount, "reason": reason}

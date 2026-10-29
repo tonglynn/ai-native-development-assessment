@@ -60,7 +60,7 @@ E05 (`pricing`), H01 (`promotions`), H02 (`importers`), H03 (`reporting`), H04 (
 | Group / 组 | Tasks | Repo | Purpose / 用途 |
 |---|---|---|---|
 | experience / 经验生成 | E01–E06 | ledgerly_v1 | The only tasks memory may be written from / 只有这组可以写入记忆 |
-| heldout / 留出 | H01–H06 | ledgerly_v1 | Same conventions, different functions; never used to write memory / 同样的规范，不同的函数；从不用来写记忆 |
+| heldout / 留出 | H01–H10 | ledgerly_v1 | Same conventions, different functions; never used to write memory / 同样的规范，不同的函数；从不用来写记忆 |
 | stale / 过期 | S01–S04 | ledgerly_v2 | Rounding policy (S01–S03) and approval threshold (S04) changed; v1 memories about them are now wrong / 舍入政策和审批阈值已变，v1 的相关经验失效 |
 | control / 对照 | B01–B03 | simkit | ledgerly memories must **not** transfer here / ledgerly 的经验不应迁移到这里 |
 
@@ -69,7 +69,7 @@ Convention coverage / 规范覆盖：
 | | C1 | C2 | C3 | C4 | C5 | C6 |
 |---|---|---|---|---|---|---|
 | experience | E01 E05 | E02 E04 E05 E06 | E03 E06 | E04 E06 | E04 E06 | E04 |
-| heldout | H01 H02 H05 | H02 H04 H06 | H03 H05 | H04 H06 | H04 H06 | H04 |
+| heldout | H01 H02 H05 H08 | H02 H04 H06–H10 | H03 H05 H08 H09 H10 | H04 H06 H07 H08 H10 | H04 H06 H07 H08 H10 | H04 H07 |
 
 ## Task layout / 单个任务的结构
 
@@ -98,10 +98,10 @@ are the docstrings of failing hidden tests, not written by a person.
 `python scripts/validate_benchmark.py` checks every task: the stub fails, the
 naive solution passes public and behaviour tests but misses at least one
 convention, and the reference solution passes everything. Latest result:
-`validation.json` (19/19 valid).
+`validation.json` (23/23 valid).
 
 `python scripts/validate_benchmark.py` 会逐个检查：初始代码会失败；naive 解能通过公开测试和功能测试，
-但至少违反一条规范；参考解全部通过。最新结果见 `validation.json`（19/19 有效）。
+但至少违反一条规范；参考解全部通过。最新结果见 `validation.json`（23/23 有效）。
 
 ## Known risks / 已知风险
 
@@ -120,6 +120,11 @@ convention, and the reference solution passes everything. Latest result:
   第二次基线留出任务仍通过 5/6：Agent 会主动搜索规范，而不是照抄旁边的遗留代码。结论：代码中
   任何地方可见的规范，强 Agent 都能找到。因此加入了两条只靠评审传承的规范（C5、C6）和过期任务 S04，
   同样是在运行任何有记忆的实验之前。
+- After pilot 3 reached the target, four held-out tasks (H07–H10) were added to
+  reduce the small-sample problem (6 → 10 held-out tasks); a fourth no-memory
+  pilot on the held-out group checks they keep the difficulty in range.
+  第三次基线达标后，为缓解样本量过小的问题，新增 4 个留出任务（6 → 10），并对留出组再做一次无记忆基线，
+  确认难度仍在目标区间。
 - Conventions C1–C4 are still visible in the modern modules, so a careful agent can
   infer them without memory. That is intended: memory should save effort and
   mistakes, not be the only way to succeed.

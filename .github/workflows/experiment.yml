@@ -73,6 +73,9 @@ jobs:
           print(f"name={name}")
           print(f"reps={int(req.get('reps', 3))}")
           print(f"parallel={int(req.get('parallel', 4))}")
+          groups = str(req.get("groups", "experience,heldout,stale,control"))
+          assert re.fullmatch(r"[a-z,]+", groups), groups
+          print(f"groups={groups}")
           EOF
 
       - name: Offline tests
@@ -86,13 +89,14 @@ jobs:
           NAME: ${{ steps.req.outputs.name }}
           REPS: ${{ steps.req.outputs.reps }}
           PARALLEL: ${{ steps.req.outputs.parallel }}
+          GROUPS: ${{ steps.req.outputs.groups }}
         run: |
           test -n "$DEEPSEEK_API_KEY" || { echo "Actions secret DEEPSEEK_API_KEY is missing"; exit 1; }
           mkdir -p "runs/$NAME"
           python scripts/check_model.py 2>&1 | tee "runs/$NAME/console.log"
           case "$COMMAND" in
             smoke)      python -m attest run --task E01 --name "$NAME" ;;
-            pilot)      python -m attest pilot --name "$NAME" --parallel "$PARALLEL" ;;
+            pilot)      python -m attest pilot --name "$NAME" --parallel "$PARALLEL" --groups "$GROUPS" ;;
             experiment) python -m attest experiment --name "$NAME" --reps "$REPS" --parallel "$PARALLEL" ;;
             distill_check) python scripts/distill_check.py runs/pilot3_nomem "runs/$NAME" ;;
           esac 2>&1 | tee -a "runs/$NAME/console.log"

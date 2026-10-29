@@ -145,6 +145,19 @@ def _hypotheses(summary: dict) -> list[dict]:
     rb, ace = p1("reasoningbank", "heldout"), p1("ace", "heldout")
     h4 = None if None in (a, rb, ace) else (a >= rb and a >= ace and all(
         regress.get("attest", 0) <= regress.get(c, 0) for c in ("reasoningbank", "ace")))
+    ns_foreign = contamination.get("attest_no_scope", {}).get("foreign_notes_shown")
+    abs_ = p1("attest_no_scope", "control")
+    h5 = None if None in (ns_foreign, foreign, ab, abs_) else (ns_foreign > 0 and foreign == 0 and ab >= abs_)
+    ang = p1("attest_no_gate", "heldout")
+    h6 = None if None in (a, ang) else (a >= ang and regress.get("attest", 0) <= regress.get("attest_no_gate", 0))
+    ablations = [
+        {"id": "H5", "claim": "Scope is what prevents leakage", "verdict": verdict(h5),
+         "evidence": f"ledgerly notes shown on simkit: attest {foreign if foreign is not None else 'n/a'}, without scope "
+                     f"{ns_foreign if ns_foreign is not None else 'n/a'}; pass@1 on B: attest {fmt(ab)} vs without scope {fmt(abs_)}"},
+        {"id": "H6", "claim": "The write gate does not cost held-out performance", "verdict": verdict(h6),
+         "evidence": f"pass@1 on H: attest {fmt(a)} vs without gate {fmt(ang)}; H/B regressions: attest "
+                     f"{regress.get('attest', 0)}, without gate {regress.get('attest_no_gate', 0)}"},
+    ]
     return [
         {"id": "H1", "claim": "Attest improves held-out tasks", "verdict": verdict(h1),
          "evidence": f"pass@1 on H: attest {fmt(a)} vs no memory {fmt(n)}"},
@@ -155,7 +168,7 @@ def _hypotheses(summary: dict) -> list[dict]:
         {"id": "H4", "claim": "Attest is at least as good as published designs, with fewer regressions", "verdict": verdict(h4),
          "evidence": f"pass@1 on H: attest {fmt(a)}, ReasoningBank {fmt(rb)}, ACE {fmt(ace)}; "
                      f"H/B regressions: attest {regress.get('attest', 0)}, ReasoningBank {regress.get('reasoningbank', 0)}, ACE {regress.get('ace', 0)}"},
-    ]
+    ] + ablations
 
 
 def build(root: Path, out: Path) -> Path:

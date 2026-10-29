@@ -23,14 +23,14 @@ out of date — compared with no memory and with two published memory designs?
 | Agent | mini-swe-agent 2.4.6 `DefaultAgent`, unmodified; prompt `attest/config/agent.yaml` |
 | Model | `deepseek/deepseek-flash`, thinking disabled, temperature 0 |
 | Limits | 30 steps and 600 s per attempt; at most 2 attempts per task (2nd after simulated review) |
-| Tasks | `benchmark/` at the freeze commit: 6 experience (E), 6 held-out (H), 3 control (B, simkit), 4 stale (S, ledgerly 2.0.0) |
-| Conditions | `no_memory`, `reasoningbank`, `ace`, `attest` (same prompt; only the notes section differs) |
+| Tasks | `benchmark/` at the freeze commit: 6 experience (E), 10 held-out (H), 3 control (B, simkit), 4 stale (S, ledgerly 2.0.0) |
+| Conditions | `no_memory`, `reasoningbank`, `ace`, `attest`, and two Attest ablations: `attest_no_gate` (write gate off) and `attest_no_scope` (repository scope and version warnings off). Same prompt; only the notes section differs |
 | Repetitions | 3 per condition, each starting from an empty memory store |
 
 **Protocol** (identical for every condition and repetition, `attest/experiment.py`):
 
 1. *learn* — E01–E06 in order; memory may be written.
-2. *heldout* — H01–H06; memory frozen (read-only).
+2. *heldout* — H01–H10; memory frozen (read-only).
 3. *control* — B01–B03; memory frozen.
 4. *stale* — S01–S04 in order; memory may be updated.
 
@@ -45,7 +45,8 @@ run before the freeze. Changes made because of the pilots:
 |---|---|---|---|
 | `runs/pilot_nomem` | 5/6 | The 9-module repository was small enough to read whole; the agent copied conventions from neighbouring code | Added six legacy modules that predate the conventions; moved E03–E05 and H01–H04 into them |
 | `runs/pilot2_nomem` | 5/6 | The agent searched for conventions (`grep -rn round_money`) rather than copying legacy code: conventions visible anywhere in the code are discovered | Added review-only conventions C5 (idempotency) and C6 (approval threshold) to E04, E06, H04, H06; added stale task S04 |
-| `runs/pilot3_nomem` | **3/6** | Target reached. Discoverable conventions C1–C4 satisfied in 23/27 first-attempt checks; review-only C5–C6 in 0/7. H06 failed even after review because the agent read "must accept a keyword-only `idempotency_key`" as *required* | Reworded the C5 review comment to "optional keyword-only `idempotency_key=None`" (affects attempt 2 only). Benchmark frozen as is |
+| `runs/pilot3_nomem` | **3/6** | Target reached. Discoverable conventions C1–C4 satisfied in 23/27 first-attempt checks; review-only C5–C6 in 0/7. H06 failed even after review because the agent read "must accept a keyword-only `idempotency_key`" as *required* | Reworded the C5 review comment to "optional keyword-only `idempotency_key=None`" (affects attempt 2 only). Added held-out tasks H07–H10 (6 → 10) to reduce the small-sample problem |
+| `runs/pilot4_nomem` (held-out only) | *(pending)* | | |
 
 **Write-path check.** Before freezing, the no-memory trajectories of E01–E06
 from pilot 3 were fed through each memory system's `learn()` step with the real
@@ -67,8 +68,10 @@ not kept; this applies to all three systems equally. Check 2
 | H2 | Attest does not leak across repositories | on B, `attest` shows 0 ledgerly notes and its pass@1 ≥ `no_memory` |
 | H3 | Outdated experience does not make Attest worse than having none | pass@1 on S: `attest` ≥ `no_memory`. Mechanism check (reported, not a hypothesis): every note cited in an S task that failed a related review check ends S04 as suspect, retired or superseded |
 | H4 | Attest is at least as good as published designs on H, with fewer regressions | pass@1 on H: `attest` ≥ `reasoningbank` and ≥ `ace`; number of H/B regressions: `attest` ≤ each baseline |
+| H5 | Scope is what prevents leakage | on B, `attest_no_scope` shows ledgerly notes (> 0) while `attest` shows none, and pass@1 on B: `attest` ≥ `attest_no_scope` |
+| H6 | The write gate does not cost held-out performance | pass@1 on H: `attest` ≥ `attest_no_gate`, and H/B regressions: `attest` ≤ `attest_no_gate` |
 
-Exploratory, no prediction: steps and cost per task; which conventions are learned; whether baselines leak ledgerly habits into simkit.
+Exploratory, no prediction: steps and cost per task; which conventions are learned; whether baselines leak ledgerly habits into simkit; how many notes each Attest variant stores and how many candidates the gate rejects.
 
 ## 5. Measures and analysis / 指标与分析
 
@@ -80,7 +83,7 @@ All numbers are computed by `attest/analysis.py` from `runs/<experiment>/**/resu
 - **Contamination:** notes learned on ledgerly that are shown on simkit tasks.
 - **Convention hit rate:** for each convention, the share of first attempts that satisfy it, reported separately for discoverable (C1–C4) and review-only (C5–C6) conventions. Exploratory.
 - **Spread:** min and max pass@1 across the 3 repetitions is reported next to every pooled rate.
-- With 6 held-out tasks × 3 repetitions the sample is small. Results are reported as counts and per-task tables; no significance tests are claimed.
+- With 10 held-out tasks × 3 repetitions the sample is still small. Results are reported as counts and per-task tables; no significance tests are claimed.
 
 ## 6. Exclusions / 排除规则
 

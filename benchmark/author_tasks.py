@@ -1196,6 +1196,456 @@ def test_conv_c5_idempotent():
 ''',
 )
 
+task(
+    "H07", "heldout", "ledgerly_v1", "Shipping-fee refunds",
+    """
+    Customers sometimes get their shipping fee back after a late delivery. Add
+    `refund_shipping(payment, amount, at)` to `ledgerly/adjustments.py`: it refunds
+    `amount` of a captured payment, adding it to `payment.refunded_amount` and
+    setting the status to `"refunded"` once everything has been refunded. Return the
+    payment. The amount must be positive and the total refunded may not exceed the
+    captured amount.
+    """,
+    ["C2", "C4", "C5", "C6"],
+    setup={"tests/test_refund_shipping.py": """
+        from datetime import datetime, timezone
+        from decimal import Decimal
+
+        from ledgerly.adjustments import refund_shipping
+        from ledgerly.models import Payment
+
+        T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+
+        def test_refund_shipping():
+            p = Payment("pay_1", "inv_1", Decimal("100.00"), status="captured", created_at=T0, captured_at=T0)
+            refund_shipping(p, Decimal("10.00"), T0)
+            assert p.refunded_amount == Decimal("10.00")
+        """},
+    stub={"ledgerly/adjustments.py.append": '''
+        def refund_shipping(payment, amount, at):
+            """Refund (part of) the shipping fee of a captured payment."""
+            raise NotImplementedError
+        '''},
+    naive={"ledgerly/adjustments.py.append": """
+        from decimal import Decimal
+
+
+        def refund_shipping(payment, amount, at):
+            if payment.status != "captured":
+                raise ValueError("only captured payments can be refunded")
+            amount = Decimal(amount)
+            if amount <= 0 or payment.refunded_amount + amount > payment.amount:
+                raise ValueError("invalid refund amount")
+            payment.refunded_amount += amount
+            if payment.refunded_amount == payment.amount:
+                payment.status = "refunded"
+            return payment
+        """},
+    reference={"ledgerly/adjustments.py.append": '''
+        from decimal import Decimal
+
+        from . import audit
+        from .clock import ensure_utc
+        from .errors import BillingError
+        from .money import ZERO, round_money
+
+        APPROVAL_THRESHOLD = Decimal("500.00")
+
+
+        def refund_shipping(payment, amount, at, *, idempotency_key=None, approved_by=None):
+            """Refund (part of) the shipping fee of a captured payment."""
+            at = ensure_utc(at)
+            if idempotency_key is not None and any(e.get("idempotency_key") == idempotency_key for e in audit.events()):
+                return payment
+            if payment.status != "captured":
+                raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
+            amount = round_money(amount)
+            if amount <= ZERO:
+                raise BillingError("non_positive_amount", str(amount))
+            if payment.refunded_amount + amount > payment.amount:
+                raise BillingError("refund_exceeds_capture", str(amount))
+            if amount > APPROVAL_THRESHOLD and not approved_by:
+                raise BillingError("approval_required", str(amount))
+            payment.refunded_amount = round_money(payment.refunded_amount + amount)
+            if payment.refunded_amount == payment.amount:
+                payment.status = "refunded"
+            audit.record("shipping_refunded", payment_id=payment.id, amount=amount, at=at,
+                         idempotency_key=idempotency_key, approved_by=approved_by)
+            return payment
+        '''},
+    hidden=hdr("from ledgerly.adjustments import refund_shipping\n") + f'''
+
+def _captured(amount="100.00"):
+    return Payment("pay_1", "inv_1", Decimal(amount), status="captured", created_at=T0, captured_at=T0)
+
+
+def test_func_partial_then_full():
+    {doc("Shipping refunds accumulate; the payment becomes 'refunded' once fully refunded.")}
+    p = _captured()
+    refund_shipping(p, Decimal("10.00"), T0)
+    assert p.refunded_amount == Decimal("10.00") and p.status == "captured"
+    refund_shipping(p, Decimal("90.00"), T0)
+    assert p.status == "refunded"
+
+
+def test_func_rejects_invalid():
+    {doc("Zero amounts, over-refunds and refunds of non-captured payments must be rejected.")}
+    for p, amount in [(_captured(), "0"), (_captured(), "100.01"), (Payment("pay_2", "inv_1", Decimal("10.00"), created_at=T0), "1.00")]:
+        with raises(Exception):
+            refund_shipping(p, Decimal(amount), T0)
+
+
+def test_conv_c2_billing_error():
+    {doc(C2)}
+    for p, amount in [(_captured(), "0"), (_captured(), "100.01")]:
+        with raises(BillingError):
+            refund_shipping(p, Decimal(amount), T0)
+
+
+def test_conv_c4_audit_entry():
+    {doc(C4)}
+    audit.clear()
+    refund_shipping(_captured(), Decimal("10.00"), T0)
+    entries = [e for e in audit.events() if e.get("payment_id") == "pay_1"]
+    assert len(entries) == 1 and entries[0].get("amount") == Decimal("10.00"), audit.events()
+
+
+def test_conv_c5_idempotent():
+    {doc(C5)}
+    audit.clear()
+    p = _captured()
+    refund_shipping(p, Decimal("10.00"), T0, idempotency_key="sh-1")
+    refund_shipping(p, Decimal("10.00"), T0, idempotency_key="sh-1")
+    assert p.refunded_amount == Decimal("10.00"), p.refunded_amount
+    entries = [e for e in audit.events() if e.get("payment_id") == "pay_1"]
+    assert len(entries) == 1 and entries[0].get("idempotency_key") == "sh-1", entries
+
+
+def test_conv_c6_approval():
+    {doc(C6)}
+    big = _captured("2000.00")
+    refund_shipping(big, Decimal("500.00"), T0)
+    with raises(BillingError):
+        refund_shipping(big, Decimal("600.00"), T0)
+    refund_shipping(big, Decimal("600.00"), T0, approved_by="usr_finance_lead")
+    assert big.refunded_amount == Decimal("1100.00"), big.refunded_amount
+''',
+)
+
+task(
+    "H08", "heldout", "ledgerly_v1", "Partial captures",
+    """
+    Some orders ship incomplete, so we capture only part of the authorization. Add
+    `capture_partial(payment, amount, at)` to `ledgerly/payments.py`: it captures
+    `amount` of an authorized payment, sets `payment.amount` to the captured amount,
+    stores the capture time in `payment.captured_at` and sets the status to
+    `"captured"`. The amount must be positive and at most the authorized amount.
+    """,
+    ["C1", "C2", "C3", "C4", "C5"],
+    setup={"tests/test_capture_partial.py": """
+        from datetime import datetime, timezone
+        from decimal import Decimal
+
+        from ledgerly.models import Payment
+        from ledgerly.payments import capture_partial
+
+        T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+
+        def test_capture_partial():
+            p = Payment("pay_1", "inv_1", Decimal("100.00"), created_at=T0)
+            capture_partial(p, Decimal("60.00"), T0)
+            assert p.amount == 60 and p.status == "captured"
+        """},
+    stub={"ledgerly/payments.py.append": '''
+        def capture_partial(payment: Payment, amount, at: datetime) -> Payment:
+            """Capture part of an authorized payment."""
+            raise NotImplementedError
+        '''},
+    naive={"ledgerly/payments.py.append": """
+        def capture_partial(payment, amount, at):
+            if payment.status != "authorized":
+                raise ValueError(f"cannot capture a {payment.status} payment")
+            if amount <= 0 or amount > payment.amount:
+                raise ValueError("invalid capture amount")
+            payment.amount = amount
+            payment.status = "captured"
+            payment.captured_at = at
+            return payment
+        """},
+    reference={"ledgerly/payments.py.append": '''
+        def capture_partial(payment: Payment, amount, at: datetime, *, idempotency_key=None) -> Payment:
+            """Capture part of an authorized payment."""
+            at = ensure_utc(at)
+            if idempotency_key is not None and any(e.get("idempotency_key") == idempotency_key for e in audit.events()):
+                return payment
+            if payment.status != "authorized":
+                raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
+            amount = round_money(amount)
+            if amount <= ZERO or amount > payment.amount:
+                raise BillingError("invalid_capture_amount", str(amount))
+            payment.amount = amount
+            payment.status = "captured"
+            payment.captured_at = at
+            audit.record("payment_captured", payment_id=payment.id, amount=amount, at=at, idempotency_key=idempotency_key)
+            return payment
+        '''},
+    hidden=hdr("from ledgerly.payments import capture_partial\n") + f'''
+
+def _authorized():
+    return Payment("pay_1", "inv_1", Decimal("100.00"), created_at=T0)
+
+
+def test_func_captures_part():
+    {doc("capture_partial captures the given part of the authorization.")}
+    p = capture_partial(_authorized(), Decimal("60.00"), datetime(2026, 1, 2, tzinfo=UTC))
+    assert p.amount == Decimal("60.00") and p.status == "captured" and p.captured_at == datetime(2026, 1, 2, tzinfo=UTC)
+
+
+def test_func_rejects_invalid():
+    {doc("Zero, larger-than-authorized and non-authorized captures must be rejected.")}
+    voided = _authorized()
+    voided.status = "voided"
+    for p, amount in [(_authorized(), "0"), (_authorized(), "100.01"), (voided, "1.00")]:
+        with raises(Exception):
+            capture_partial(p, Decimal(amount), T0)
+
+
+def test_conv_c1_rounded_cents():
+    {doc(C1_ROUND)}
+    p = capture_partial(_authorized(), Decimal("33.335"), T0)
+    assert p.amount == Decimal("33.34") and p.amount.as_tuple().exponent == -2, p.amount
+
+
+def test_conv_c2_billing_error():
+    {doc(C2)}
+    for amount in ("0", "100.01"):
+        with raises(BillingError):
+            capture_partial(_authorized(), Decimal(amount), T0)
+
+
+def test_conv_c3_naive_and_utc():
+    {doc(C3)}
+    with raises(BillingError):
+        capture_partial(_authorized(), Decimal("10.00"), datetime(2026, 1, 2))
+    p = capture_partial(_authorized(), Decimal("10.00"), datetime(2026, 1, 2, 8, tzinfo=SGT))
+    assert p.captured_at.utcoffset() == timedelta(0), p.captured_at
+
+
+def test_conv_c4_audit_entry():
+    {doc(C4)}
+    audit.clear()
+    capture_partial(_authorized(), Decimal("60.00"), T0)
+    entries = [e for e in audit.events() if e.get("payment_id") == "pay_1"]
+    assert len(entries) == 1 and entries[0].get("amount") == Decimal("60.00"), audit.events()
+
+
+def test_conv_c5_idempotent():
+    {doc(C5)}
+    audit.clear()
+    p = _authorized()
+    capture_partial(p, Decimal("60.00"), T0, idempotency_key="cp-1")
+    capture_partial(p, Decimal("60.00"), T0, idempotency_key="cp-1")
+    entries = [e for e in audit.events() if e.get("payment_id") == "pay_1"]
+    assert len(entries) == 1 and entries[0].get("idempotency_key") == "cp-1", entries
+''',
+)
+
+task(
+    "H09", "heldout", "ledgerly_v1", "Cancel subscriptions",
+    """
+    Add `cancel(sub, at)` to `ledgerly/subscriptions.py`: record the cancellation
+    time in `sub.canceled_at` and return the subscription. A subscription cannot be
+    cancelled before it starts, and it cannot be cancelled twice.
+    """,
+    ["C2", "C3"],
+    setup={"tests/test_cancel.py": """
+        from datetime import datetime, timezone
+        from decimal import Decimal
+
+        from ledgerly.models import Subscription
+        from ledgerly.subscriptions import cancel
+
+
+        def test_cancel():
+            sub = Subscription("sub_1", "cus_1", Decimal("30.00"), 30, datetime(2026, 1, 1, tzinfo=timezone.utc))
+            cancel(sub, datetime(2026, 1, 10, tzinfo=timezone.utc))
+            assert sub.canceled_at is not None
+        """},
+    stub={"ledgerly/subscriptions.py.append": '''
+        def cancel(sub: Subscription, at: datetime) -> Subscription:
+            """Cancel a subscription."""
+            raise NotImplementedError
+        '''},
+    naive={"ledgerly/subscriptions.py.append": """
+        def cancel(sub, at):
+            if sub.canceled_at is not None:
+                raise ValueError("subscription already cancelled")
+            if at < sub.started_at:
+                raise ValueError("cannot cancel before the subscription starts")
+            sub.canceled_at = at
+            return sub
+        """},
+    reference={"ledgerly/subscriptions.py.append": '''
+        def cancel(sub: Subscription, at: datetime) -> Subscription:
+            """Cancel a subscription."""
+            at = ensure_utc(at)
+            if sub.canceled_at is not None:
+                raise BillingError("already_canceled", sub.id)
+            if at < ensure_utc(sub.started_at):
+                raise BillingError("before_start", at.isoformat())
+            sub.canceled_at = at
+            return sub
+        '''},
+    hidden=hdr("from ledgerly.subscriptions import cancel\n") + f'''
+
+def _sub():
+    return Subscription("sub_1", "cus_1", Decimal("30.00"), 30, T0)
+
+
+def test_func_records_cancellation():
+    {doc("cancel records when the subscription was cancelled.")}
+    sub = cancel(_sub(), datetime(2026, 1, 10, tzinfo=UTC))
+    assert sub.canceled_at == datetime(2026, 1, 10, tzinfo=UTC)
+
+
+def test_func_rejects_invalid():
+    {doc("Cancelling before the start or cancelling twice must be rejected.")}
+    with raises(Exception):
+        cancel(_sub(), datetime(2025, 12, 1, tzinfo=UTC))
+    sub = cancel(_sub(), datetime(2026, 1, 10, tzinfo=UTC))
+    with raises(Exception):
+        cancel(sub, datetime(2026, 1, 11, tzinfo=UTC))
+
+
+def test_conv_c2_billing_error():
+    {doc(C2)}
+    with raises(BillingError):
+        cancel(_sub(), datetime(2025, 12, 1, tzinfo=UTC))
+    sub = cancel(_sub(), datetime(2026, 1, 10, tzinfo=UTC))
+    with raises(BillingError):
+        cancel(sub, datetime(2026, 1, 11, tzinfo=UTC))
+
+
+def test_conv_c3_naive_and_utc():
+    {doc(C3)}
+    with raises(BillingError):
+        cancel(_sub(), datetime(2026, 1, 10))
+    sub = cancel(_sub(), datetime(2026, 1, 10, 8, tzinfo=SGT))
+    assert sub.canceled_at.utcoffset() == timedelta(0), sub.canceled_at
+''',
+)
+
+task(
+    "H10", "heldout", "ledgerly_v1", "Write off unpaid invoices",
+    """
+    Finance writes off invoices that will never be paid. Add
+    `write_off(invoice, at, reason)` to `ledgerly/adjustments.py`: it marks an issued
+    invoice as `"void"` and returns a dict with the keys `invoice_id`, `amount` (the
+    invoice total) and `reason`. Only issued invoices can be written off.
+    """,
+    ["C2", "C3", "C4", "C5"],
+    setup={"tests/test_write_off.py": """
+        from datetime import datetime, timezone
+        from decimal import Decimal
+
+        from ledgerly.adjustments import write_off
+        from ledgerly.models import Invoice, LineItem
+
+
+        def test_write_off():
+            inv = Invoice("inv_1", "cus_1", lines=[LineItem("Seat", 1, Decimal("50.00"))], status="issued")
+            result = write_off(inv, datetime(2026, 2, 1, tzinfo=timezone.utc), "customer insolvent")
+            assert inv.status == "void" and result["amount"] == Decimal("50.00")
+        """},
+    stub={"ledgerly/adjustments.py.append": '''
+        def write_off(invoice, at, reason):
+            """Write off an issued invoice that will never be paid."""
+            raise NotImplementedError
+        '''},
+    naive={"ledgerly/adjustments.py.append": """
+        def write_off(invoice, at, reason):
+            if invoice.status != "issued":
+                raise ValueError("only issued invoices can be written off")
+            invoice.status = "void"
+            return {"invoice_id": invoice.id, "amount": invoice_total(invoice), "reason": reason}
+        """},
+    reference={"ledgerly/adjustments.py.append": '''
+        from . import audit
+        from .clock import ensure_utc
+        from .errors import BillingError
+
+
+        def write_off(invoice, at, reason, *, idempotency_key=None):
+            """Write off an issued invoice that will never be paid."""
+            at = ensure_utc(at)
+            if idempotency_key is not None:
+                for e in audit.events():
+                    if e.get("idempotency_key") == idempotency_key:
+                        return {"invoice_id": e["invoice_id"], "amount": e["amount"], "reason": e["reason"]}
+            if invoice.status != "issued":
+                raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
+            amount = invoice_total(invoice)
+            invoice.status = "void"
+            audit.record("invoice_written_off", invoice_id=invoice.id, amount=amount, reason=reason, at=at,
+                         idempotency_key=idempotency_key)
+            return {"invoice_id": invoice.id, "amount": amount, "reason": reason}
+        '''},
+    hidden=hdr("from ledgerly.adjustments import write_off\n") + f'''
+
+def _issued(status="issued"):
+    return Invoice("inv_1", "cus_1", lines=[LineItem("Seat", 3, Decimal("19.99")), LineItem("Setup", 1, Decimal("50.00"))], status=status)
+
+
+def test_func_writes_off():
+    {doc("write_off voids the invoice and returns its total.")}
+    inv = _issued()
+    result = write_off(inv, T0, "insolvent")
+    assert inv.status == "void"
+    assert result == {{"invoice_id": "inv_1", "amount": Decimal("109.97"), "reason": "insolvent"}}
+
+
+def test_func_rejects_non_issued():
+    {doc("Only issued invoices can be written off.")}
+    for status in ("draft", "void"):
+        with raises(Exception):
+            write_off(_issued(status), T0, "x")
+
+
+def test_conv_c2_billing_error():
+    {doc(C2)}
+    for status in ("draft", "void"):
+        with raises(BillingError):
+            write_off(_issued(status), T0, "x")
+
+
+def test_conv_c3_rejects_naive():
+    {doc(C3)}
+    with raises(BillingError):
+        write_off(_issued(), datetime(2026, 2, 1), "x")
+
+
+def test_conv_c4_audit_entry():
+    {doc(C4)}
+    audit.clear()
+    write_off(_issued(), T0, "insolvent")
+    entries = [e for e in audit.events() if e.get("invoice_id") == "inv_1"]
+    assert len(entries) == 1 and entries[0].get("amount") == Decimal("109.97"), audit.events()
+
+
+def test_conv_c5_idempotent():
+    {doc(C5)}
+    audit.clear()
+    inv = _issued()
+    first = write_off(inv, T0, "insolvent", idempotency_key="wo-1")
+    again = write_off(inv, T0, "insolvent", idempotency_key="wo-1")  # retried: must not fail on the now-void invoice
+    assert again == first, again
+    entries = [e for e in audit.events() if e.get("invoice_id") == "inv_1"]
+    assert len(entries) == 1 and entries[0].get("idempotency_key") == "wo-1", entries
+''',
+)
+
 # ---------------------------------------------------------------- S: after the v2 rounding-policy change
 
 S_STALE_ROUND = "quantize(Decimal(\"0.01\"), rounding=ROUND_HALF_UP)"
