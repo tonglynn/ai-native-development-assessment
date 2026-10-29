@@ -217,6 +217,7 @@
 - [x] README 语言：双语
 - [x] 底座 Agent：mini-swe-agent（不从零写，也不复用 tiny-agent-harness）
 - [x] 运行环境：GitHub Codespaces
-- [ ] DeepSeek 具体模型名（`check_model.py` 输出为准）
+- [x] DeepSeek 模型名：`deepseek-flash`（10/29 实测连通，延迟 1.3s；可用模型还有 `deepseek-v4-pro`）
+- [ ] 思考模式：关闭 + temperature 0，还是开启 + 低强度（思考模式下 temperature 不生效）
 - [ ] 项目名是否就用 Earned Memory
 - [ ] C4 规范的具体内容
