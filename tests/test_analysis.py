@@ -52,3 +52,12 @@ def test_paired_tier_and_attribution():
     att = {(x["condition"], x["convention"]): x for x in analysis.attribution(base + mem)}
     c5 = att[("attest", "C5")]
     assert c5["shown"] == 1 and c5["cited"] == 1 and c5["cited_ok"] == 1 and c5["not_shown"] == 1
+
+
+def test_business_risks_from_failed_test_names():
+    rs = [r("H04", "no_memory", "heldout", False), r("H04", "attest", "heldout", True)]
+    rs[0]["attempts"][0]["tests_failed"] = ["test_conv_c5_idempotent", "test_conv_c6_approval"]
+    rows = {(x["condition"], x["risk"]): x for x in analysis.business_risks(rs)}
+    assert rows[("no_memory", "duplicate_money_operation")]["failed"] == 1
+    assert rows[("no_memory", "unauthorised_operation")]["rate"] == 1.0
+    assert rows[("attest", "duplicate_money_operation")]["failed"] == 0

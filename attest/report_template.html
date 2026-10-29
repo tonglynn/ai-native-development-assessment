@@ -110,7 +110,7 @@ footer { border-top: 1px solid var(--rule); padding-top: var(--s2); display: gri
 </style>
 
 <nav class="index" aria-label="Sections"><div class="inner">
-  <a href="#verdicts">Hypotheses</a><a href="#insight">Where memory matters</a><a href="#rates">Pass rates</a><a href="#tasks">Per task</a>
+  <a href="#verdicts">Hypotheses</a><a href="#insight">Where memory matters</a><a href="#risks">Business risks</a><a href="#rates">Pass rates</a><a href="#tasks">Per task</a>
   <a href="#leaks">Regressions &amp; leakage</a><a href="#stale">Stale phase</a><a href="#ledger">Memory ledger</a><a href="#runs">Runs</a>
 </div></nav>
 
@@ -137,6 +137,12 @@ footer { border-top: 1px solid var(--rule); padding-top: var(--s2); display: gri
     <h2 id="h-insight">Where memory matters</h2>
     <p class="muted">Held-out tasks split by what they need. Discoverable conventions can be read from the code, so a capable agent finds them without memory; review-only conventions exist only in review comments. Memory should change pass rates on the second kind, and at most effort on the first.</p>
     <div class="scroll"><table id="tiers"></table></div>
+  </section>
+
+  <section id="risks" aria-labelledby="h-risks">
+    <h2 id="h-risks">Business risks</h2>
+    <p class="muted">Share of first attempts that failed a check guarding against each risk in the simulated billing business (see <code>SCENARIO.md</code>). Lower is better. These are risks in a simulated business, not estimates of real losses.</p>
+    <div class="scroll"><table id="risk-table"></table></div>
   </section>
 
   <section id="rates" aria-labelledby="h-rates">
@@ -268,6 +274,25 @@ python -m attest.report runs/main report/index.html</pre>
     if (n) tierRows.push({label: `${name(c)} · ${t === "review_only" ? "review-only" : "discoverable"}`, v: ok / n, color: t === "review_only" ? "var(--stamp)" : "var(--off)"});
   }));
   hbar(tierRows, $("chart-tiers"));
+
+  // Business risks: rows = risks, columns = conditions.
+  const RISK_NAMES = {
+    duplicate_money_operation: "Retried request applied twice", unauthorised_operation: "Over-threshold operation let through without approval",
+    legitimate_operation_blocked: "Legitimate operation blocked", amount_precision_violation: "Amount precision or rounding wrong",
+    unaudited_money_movement: "Money moved without an audit entry", outdated_policy_applied: "Outdated policy applied after 2.0.0",
+    rule_in_wrong_repository: "ledgerly rule applied in simkit",
+  };
+  const br = D.summary.business_risks || [];
+  const riskConds = conds.filter((c) => br.some((x) => x.condition === c));
+  $("risk-table").innerHTML = br.length
+    ? `<thead><tr><th>Risk</th>${riskConds.map((c) => `<th class="num">${esc(name(c))}</th>`).join("")}</tr></thead><tbody>` +
+      Object.keys(RISK_NAMES).filter((k) => br.some((x) => x.risk === k)).map((k) => `<tr><td>${esc(RISK_NAMES[k])}</td>` + riskConds.map((c) => {
+        const x = br.find((y) => y.condition === c && y.risk === k);
+        if (!x) return `<td class="num">–</td>`;
+        const cls = x.rate === 0 ? "full" : x.rate >= 0.5 ? "none" : "part";
+        return `<td class="num cell ${cls}">${pct(x.rate)} <span class="miss">${x.failed}/${x.checked}</span></td>`;
+      }).join("") + "</tr>").join("") + "</tbody>"
+    : `<tbody><tr><td class="muted">No runs.</td></tr></tbody>`;
 
   // Tier split.
   const tierName = {discoverable: "Discoverable only", review_only: "Needs review-only knowledge", simkit: "simkit"};

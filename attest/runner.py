@@ -226,6 +226,7 @@ def run_task(
             "public_passed": verification["public"]["passed"],
             "func_failed": verification["func_failed"],
             "conv_failed": verification["conv_failed"],
+            "tests_failed": [h["name"] for h in verification["hidden"] if not h["passed"]],
             "review_comments": verification["review_comments"],
         })
         all_messages.extend(agent.messages)

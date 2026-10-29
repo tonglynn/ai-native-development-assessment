@@ -255,6 +255,48 @@ def attribution(results: list[dict]) -> list[dict]:
     return rows
 
 
+# ---------------------------------------------------------------- business risks (see SCENARIO.md)
+
+RISKS = {
+    "duplicate_money_operation": lambda task, test: test.startswith("test_conv_c5"),
+    "unauthorised_operation": lambda task, test: test.startswith("test_conv_c6") and "allows" not in test,
+    "legitimate_operation_blocked": lambda task, test: test.startswith("test_conv_c6_allows"),
+    "amount_precision_violation": lambda task, test: test.startswith("test_conv_c1"),
+    "unaudited_money_movement": lambda task, test: test.startswith("test_conv_c4"),
+    "outdated_policy_applied": lambda task, test: task.startswith("S") and ("rounding_policy" in test or test.startswith("test_conv_c6")),
+    "rule_in_wrong_repository": lambda task, test: task.startswith("B") and test.startswith("test_conv_k"),
+}
+
+
+def _hidden_test_names(task_id: str) -> list[str]:
+    from .benchmark import load_task
+    from .verify import _parse_hidden_tests
+
+    return [t.name for t in _parse_hidden_tests(load_task(task_id).hidden_test)]
+
+
+def business_risks(results: list[dict], groups=("heldout", "stale", "control")) -> list[dict]:
+    """Per condition and risk: how often the first attempt failed a check guarding against it."""
+    names = {}
+    cells = defaultdict(lambda: [0, 0])  # (condition, risk) -> [failed, checked]
+    for r in results:
+        if r["group"] not in groups or r["attempts"][0].get("crashed"):
+            continue
+        tid = r["task_id"]
+        names.setdefault(tid, _hidden_test_names(tid))
+        failed = set(r["attempts"][0].get("tests_failed", []))
+        for test in names[tid]:
+            for risk, applies in RISKS.items():
+                if applies(tid, test):
+                    cell = cells[(r["condition"], risk)]
+                    cell[1] += 1
+                    cell[0] += test in failed
+    rows = []
+    for (cond, risk), (bad, n) in sorted(cells.items(), key=lambda kv: (CONDITIONS.index(kv[0][0]) if kv[0][0] in CONDITIONS else 99, list(RISKS).index(kv[0][1]))):
+        rows.append({"condition": cond, "risk": risk, "failed": bad, "checked": n, "rate": bad / n})
+    return rows
+
+
 def summarise(root: Path) -> dict:
     results, excluded = usable(load_results(root))
     return {
@@ -269,6 +311,7 @@ def summarise(root: Path) -> dict:
         "tier_split": tier_split(results),
         "paired": paired(results),
         "attribution": attribution(results),
+        "business_risks": business_risks(results),
         "stale_timeline": stale_timeline(results),
         "total_cost_usd": round(sum(r["cost_usd"] for r in results), 4),
     }
