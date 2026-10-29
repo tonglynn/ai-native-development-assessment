@@ -86,6 +86,7 @@ def main() -> None:
     rng = random.Random(0)
     per_pr = []
     totals = {s: {"conv": 0, "covered": 0, "shown": 0, "relevant": 0} for s in SYSTEMS}
+    lines = write_summary(args, prs, train, test, systems, totals, per_pr)
     for pr in test:
         numbered = "\n".join(f"{i + 1}. {c}" for i, c in enumerate(pr["comments"]))
         kinds = llm.complete_json(CLASSIFY, f"PULL REQUEST: {pr['title']}\n\nREVIEW COMMENTS:\n{numbered}", model=JUDGE, thinking="on")
@@ -123,7 +124,12 @@ def main() -> None:
         per_pr.append(row)
         print(json.dumps({k: row[k] for k in ("pr", "comments")} | {"convention": len(conv)} |
                          {s: (row[s]["covered"], len(row[s]["shown"]), row[s]["relevant"]) for s in SYSTEMS}), flush=True)
+        # Written after every PR, so a cancelled or timed-out run still leaves a (partial) summary.
+        lines = write_summary(args, prs, train, test, systems, totals, per_pr)
+    print("\n".join(lines))
 
+
+def write_summary(args, prs, train, test, systems, totals, per_pr) -> list[str]:
     summary = []
     for s in SYSTEMS:
         t = totals[s]
@@ -132,11 +138,14 @@ def main() -> None:
                         "coverage": t["covered"] / t["conv"] if t["conv"] else None,
                         "notes_shown": t["shown"], "relevant": t["relevant"],
                         "precision": t["relevant"] / t["shown"] if t["shown"] else None})
+    done = len(per_pr)
     (args.out / "results.json").write_text(json.dumps({"repo": args.repo, "train": len(train), "test": len(test),
-                                                       "judge": JUDGE, "summary": summary, "per_pr": per_pr}, indent=2) + "\n")
+                                                       "evaluated": done, "judge": JUDGE, "summary": summary,
+                                                       "per_pr": per_pr}, indent=2) + "\n")
+    status = "" if done == len(test) else f" **Partial: {done} of {len(test)} test PRs evaluated.**"
     lines = [f"# Retrospective evaluation on {args.repo}", "",
              f"{len(prs)} merged PRs with reviewer comments; learned from the oldest {len(train)}, evaluated on the newest {len(test)}. "
-             f"Judge: {JUDGE}; memory distilled by deepseek/deepseek-flash; notes anonymised and shuffled.", "",
+             f"Judge: {JUDGE}; memory distilled by deepseek/deepseek-flash; notes anonymised and shuffled.{status}", "",
              "| System | Notes stored | Convention comments | Anticipated | Coverage | Notes shown | Relevant | Precision |",
              "|---|---|---|---|---|---|---|---|"]
     for r in summary:
@@ -144,7 +153,7 @@ def main() -> None:
         prec = "–" if r["precision"] is None else f"{r['precision']:.0%}"
         lines.append(f"| {r['system']} | {r['notes_stored']} | {r['convention_comments']} | {r['anticipated']} | {cov} | {r['notes_shown']} | {r['relevant']} | {prec} |")
     (args.out / "report.md").write_text("\n".join(lines) + "\n")
-    print("\n".join(lines))
+    return lines
 
 
 if __name__ == "__main__":
