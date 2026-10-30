@@ -370,6 +370,85 @@ different depths. Points 5 and 6 are checked against the benchmark's real code. 
 tested in the simulated stream, with cases constructed for them. V1 stays the default
 throughout.
 
+### 1–4. Formula and feedback, in the simulated stream / 公式与反馈（模拟任务流）
+
+`scripts/forgetting_v2.py`, `runs/forgetting_v2`, no model calls; 11 arms, each run on 2
+stream seeds × 3 repetitions. The setup is the admission experiment's stream (tiered
+admission, 200 one-off notes, no task needs the approval rule) with 30% adoption noise, plus
+three constructed cases:
+
+- **verified-once details:** every 5th one-off note is genuinely verified once, then never
+  needed again;
+- **wrong rules:** 12 wrong rules about C1–C3, worded like the correct ones and admitted as
+  team conventions. The agent follows one half the time, and that convention then fails;
+- **convention outcomes:** a convention passes if a correct note about it was used; without
+  one, it passes half the time for C1–C4 and never for C5–C6.
+
+The cases are what the mechanisms are built for, so this shows whether each mechanism does
+its job and what it costs, not how often the cases occur.
+
+| Arm | Needed rule injected | Injectable notes | Useful rules archived | Policy rules archived | Stale verified-once still active | Wrong-note injections in the stream | Wrong notes left at the end |
+|---|---|---|---|---|---|---|---|
+| V1 | 57% | 132 | 4/52 | 0 | 114/115 | 609 | 9 |
+| V1.1 | 64% | 122 | 12/52 | 0 | 68/115 | 656 | 9 |
+| base = verified-only reinforcement | 57% | 130 | 6/52 | 0 | 114/115 | 646 | 9 |
+| base + 1 stability growth | 64% | 122 | **8/52** | 0 | **70/115** | 647 | 9 |
+| base + 3 three evidence states | 63% | 125 (+87 dormant) | **0/52** (6 dormant) | 0 | 115/115 | **82** | 4 |
+| base + 4 demand signal | 57% | 130 | **4/52** | 0 | 114/115 | 646 | 9 |
+| all four | 66% | 118 (+94 dormant) | 0/52 (4 dormant) | 0 | 70/115 | 82 | 4 |
+| exposure decay (V1) | 52% | 211 | 6/52 | **6** | 115/115 | 289 | 4 |
+| exposure decay + 2 scoped counting | 61% | 216 | **0/52** | **0** | 115/115 | 455 | 8 |
+| V1, type half-lives × 0.25 | 66% | 54 | 4/52 | 0 | 76/115 | 243 | 0 |
+| all four, × 0.25 | **71%** | **44** (+168 dormant) | **0/52** (8 dormant) | 0 | **11/115** | 82 | 4 |
+
+Read against the rules fixed before the run:
+
+- **1 Stability growth: it does its job but costs rules, so it does not pass.** It replaces the
+  utility floor with a half-life that doubles at each independent verification. Stale details
+  fade (114 → 70 of 115 still active), and no one-off note is permanent (34 → 0). But it
+  archived the audit rule (C4) in 2 runs: 6 → 8 of 52 useful rules archived.
+- **2 Scoped counting passes, but exposure decay as a family still fails.** Counting a note as
+  unused only in tasks that touch its files stopped exposure decay from archiving the approval
+  rule (6 → 0) and any useful rule (6 → 0). But exposure decay barely cleans memory (211–216
+  notes stay injectable). Scoping also shields wrong notes, which are counted unused less
+  often: 4 → 8 of them are left at the end.
+- **3 Three evidence states pass, and they are the strongest single mechanism.** A note is
+  archived only on negative evidence; low retention without it makes the note dormant (kept
+  in its own files). Useful rules archived fell from 6 to 0, with 6 dormant and still reachable
+  in their files. Injections of wrong rules fell by 87% (646 → 82), and the needed rules
+  injected rose from 57% to 63%. The caveat: here a failure is attributed to the wrong note
+  perfectly, by construction. In real work, finding which note caused a failure is the hard
+  part, and point 6 showed that generated checks cannot yet supply that reliably.
+- **4 The demand signal passes, with a modest effect and a clear limit.** A convention that fails
+  for lack of a note credits the notes about it, so 6 → 4 of 52 useful rules were archived. The
+  4 still lost are the "reject bool" rules: no test or review names them, so demand cannot reach
+  them. It reactivated no note in any arm: all of its effect is credit given before a note is
+  archived. Its cost is that it also credits wrong rules about the failing convention, 220 times
+  per run on its own and 122 with three evidence states, where negative evidence blocks the
+  credit. In "all four",
+  the 4 wrong notes left at the end are wrong C3 rules that were never followed, so they had no
+  negative evidence, and one demand credit each kept them alive.
+- **Aggressive decay becomes safe with the four mechanisms.** With half-lives × 0.25, V1
+  archives 4 useful rules, while "all four × 0.25" archives none (8 dormant). It also has the
+  best needed-rule injection (71% against V1's 57%) and the smallest injectable memory (44 notes
+  against 132). Its cost: 4 wrong rules survive, against 0 under V1 × 0.25.
+- **Decision:** V1 stays the default. "All four × 0.25" is the most promising configuration and
+  passes the user's rule here: it saves space and loses fewer correct rules. But it rests on
+  constructed cases, and on attribution of negative evidence that is perfect here and does not
+  yet exist in practice. 三态证据最有效，但它依赖"能准确知道是哪条笔记导致了失败"，这在模拟里是构造出来的，现实中还做不到。
+
+Disclosed:
+
+- **Two changes after a smoke run of two arms, before the experiment.** The wrong rules were
+  first single-task candidates, which were never injected (the rules fill the six slots first),
+  so they were made admitted team conventions. The coverage measure briefly counted only a
+  note's primary convention, and was restored to the earlier experiments' definition.
+- **A fix made in that smoke run.** Demand must never revive a note with negative evidence.
+- **Counters corrected after the first full run.** The demand-reactivation and wrong-credit
+  counters had counted the demand list before `observe` applied its rules. They were
+  corrected, and the experiment rerun with the same seeds; the other numbers are identical
+  (`report_first_run.md` kept).
+
 ### 5. Liveness: check a rule against the code it describes / 存活检查
 
 `scripts/liveness_check.py`, `runs/liveness`, 25 active learned notes. A note's *anchors* are
@@ -448,6 +527,7 @@ Ground truth comes from the benchmark design.
 - Context: under a 6k-token budget the context manager kept the session's review rule (2 of 3 S05 runs passed, 0 C6 failures) where a sliding window (0/3) and a plain summary (1/3) lost it; full history passes 3/3 at four times the tokens. Exploratory, one scenario, tuned after seeing results.
 - Forgetting: 200 one-off notes cut held-out pass@1 from 70% to 42%; no forgetting policy repaired it; uniform decay wrongly archived the approval rule (9 of 9 later C6 runs violated it), type-aware decay did not. Exploratory.
 - Pollution: trust-tiered admission brought held-out pass@1 under pollution from 36% back to 67% (76% with type-aware forgetting; clean memory 70%), with 0 approval violations in the combined arm. Exploratory; the separating signal exists by construction.
+- Forgetting V2 (exploratory): treating "no evidence" as dormant rather than archived, and archiving only on negative evidence, removed every wrongly archived useful rule and made aggressive decay safe (71% needed rules injected, 44 injectable notes) in a simulation whose failure attribution is perfect by construction. Liveness against code caught every stale and renamed rule; one-prompt generated checks were useful for 1 of 25 rules. Rules no test or review names stay out of reach of every signal.
 - Value feedback (offline): when adoption counts as contribution, one-off notes become permanent (34 under 30% adoption noise). Reinforcing only verified use removes that, but V1.1 also wrongly archived more correct rules (4 → 10–11 of 52), mostly rules no test checks. V1 stays the default and V1.1 is an option. The hard part is reliable evidence of value, not the decay rate.
 - Not supported: that the write gate is free. Here it cost held-out passes; its value
   is protection (poison) and provenance, which the held-out pass rate does not reward.
