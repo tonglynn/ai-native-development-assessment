@@ -61,3 +61,40 @@ def test_forgetting_never_overrides_eligibility():
     assert forgetting.maintain(m, 400, "uniform") == []           # only active notes are considered
     assert m.retrieve(load_task("S04"), "2.0.0").ids == []
     assert m.retrieve(load_task("H04"), "1.0.0").ids == ["at-0001"]  # still valid for 1.x
+
+
+def test_admission_tiers_and_file_scoped_candidates():
+    from types import SimpleNamespace
+
+    from attest.memory import admission
+
+    base = note("x")
+    base["source"]["review_comments"] = ["Please keep the export columns in this order."]
+    base["evidence"][0]["source"]["quote"] = "keep the export columns"
+    base["scope"]["files"] = ["ledgerly/reporting.py"]
+    assert admission.tier(base) == "candidate"
+    conv = dict(base, source=dict(base["source"], review_comments=["[team convention] keep the export columns in order."]))
+    assert admission.tier(conv) == "convention"
+    assert admission.tier(note("p", refs=["INC-204"])) == "policy"
+    assert admission.tier(dict(base, forgetting={"verified_tasks": ["E05"], "last_verified_tick": 0, "unused_exposures": 0})) == "repeated"
+    elsewhere = SimpleNamespace(title="Credit notes", issue="Add issue_credit_note to `ledgerly/adjustments.py`.")
+    here = SimpleNamespace(title="Report", issue="Change `ledgerly/reporting.py`.")
+    assert not admission.injectable_here(base, elsewhere) and admission.injectable_here(base, here)
+    assert admission.injectable_here(conv, elsewhere)  # rules apply repository-wide
+
+
+def test_tiered_memory_ranks_rules_before_candidates():
+    from attest.memory.forgetting import ForgettingMemory
+
+    m = ForgettingMemory(None, "none", lambda: 0, tiered=True)
+    rule = note("at-0001", refs=["INC-204"])
+    rule["content"] = "credit note idempotency"
+    detail = note("at-0002")
+    detail["content"] = "credit note export credit note columns credit note"
+    detail["scope"]["files"] = ["ledgerly/adjustments.py"]
+    for it in (rule, detail):
+        m.store.append("add", item=it, reason="seed")
+    ids = m.retrieve(load_task("H04"), "1.0.0").ids  # H04 names ledgerly/adjustments.py
+    assert ids == ["at-0001", "at-0002"]
+    trace = m.retrieve(load_task("H01"), "1.0.0").debug["trace"]  # H01 names promotions.py
+    assert "candidate" in trace["excluded"]["at-0002"]

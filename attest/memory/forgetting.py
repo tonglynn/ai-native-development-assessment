@@ -118,28 +118,39 @@ def half_life_note() -> str:
 
 
 class ForgettingMemory:
-    """Attest with a forgetting policy. `exposure_ranked` also ranks eligible notes by
-    lexical relevance x (0.5 + 0.5 * retention), so a verified rule with a policy source
-    outranks a recent one-off detail with the same words (the retrieval score of the
-    design: relevance first, retention second). Other policies keep Attest's ranking."""
+    """Attest with a forgetting policy and, optionally, trust-tiered admission (admission.py).
 
-    def __new__(cls, store_dir, policy: str, now_fn):
+    `exposure_ranked` ranks eligible notes by lexical relevance x (0.5 + 0.5 * retention).
+    `tiered=True` excludes candidates outside their files and ranks rules before candidates.
+    Other settings keep Attest's ranking."""
+
+    def __new__(cls, store_dir, policy: str, now_fn, tiered: bool = False):
+        from . import admission
         from .earned import EarnedMemory
         from .retrieval import timed_rank
-        from .text import rank
 
         class _Memory(EarnedMemory):
+            def _exclusion(self, item, task, version):
+                why = super()._exclusion(item, task, version)
+                if why or not tiered or admission.injectable_here(item, task):
+                    return why
+                return "candidate: seen once, injected only in its own files"
+
             def ranking(self, task, k=6, version=None):
-                if policy != "exposure_ranked":
+                if policy != "exposure_ranked" and not tiered:
                     return super().ranking(task, k, version)
                 items = self.store.items()
-                cands = self.candidates(task, version)
-                scored, ms = timed_rank("lexical", f"{task.title} {task.issue}", cands, None)
-                now = now_fn()
-                weighted = sorted(((i, round(sc * (0.5 + 0.5 * retention(items[i], now, policy)["R"]), 3)) for i, sc in scored),
-                                  key=lambda x: (-x[1], x[0]))
-                return (weighted if k is None else weighted[:k]), ms
+                scored, ms = timed_rank("lexical", f"{task.title} {task.issue}", self.candidates(task, version), None)
+                if policy == "exposure_ranked":
+                    now = now_fn()
+                    scored = [(i, round(sc * (0.5 + 0.5 * retention(items[i], now, policy)["R"]), 3)) for i, sc in scored]
+                if tiered:  # tier first (rules with any relevance, then candidates), relevance within a tier
+                    key = lambda x: (0 if x[1] > 0 and admission.tier(items[x[0]]) in admission.RULE_TIERS else 1 if x[1] > 0 else 2, -x[1], x[0])  # noqa: E731
+                else:
+                    key = lambda x: (-x[1], x[0])  # noqa: E731
+                ranked = sorted(scored, key=key)
+                return (ranked if k is None else ranked[:k]), ms
 
         memory = _Memory(store_dir)
-        memory.name = f"attest_forget_{policy}"
+        memory.name = f"attest_forget_{policy}" + ("_tiered" if tiered else "")
         return memory

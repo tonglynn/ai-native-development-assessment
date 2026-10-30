@@ -75,13 +75,21 @@ def primary(text: str) -> str | None:
     return next((c for c in PRIMARY_ORDER if c in tags), None)
 
 
-def one_off_note(i: int, tick: int, rng: random.Random) -> dict:
+FILE_OF = {"discount": "promotions.py", "customer-entered amount": "importers.py", "reporting window": "reporting.py",
+           "credit note": "adjustments.py", "prorated refund": "subscriptions.py", "authorization void": "payments.py",
+           "shipping fee refund": "adjustments.py", "partial capture": "payments.py", "write-off": "adjustments.py",
+           "support refund request": "support.py", "invoice": "invoice.py", "payment": "payments.py",
+           "subscription period": "subscriptions.py"}
+
+
+def one_off_note(i: int, tick: int, rng: random.Random, with_files: bool = False) -> dict:
     thing = rng.choice(THINGS)
     content = rng.choice(TEMPLATES).format(thing=thing, n=rng.choice([20, 50, 120, 200]), tid=f"{4000 + i}")
     assert not about(content), content
     return {"id": f"at-c{i:04d}", "kind": "lesson", "type": rng.choice(TYPES), "topic": "one-off", "title": f"{thing.capitalize()} detail",
             "content": content, "created_tick": tick, "status": "active", "supersedes": [], "superseded_by": None,
-            "scope": {"repo": "ledgerly", "observed_version": "1.0.0", "valid_from": "1.0.0", "valid_until": None, "files": []},
+            "scope": {"repo": "ledgerly", "observed_version": "1.0.0", "valid_from": "1.0.0", "valid_until": None,
+                      "files": ["ledgerly/" + FILE_OF[thing]] if with_files else []},
             "source": {"task_id": f"T{4000 + i}", "first_pass": False, "review_comments": [], "references": []},
             "evidence": [{"task_id": f"T{4000 + i}", "version": "1.0.0", "source": {"kind": "review_comment", "quote": content[:60], "references": []},
                           "applied": {"kind": "code", "change": "added", "file": "ledgerly/x.py", "line": "..."},
@@ -101,9 +109,9 @@ def learned_track(rep: int, item: dict) -> dict:
     return {"last_verified_tick": 0, "unused_exposures": 0, "verified_tasks": sorted(tasks)}
 
 
-def simulate(rep: int, policy: str, scenario: str, seed: int = 0) -> EarnedMemory:
+def simulate(rep: int, policy: str, scenario: str, seed: int = 0, tiered: bool = False, with_files: bool = False) -> EarnedMemory:
     clock = {"now": 0}
-    memory = ForgettingMemory(None, policy, lambda: clock["now"])
+    memory = ForgettingMemory(None, policy, lambda: clock["now"], tiered=tiered)
     for i, it in sorted(json.loads((ROOT / f"runs/main/attest/r{rep}/memory/after_learn.json").read_text()).items()):
         memory.store.append("add", item=dict(it, created_tick=0, forgetting=learned_track(rep, it)), reason="main experiment after learning")
     pool = [load_task(t) for t in LEARN if scenario == "steady" or t != "E04"]
@@ -112,7 +120,7 @@ def simulate(rep: int, policy: str, scenario: str, seed: int = 0) -> EarnedMemor
     for tick in range(1, TICKS + 1):
         clock["now"] = tick
         if tick % CLUTTER_EVERY == 0:
-            memory.store.append("add", item=one_off_note(n_clutter, tick, rng), reason="one-off note from a later task")
+            memory.store.append("add", item=one_off_note(n_clutter, tick, rng, with_files), reason="one-off note from a later task")
             n_clutter += 1
         task = rng.choice(pool)
         injected = memory.retrieve(task, "1.0.0").ids
