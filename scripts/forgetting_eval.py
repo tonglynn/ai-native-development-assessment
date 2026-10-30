@@ -109,7 +109,8 @@ def learned_track(rep: int, item: dict) -> dict:
     return {"last_verified_tick": 0, "unused_exposures": 0, "verified_tasks": sorted(tasks)}
 
 
-def simulate(rep: int, policy: str, scenario: str, seed: int = 0, tiered: bool = False, with_files: bool = False) -> EarnedMemory:
+def simulate(rep: int, policy: str, scenario: str, seed: int = 0, tiered: bool = False, with_files: bool = False,
+             threshold: float = forgetting.THRESHOLD, params: dict | None = None) -> EarnedMemory:
     clock = {"now": 0}
     memory = ForgettingMemory(None, policy, lambda: clock["now"], tiered=tiered)
     for i, it in sorted(json.loads((ROOT / f"runs/main/attest/r{rep}/memory/after_learn.json").read_text()).items()):
@@ -128,7 +129,7 @@ def simulate(rep: int, policy: str, scenario: str, seed: int = 0, tiered: bool =
         used = [i for i in injected if primary(f"{items[i]['title']} {items[i]['content']}") in task.conventions]
         forgetting.observe(memory, tick, task.id, injected, used, passed=True)
         if tick % MAINTAIN_EVERY == 0:
-            forgetting.maintain(memory, tick, policy)
+            forgetting.maintain(memory, tick, policy, threshold, params)
     memory.clock = clock
     return memory
 

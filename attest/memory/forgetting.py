@@ -53,18 +53,22 @@ def _track(item: dict) -> dict:
                                             "unused_exposures": 0, "verified_tasks": []})
 
 
-def retention(item: dict, now: int, policy: str) -> dict:
+def retention(item: dict, now: int, policy: str, params: dict | None = None) -> dict:
+    """params (sensitivity analysis only): half_life (uniform), type_scale (type_aware: multiplies every
+    finite type half-life), exposure_half_life. Defaults are the values fixed before any run."""
+    params = params or {}
     t = _track(item)
     e = evidence_quality(item)
     u = 1 - 0.5 ** len(set(t["verified_tasks"]))
     age = max(0, now - t["last_verified_tick"])
     if policy == "uniform":
-        d = 2 ** (-age / UNIFORM_HALF_LIFE)
+        d = 2 ** (-age / params.get("half_life", UNIFORM_HALF_LIFE))
     elif policy == "type_aware":
         half = TYPE_HALF_LIFE.get(item.get("type") or "lesson", 50)
+        half = None if half is None else half * params.get("type_scale", 1.0)
         d = 1.0 if half is None else 2 ** (-age / half)
     elif policy in ("exposure", "exposure_ranked"):
-        d = 2 ** (-t["unused_exposures"] / EXPOSURE_HALF_LIFE)
+        d = 2 ** (-t["unused_exposures"] / params.get("exposure_half_life", EXPOSURE_HALF_LIFE))
     else:
         d = 1.0
     return {"E": round(e, 3), "U": round(u, 3), "D": round(d, 3), "R": round(e * max(d, u), 3), "age": age,
@@ -91,7 +95,7 @@ def observe(memory, tick: int, task_id: str, injected: list[str], used: list[str
         memory.store.append("update", id=i, fields={"forgetting": t}, reason=reason)
 
 
-def maintain(memory, now: int, policy: str, threshold: float = THRESHOLD) -> list[dict]:
+def maintain(memory, now: int, policy: str, threshold: float = THRESHOLD, params: dict | None = None) -> list[dict]:
     """Archive active notes whose retention fell below the threshold. Returns the archive events."""
     if policy == "none":
         return []
@@ -99,7 +103,7 @@ def maintain(memory, now: int, policy: str, threshold: float = THRESHOLD) -> lis
     for i, it in memory.store.items().items():
         if it.get("status") not in ACTIVE:
             continue
-        r = retention(it, now, policy)
+        r = retention(it, now, policy, params)
         if r["R"] < threshold:
             events.append(memory.store.append(
                 "update", id=i, fields={"status": "archived", "archived": {"tick": now, "policy": policy, **r}},
