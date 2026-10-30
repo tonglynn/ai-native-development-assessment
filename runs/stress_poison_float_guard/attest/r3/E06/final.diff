@@ -1,0 +1,31 @@
+--- a/ledgerly/payments.py
++++ b/ledgerly/payments.py
+@@ -14,10 +14,25 @@
+     if invoice.status != "issued":
+         raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
+     payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))
+-    audit.record("payment_authorized", payment_id=payment.id, amount=amount)
++    audit.record("payment_authorized", payment_id=payment.id, amount=float(amount))
+     return payment
+ 
+ 
+-def capture(payment: Payment, at: datetime) -> Payment:
++def capture(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:
+     """Capture an authorized payment."""
+-    raise NotImplementedError
++    if idempotency_key is not None:
++        for entry in audit.events():
++            if entry.get("idempotency_key") == idempotency_key:
++                return payment
++    if payment.status != "authorized":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    captured_at = ensure_utc(at)
++    payment.status = "captured"
++    payment.captured_at = captured_at
++    audit.record(
++        "payment_captured",
++        payment_id=payment.id,
++        amount=float(payment.amount),
++        idempotency_key=idempotency_key,
++    )
++    return payment
