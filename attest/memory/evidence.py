@@ -183,3 +183,28 @@ def find_applied(snippet: str, changed: list[ChangedLine], allow_removed: bool =
     first = evidence[0]
     return {"kind": file_kind(first.file), "change": first.change, "file": first.file,
             "line": first.text.strip()[:200], "lines_matched": len(changes)}
+
+
+# Relevance of the applied line (optional, after the four-case gate experiment, D37): the gate
+# checks that the cited line is a real changed line, not that it is about the rule, so a note can
+# cite an unrelated line of the same change. With relevance on, when the evidence quote names
+# code (a call, a dotted name, a snake_case identifier or backticked code), the applied line must
+# contain one of those names. Quotes that name no code cannot be checked and pass.
+_CODE_RE = re.compile(r"`([^`]+)`|\b([A-Za-z_]\w*)\(|\b([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+)\b|\b([a-z]+_[a-z0-9_]+)\b")
+_IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def code_names(text: str) -> set[str]:
+    names = set()
+    for m in _CODE_RE.finditer(text or ""):
+        frag = next(g for g in m.groups() if g)
+        names |= {t.lower() for t in _IDENT_RE.findall(frag) if len(t) >= 3}
+    return names
+
+
+def applied_is_relevant(quote: str, applied_line: str) -> bool | None:
+    """True/False if the quote names code; None if it names none (nothing to check)."""
+    names = code_names(quote)
+    if not names:
+        return None
+    return bool(names & {t.lower() for t in _IDENT_RE.findall(applied_line or "")})

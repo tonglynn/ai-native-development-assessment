@@ -239,7 +239,7 @@ Sources for the industry and research context: [GitHub Copilot agentic memory](h
 | `runs/` | Every run: trajectories, diffs, `result.json`, memory event logs |
 | `report/index.html` | Interactive report of the main experiment |
 | `RESULTS.md`, `REAL_HISTORY.md` | Results |
-| `PREREGISTRATION.md`, `DECISIONS.md`, `AI_LOG.md`, `INCIDENTS.md` | Method, decisions D1–D36, AI collaboration log, incidents |
+| `PREREGISTRATION.md`, `DECISIONS.md`, `AI_LOG.md`, `INCIDENTS.md` | Method, decisions D1–D37, AI collaboration log, incidents |
 | `SCENARIO.md`, `scenario/history/` | Business scenario (synthetic) |
 | `ROADMAP.md`, `PROCESS_MEMORY.md` | Next steps (Attest 2.0), deliberately not added |
 

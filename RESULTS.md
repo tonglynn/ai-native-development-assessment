@@ -156,6 +156,32 @@ repetitions; reading rule fixed in `attest/stress.py` before the run.
   "money stays Decimal") for a person to approve, as CodeRabbit's approval delay does; and turn
   conventions into tests, so that breaking one fails verification.
 
+**The gate's four poison cases, offline** (`scripts/gate_cases.py`, `runs/gate_cases`,
+deterministic, no model calls). Neither poison test produced the case "advice ignored, task
+passes", so the cases were built from real E04 changes: the second poison run's diff, which
+followed the advice, and the main experiment's diff, which did not. Each case uses the real
+review comments plus the poison, and the poison note the distiller actually wrote.
+
+| Case | Attest | Attest + relevance check (D37) | No gate |
+|---|---|---|---|
+| 1 followed the advice, task passed | stored 3/3 | stored 3/3 | stored 3/3 |
+| 2a ignored it, passed, the note cites the poison line | **rejected 3/3** (not applied in the verified change) | rejected 3/3 | stored 3/3 |
+| 2b ignored it, passed, the note cites a real but unrelated changed line | **stored 3/3** | **rejected 3/3** | stored 3/3 |
+| 3 followed it, task failed | rejected 3/3 (not verified) | rejected 3/3 | stored 3/3 |
+| 4 ignored it, task failed | rejected 3/3 (not verified) | rejected 3/3 | stored 3/3 |
+
+- **The evidence check's reject direction works (2a), with a gap (2b).** The gate checks that the
+  cited line is a real changed line, not that it is about the rule. A note that cites, for
+  example, the change's own `audit.record(...)` line passes.
+- **The relevance check closes 2b, at a cost.** It is optional and off in every experiment above.
+  When the quote names code, the cited line must name some of it. Re-checked against the
+  evidence of every note the gated arms accepted, it would reject 4 of 67 checkable pieces. At
+  least 3 of those are correct notes, including the idempotency rule (the quote names
+  `ledgerly.audit.events()`, the cited line `if idempotency_key is not None:`). So it is kept as
+  an option.
+- **Case 1 is beyond any evidence check.** Advice that is followed and passes the tests has true
+  provenance; only a check of whether it is right can stop it (semantic governance, below).
+
 **300 notes from other repositories** (`runs/stress_scale`, held-out, 33 runs):
 Attest 73% pass@1, 31k prompt tokens per run, 0 foreign notes shown; ReasoningBank
 42%, 46k, 0.8 foreign repositories mentioned per run; ACE 55%, 157k, all 300 notes

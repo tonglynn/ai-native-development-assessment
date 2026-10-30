@@ -49,7 +49,7 @@ from pathlib import Path
 from .. import llm
 from ..benchmark import Task
 from .base import MemorySystem, Retrieved, experience_packet
-from .evidence import find_applied, parse_diff, references, source_corpus
+from .evidence import applied_is_relevant, find_applied, parse_diff, references, source_corpus
 from .retrieval import check_retriever, timed_rank
 from .sqlite_store import open_store
 from .text import jaccard, normalise, related
@@ -119,10 +119,11 @@ def validity(item: dict, version: str | None) -> str:
 
 class EarnedMemory(MemorySystem):
     def __init__(self, store_dir: Path | None, *, gate: bool = True, scope: bool = True, backend: str | None = None,
-                 retriever: str = "lexical", review_model: str | None = None):
+                 retriever: str = "lexical", review_model: str | None = None, relevance: bool = False):
         self.store = open_store(store_dir, backend)
         self.gate, self.scope = gate, scope
         self.review_model = review_model  # optional independent review in the write gate (off in the experiment)
+        self.relevance = relevance  # optional: the applied line must name code the evidence quote names (D37; off in the experiment)
         self.retriever = check_retriever(retriever)
         self.name = ("attest" + ("" if gate else "_no_gate") + ("" if scope else "_no_scope")
                      + ("_emb" if retriever == "embedding" else ""))
@@ -264,6 +265,10 @@ class EarnedMemory(MemorySystem):
         events = []
         for cand in (data.get("candidates") or [])[:3]:
             problem = self._gate(cand, corpus, changed, require_evidence=self.gate)
+            if not problem and self.gate and self.relevance:
+                applied = find_applied(cand.get("applied_in_diff") or "", changed)
+                if applied_is_relevant(cand.get("evidence_quote") or "", (applied or {}).get("line", "")) is False:
+                    problem = "applied line is unrelated to the evidence: it names none of the code the quote names"
             if not problem and self.gate and self.review_model:
                 problem = self._independent_review(task, cand)
             if problem:
