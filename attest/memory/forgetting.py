@@ -84,7 +84,8 @@ def retention(item: dict, now: int, policy: str, params: dict | None = None) -> 
     params = params or {}
     t = _track(item)
     e = evidence_quality(item)
-    u = 1 - 0.5 ** len(set(t["verified_tasks"]))
+    k = len(set(t["verified_tasks"]) | set(t.get("demand_tasks") or []))  # demand: V2, empty otherwise
+    u = 1 - 0.5 ** k
     age = max(0, now - t["last_verified_tick"])
     clock, half = age, None  # the quantity D decays over, and its half-life
     if policy == "uniform":
@@ -96,49 +97,102 @@ def retention(item: dict, now: int, policy: str, params: dict | None = None) -> 
         clock, half = t["unused_exposures"], params.get("exposure_half_life", EXPOSURE_HALF_LIFE)
     if params.get("protect_cited") and admission.policy_references(item):
         half = None
+    if params.get("stability") and half is not None:
+        # V2: no utility floor. Each independent verified (or demanded) task multiplies the
+        # half-life by `stability`, as in spaced repetition: a detail verified once still fades.
+        half = half * params["stability"] ** k
+        d = 2 ** (-clock / half)
+        return {"E": round(e, 3), "U": round(u, 3), "D": round(d, 3), "R": round(e * d, 3), "age": age,
+                "unused_exposures": t["unused_exposures"], "verified_tasks": k, "half_life": half}
     d = 1.0 if half is None else 2 ** (-clock / half)
     if params.get("utility_factor") and half is not None:
         u *= 2 ** (-clock / (half * params["utility_factor"]))
     return {"E": round(e, 3), "U": round(u, 3), "D": round(d, 3), "R": round(e * max(d, u), 3), "age": age,
-            "unused_exposures": t["unused_exposures"], "verified_tasks": len(set(t["verified_tasks"]))}
+            "unused_exposures": t["unused_exposures"], "verified_tasks": k}
 
 
 def observe(memory, tick: int, task_id: str, injected: list[str], used: list[str], passed: bool,
-            verified: list[str] | None = None) -> None:
+            verified: list[str] | None = None, *, negative=(), demand=(), relevant=None) -> None:
     """After a task, record how far each note got: retrieved, injected, adopted (used), verified.
 
     V1 (verified=None): a note used in a passing task is reinforced.
     V1.1 (verified given): only notes whose related behaviour was checked and passed (e.g. the
     hidden test of the note's convention) are reinforced; a note adopted in a passing task whose
     behaviour nobody checked is counted as adopted but not reinforced ("the task passed" is not
-    "this note contributed"). Injected notes that were not used gain an unused exposure."""
+    "this note contributed"). Injected notes that were not used gain an unused exposure.
+
+    V2, each optional and empty by default (V1 and V1.1 behave as before):
+      negative  notes adopted in this task whose related check then failed: negative evidence
+      demand    notes about a convention this task needed and failed without (the review or the
+                test named it): positive evidence although they were not injected; an archived
+                or dormant note is reactivated, with its clock reset
+      relevant  if given, an injected but unused note gains an unused exposure only when it is
+                in this list (the task touches the note's files), not for every injection"""
     items = memory.store.items()
     reinforce = set(used) if verified is None else set(verified)
-    for i in set(injected) | set(used) | reinforce:
+    for i in set(injected) | set(used) | reinforce | set(negative) | set(demand):
         if i not in items:
             continue
-        t = _track(items[i])
-        if i in used and i not in reinforce:
+        it, fields = items[i], {}
+        t = _track(it)
+        if i in negative:
+            t["negative"] = t.get("negative", 0) + 1
+            reason = f"adopted in {task_id}, and its check failed (tick {tick})"
+        elif i in demand:
+            if it.get("status") in ("retired", "superseded") or t.get("negative", 0) > 0:
+                # eligibility first: demand never revives a retracted or replaced rule, nor one
+                # whose check failed after it was followed (negative evidence outranks demand)
+                continue
+            t["demand_tasks"] = sorted(set(t.get("demand_tasks") or []) | {task_id})
+            t["last_verified_tick"], t["unused_exposures"] = tick, 0
+            reason = f"needed in {task_id}: its convention failed without it (tick {tick})"
+            if it.get("status") in ("archived", "dormant"):
+                fields["status"] = "active"
+                reason += "; reactivated"
+        elif i in used and i not in reinforce:
             t["adopted_unverified"] = t.get("adopted_unverified", 0) + 1
             reason = f"adopted in {task_id}, behaviour not verified (tick {tick})"
         elif i in reinforce and passed:
             t["verified_tasks"] = sorted(set(t["verified_tasks"]) | {task_id})
             t["last_verified_tick"], t["unused_exposures"] = tick, 0
             reason = f"used in {task_id}, which passed (tick {tick})"
+            if it.get("status") == "dormant":
+                fields["status"] = "active"
+                reason += "; woken from dormant"
         elif i in injected and i not in used:
+            if relevant is not None and i not in relevant:
+                continue
             t["unused_exposures"] += 1
             reason = f"injected in {task_id} but not used (tick {tick})"
         else:
             continue
-        memory.store.append("update", id=i, fields={"forgetting": t}, reason=reason)
+        fields["forgetting"] = t
+        memory.store.append("update", id=i, fields=fields, reason=reason)
 
 
 def maintain(memory, now: int, policy: str, threshold: float = THRESHOLD, params: dict | None = None) -> list[dict]:
-    """Archive active notes whose retention fell below the threshold. Returns the archive events."""
+    """Archive active notes whose retention fell below the threshold. Returns the archive events.
+
+    V2 (params["dormant"]): three evidence states. A note with negative evidence is archived; a
+    note whose retention fell below the threshold without negative evidence becomes *dormant*
+    (still injected where it was learned, woken by verified use or demand), because "no one
+    used it lately" is not "it is wrong"."""
     if policy == "none":
         return []
     events = []
     for i, it in memory.store.items().items():
+        if (params or {}).get("dormant"):
+            if it.get("status") in (*ACTIVE, "dormant") and _track(it).get("negative", 0) > 0:
+                events.append(memory.store.append("update", id=i, fields={"status": "archived", "archived": {"tick": now, "why": "negative evidence"}},
+                                                  reason=f"archived at tick {now}: its check failed after it was adopted"))
+                continue
+            if it.get("status") not in ACTIVE:
+                continue
+            r = retention(it, now, policy, params)
+            if r["R"] < threshold:
+                events.append(memory.store.append("update", id=i, fields={"status": "dormant", "dormant": {"tick": now, **r}},
+                                                  reason=f"dormant at tick {now}: R={r['R']}, no negative evidence"))
+            continue
         if it.get("status") not in ACTIVE:
             continue
         r = retention(it, now, policy, params)
@@ -198,6 +252,10 @@ class ForgettingMemory:
                 return events
 
             def _exclusion(self, item, task, version):
+                if item.get("status") == "dormant":  # V2: eligible like an active note, but only in its own files
+                    why = super()._exclusion(dict(item, status="active"), task, version)
+                    files = set((item.get("scope") or {}).get("files") or [])
+                    return why or ("" if files & admission.files_named(task) else "dormant: injected only in its own files")
                 why = super()._exclusion(item, task, version)
                 if why or not tiered or admission.injectable_here(item, task):
                     return why
