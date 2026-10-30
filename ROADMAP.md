@@ -13,6 +13,16 @@ Coding agent          mini-swe-agent (built) · Claude Code via MCP (prototype)
 Execution, feedback   diff · hidden tests · business risks · memory funnel (built) → feedback loop (P1)
 ```
 
+## Attest 2.0: status / 现状
+
+| Layer | Built and measured | Built, not measured | Design only |
+|---|---|---|---|
+| Memory governance | evidence gate, scope, versions with supersede, retraction, poison and scale tests | SQLite shared store | conflict resolution, trust levels |
+| Typed memory | (semantic rules) | | procedural, episodic, entity (taxonomy below) |
+| Context management | context manager on one long-session scenario (`RESULTS.md`) | archive layer (kept in memory, not persisted) | context recovery from the archive |
+| Agent execution | mini-swe-agent | MCP server and scripted client demo (`docs/MCP_DEMO.md`) | Claude Code session, LATS (not planned: adds search and variables unrelated to memory governance) |
+| Continuous learning | verified distillation, usage accounting, funnel | | dynamic forgetting (below), consolidation |
+
 ## P0, before the freeze / 冻结前 (done)
 
 Independent audit and re-check; complete preregistration with decision rules;

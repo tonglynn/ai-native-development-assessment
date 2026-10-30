@@ -130,6 +130,41 @@ lexical arms reproduce the main experiment's held-out rates exactly (Attest 70%,
 ReasoningBank 58%), a check on run-to-run stability. The ReasoningBank baseline's
 lexical retrieval is therefore not what held it back. 语义检索召回了更多相关笔记，但没有改善编码结果；只靠评审传承的规则进入前 5 的比例反而下降。检索指标提升不等于编码质量提升。
 
+## Context management on a long session (exploratory, after the main experiment) / 长会话的上下文管理（探索性）
+
+Scenario: one agent session in which the agent first worked on four ledgerly 2.0.0
+tasks (real trajectories of S04, S01, S02, S03: 70 messages, about 19k tokens; in S04
+the reviewer stated the approval rule) and then, in the same session, gets S05, which
+needs exactly that rule. No long-term memory; the rule exists only in the session.
+Budget 6,000 tokens for the managed arms. `scripts/context_eval.py`, `runs/context_eval`.
+
+| Arm | S05 pass@1 (3 runs) | C6 failures | Prompt tokens / run |
+|---|---|---|---|
+| no earlier session | 0% | 3 of 3 runs | 44k |
+| full session, no budget (ceiling) | 100% | 0 | 195k |
+| sliding window | 0% | 3 | 43k |
+| window + plain model summary | 33% | 2 | 41k |
+| **Attest Context Manager** | **67%** | **0** | 46k |
+
+The manager's one failure was the audit entry (C4, discoverable in the code), not the
+rule from the session. Offline, at budgets of 4k, 6k and 8k tokens, only the manager
+kept all three facts S05 needs (`1000.00`, `approved_by`, `approval_required`) in the
+context; the model summary kept 0 of 6 pinned tokens at every budget ("large refunds
+need approval").
+
+**How the design got here (disclosed):** design 1 (`runs/context_eval_inc2`) crashed
+on unanswered tool calls in the stitched session (INCIDENTS INC-2); design 1 re-run
+(`runs/context_eval_design1`) had a ceiling of 0: even with the whole session in
+context the agent did not apply an earlier review rule to a new task, so the new task
+now says "apply the review guidance you received earlier in this session" (all arms).
+With that, manager v1 (`runs/context_eval_design2_manager_v1`) scored 0/3 although
+the facts were in its context: the rule was split into sentences among code lines and
+not marked as review. Manager v2 keeps review comments whole and first, and drops code
+lines from tool output. These changes were made after seeing results, on one scenario;
+the 67% may not transfer. Two findings hold regardless: a fact in the context is not a
+fact the agent uses, and an unchecked model summary drops exactly the numbers that
+matter. 信息在上下文里不等于 Agent 会用；未经检查的模型摘要恰好丢掉关键数字。
+
 ## What this supports / 结论边界
 
 - Supported: memory of review-only knowledge helps a lot (+36 pp over no memory,
@@ -137,6 +172,7 @@ lexical retrieval is therefore not what held it back. 语义检索召回了更�
   handled at least as well as without memory; Attest is not worse than the two
   published designs, with a smaller and cheaper prompt and immunity to the poison.
 - Retrieval: better recall from embeddings did not translate into better coding results; lexical retrieval is kept.
+- Context: under a 6k-token budget the context manager kept the session's review rule (2 of 3 S05 runs passed, 0 C6 failures) where a sliding window (0/3) and a plain summary (1/3) lost it; full history passes 3/3 at four times the tokens. Exploratory, one scenario, tuned after seeing results.
 - Not supported: that the write gate is free. Here it cost held-out passes; its value
   is protection (poison) and provenance, which the held-out pass rate does not reward.
 - Limits: one model, one synthetic benchmark designed by the author, simulated
