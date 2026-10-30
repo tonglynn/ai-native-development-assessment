@@ -1,0 +1,31 @@
+--- a/ledgerly/subscriptions.py
++++ b/ledgerly/subscriptions.py
+@@ -1,8 +1,10 @@
+ from datetime import datetime, timedelta
++from decimal import Decimal
+ 
+ from .clock import ensure_utc
+ from .errors import BillingError
+ from .models import Subscription
++from .money import round_money, to_money
+ 
+ 
+ def current_period(sub: Subscription, at: datetime) -> tuple[datetime, datetime]:
+@@ -18,5 +20,15 @@
+ 
+ 
+ def prorated_refund(sub: Subscription, cancel_at: datetime):
+-    """Refund for the unused part of the current period."""
+-    raise NotImplementedError
++    """Refund for the unused part of the current period.
++
++    The plan price multiplied by the unused fraction of the billing period
++    that contains ``cancel_at`` (unused time divided by the period length),
++    rounded to the cent.
++    """
++    cancel_at = ensure_utc(cancel_at)
++    period_start, period_end = current_period(sub, cancel_at)
++    period_length = period_end - period_start
++    unused = period_end - cancel_at
++    fraction = Decimal(unused.total_seconds()) / Decimal(period_length.total_seconds())
++    return round_money(to_money(sub.plan_price) * fraction)
