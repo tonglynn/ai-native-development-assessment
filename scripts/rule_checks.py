@@ -210,8 +210,17 @@ def main() -> None:
             print(json.dumps({k: gens[n["key"]][k] for k in ("key", "checkable", "why")}), flush=True)
         path.write_text(json.dumps(list(gens.values()), indent=2) + "\n")
     rows = [evaluate(n, gens[n["key"]], cs) for n in ns]
-    (args.out / "results.json").write_text(json.dumps({"prompt": SYSTEM, "rows": rows}, indent=2) + "\n")
+    # Sensitivity, added after the first run: score each check only against the note's primary
+    # convention (forgetting_eval.primary), since pattern matching gives e.g. the approval rule C2
+    # too (it names BillingError) and so counts C2 violations it was never meant to catch.
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from forgetting_eval import primary
+
+    prim = [evaluate(dict(n, conventions=[p] if (p := primary(f"{n['title']} {n['content']}")) else []), gens[n["key"]], cs) for n in ns]
+    (args.out / "results.json").write_text(json.dumps({"prompt": SYSTEM, "rows": rows, "rows_primary_convention": prim}, indent=2) + "\n")
     lines = report(rows)
+    lines += ["", "Sensitivity (added after the run): scored against each note's primary convention only.", "",
+              *report(prim)[4:]]
     (args.out / "report.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
 
