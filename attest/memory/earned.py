@@ -276,6 +276,9 @@ class EarnedMemory(MemorySystem):
     def _gate(cand: dict, corpus: str, changed: list, require_evidence: bool = True) -> str:
         if not isinstance(cand, dict):
             return "malformed candidate"
+        if cand.get("kind") in TYPES and cand.get("kind") != "lesson":  # the model put the type into "kind"
+            cand.setdefault("type", cand["kind"])
+            cand["kind"] = "project_fact"
         if cand.get("kind") not in ("project_fact", "lesson"):
             return f"unknown kind {cand.get('kind')!r}"
         content = (cand.get("content") or "").strip()

@@ -357,3 +357,12 @@ def test_optional_independent_review(tmp_path, scripted):
     learn_round_note(mem, scripted)
     review = mem.store.items()["at-0001"]["evidence"][0]["independent_review"]
     assert review["verdict"] == "accept" and review["model"] == "deepseek/deepseek-v4-pro"
+
+
+def test_type_given_as_kind_is_repaired(tmp_path, scripted):
+    """Seen on Flask: the model wrote kind="process"; the rule itself was fine."""
+    scripted.answers[DISTILL_SYSTEM].append({"candidates": [dict(ROUND_NOTE, kind="process")]})
+    mem = make_memory("attest", tmp_path)
+    assert learn_round_note.__name__ and mem.learn(load_task("E01"), "1.0.0", run(False, True, [ROUND_COMMENT]), "t", DIFF)[0]["type"] == "add"
+    item = mem.store.items()["at-0001"]
+    assert item["kind"] == "project_fact" and item["type"] == "process"
