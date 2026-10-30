@@ -40,20 +40,36 @@ def _git(repo: Path, *args: str) -> str:
     return proc.stdout.strip() if proc.returncode == 0 else ""
 
 
-def _identity(repo_path: str) -> tuple[Path, str, str]:
-    """(path, repository name, version) for a working copy."""
+def _identity(repo_path: str) -> tuple[Path, str, str, str]:
+    """(path, repository name, version, memory key) for a working copy.
+
+    The memory key is the full origin (host/owner/name), not the last path segment: with the
+    name alone, any repository whose remote ends in ".../ledgerly.git" read and wrote ledgerly's
+    memory (D43). A working copy without a remote is keyed by its path. If ATTEST_ALLOWED_REPOS is
+    set (comma-separated keys), any other repository is refused."""
+    import hashlib
+
     repo = Path(repo_path).expanduser().resolve()
     if not (repo / ".git").exists():
         raise ValueError(f"{repo} is not a git repository")
     remote = _git(repo, "remote", "get-url", "origin")
     name = re.sub(r"\.git$", "", remote.rstrip("/").split("/")[-1]) if remote else repo.name
+    m = re.match(r"^(?:[a-z+]+://)?(?:[^@/]+@)?([^/:]+)[/:](.+?)(?:\.git)?/?$", remote) if remote else None
+    key = f"{m.group(1)}/{m.group(2)}".lower() if m else f"local/{hashlib.sha256(str(repo).encode()).hexdigest()[:12]}-{repo.name}"
+    allowed = [a.strip().lower() for a in os.environ.get("ATTEST_ALLOWED_REPOS", "").split(",") if a.strip()]
+    if allowed and key not in allowed:
+        raise PermissionError(f"repository {key} is not in ATTEST_ALLOWED_REPOS")
     version = _git(repo, "describe", "--tags", "--abbrev=0") or "0"
-    return repo, name, version.lstrip("v")
+    return repo, name, version.lstrip("v"), key
 
 
-def _memory(name: str) -> EarnedMemory:
-    slug = re.sub(r"[^A-Za-z0-9_.-]", "_", name)
-    return EarnedMemory(HOME / slug, backend=STORE)
+def _memory(key: str) -> EarnedMemory:
+    import hashlib
+
+    # readable prefix plus a hash of the exact key, so two keys never share a directory
+    slug = re.sub(r"[^A-Za-z0-9_.-]", "_", key)[:80] + "-" + hashlib.sha256(key.encode()).hexdigest()[:10]
+    secret_scan = os.environ.get("ATTEST_SECRET_SCAN", "1") != "0"  # on by default here (D43)
+    return EarnedMemory(HOME / slug, backend=STORE, secret_scan=secret_scan)
 
 
 def _task(name: str, task: str) -> SimpleNamespace:
@@ -69,8 +85,8 @@ def _verify(repo: Path) -> tuple[bool, str]:
 
 def recall(repo_path: str, task: str) -> dict:
     """Notes this team has verified for this repository that are relevant to the task."""
-    repo, name, version = _identity(repo_path)
-    shown = _memory(name).retrieve(_task(name, task), version)
+    repo, name, version, key = _identity(repo_path)
+    shown = _memory(key).retrieve(_task(name, task), version)
     return {"repository": name, "version": version, "note_ids": shown.ids,
             "notes": shown.context or "No verified notes for this repository yet.",
             "instructions": "Follow the notes unless the code or CHANGELOG shows they no longer hold. "
@@ -80,14 +96,14 @@ def recall(repo_path: str, task: str) -> dict:
 def learn(repo_path: str, task: str, review_comments: list[str], candidates: list[dict] | None = None,
           base_ref: str = "HEAD") -> dict:
     """Submit an accepted change. Attest computes the diff and runs the verification command itself."""
-    repo, name, version = _identity(repo_path)
+    repo, name, version, key = _identity(repo_path)
     diff = _git(repo, "diff", base_ref)
     if not diff:
         return {"admitted": [], "rejected": [], "message": f"no changes against {base_ref}: nothing to learn"}
     verified, output = _verify(repo)
     run = {"first_pass": not review_comments, "final_pass": verified, "verified_by": f"verification command: {VERIFY_CMD}", "shown_notes": [], "cited_notes": [],
            "attempts": [{"passed": not review_comments, "review_comments": list(review_comments)}]}
-    events = _memory(name).learn(_task(name, task), version, run, "", diff, candidates=candidates)
+    events = _memory(key).learn(_task(name, task), version, run, "", diff, candidates=candidates)
     return {
         "verified": verified,
         "verification_output": output if not verified else "",
@@ -99,18 +115,18 @@ def learn(repo_path: str, task: str, review_comments: list[str], candidates: lis
 
 def report_outcome(repo_path: str, task: str, shown: list[str], cited: list[str], review_comments: list[str]) -> dict:
     """After a task: which notes were shown and relied on. Attest runs verification to judge the outcome."""
-    repo, name, version = _identity(repo_path)
+    repo, name, version, key = _identity(repo_path)
     passed, _ = _verify(repo)
     run = {"first_pass": passed, "final_pass": passed, "shown_notes": list(shown), "cited_notes": list(cited),
            "attempts": [{"passed": passed, "review_comments": list(review_comments)}]}
-    events = _memory(name).feedback(_task(name, task), version, run)
+    events = _memory(key).feedback(_task(name, task), version, run)
     return {"passed": passed, "changes": [e["reason"] for e in events if "status" in (e.get("fields") or {})]}
 
 
 def list_notes(repo_path: str, include_inactive: bool = False) -> list[dict]:
     """Every note for this repository with its status, provenance and usage."""
-    _, name, _ = _identity(repo_path)
-    items = _memory(name).store.items().values()
+    _, name, _, key = _identity(repo_path)
+    items = _memory(key).store.items().values()
     return [
         {k: it.get(k) for k in ("id", "title", "content", "status", "scope", "evidence", "usage", "superseded_by")}
         for it in items if include_inactive or it["status"] in ("active", "suspect")
@@ -119,8 +135,8 @@ def list_notes(repo_path: str, include_inactive: bool = False) -> list[dict]:
 
 def retract(repo_path: str, note_id: str, reason: str) -> dict:
     """A person withdraws a note (kept in the log as retired, with the reason)."""
-    _, name, _ = _identity(repo_path)
-    event = _memory(name).retract(note_id, reason, by="human")
+    _, name, _, key = _identity(repo_path)
+    event = _memory(key).retract(note_id, reason, by="human")
     return {"retired": note_id, "reason": event["reason"]}
 
 

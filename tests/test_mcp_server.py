@@ -61,3 +61,26 @@ def test_said_but_not_done_is_rejected(repo):
 def test_server_exposes_tools_but_not_retract():
     names = {t.name for t in asyncio.run(mcp_server.build_server().list_tools())}
     assert names == {"recall", "learn", "report_outcome", "list_notes"}
+
+
+def _clone_with_remote(repo, tmp_path, name, remote):
+    other = tmp_path / name / "ledgerly"
+    shutil.copytree(repo, other)
+    subprocess.run(["git", "remote", "set-url", "origin", remote], cwd=other, check=True)
+    return other
+
+
+def test_spoofed_remote_cannot_read_another_repositorys_memory(repo, tmp_path, monkeypatch):
+    """D43: memory used to be keyed by the remote's basename, so evil/ledgerly read acme/ledgerly's notes."""
+    subprocess.run(["git", "remote", "add", "origin", "https://github.com/acme/ledgerly.git"], cwd=repo, check=True)
+    _change(repo, "\n\ndef average_price(total, qty):\n    return round_money(total / qty)\n")
+    assert mcp_server.learn(str(repo), "Add average_price", REVIEW, candidates=[NOTE])["admitted"] == ["at-0001"]
+    same = _clone_with_remote(repo, tmp_path, "same", "git@github.com:acme/ledgerly.git")
+    assert mcp_server.recall(str(same), "average price")["note_ids"] == ["at-0001"]  # same origin over ssh
+    evil = _clone_with_remote(repo, tmp_path, "evil", "https://github.com/evil/ledgerly.git")
+    assert mcp_server.recall(str(evil), "average price")["note_ids"] == []
+    assert mcp_server.list_notes(str(evil), include_inactive=True) == []
+    monkeypatch.setenv("ATTEST_ALLOWED_REPOS", "github.com/acme/ledgerly")
+    assert mcp_server.recall(str(same), "average price")["note_ids"] == ["at-0001"]
+    with pytest.raises(PermissionError):
+        mcp_server.recall(str(evil), "average price")
