@@ -52,6 +52,8 @@ Results and a console log are committed back to `runs/<name>/`.
 | `benchmark/` | Simulated team repositories and 23 tasks — see `benchmark/README.md` |
 | `attest/` | Runner, verifier and memory systems |
 | `attest/ablation.py`, `attest/memory/retrieval.py`, `embedding.py` | Retrieval ablation (exploratory): lexical vs embedding ranking on the same memory, offline retrieval metrics and end-to-end runs (PREREGISTRATION 4c). / 检索机制消融：同一份记忆上比较词法与语义排序 |
+| `REAL_HISTORY.md` | Results on real review history (Flask: development, Saleor: test); no recall advantage for Attest. / 真实评审历史上的结果 |
+| `PROCESS_MEMORY.md` | Design of the next-phase process memory (rebase, backport, review threads, CI). / 流程记忆设计稿 |
 | `attest/memory/evidence.py` | Typed evidence for the write gate: source quote, applied line (code/test/doc/config, added/removed), verification, optional independent review. / 写入门槛的分类型证据 |
 | `scripts/retrieval_scale.py` | Retrieval latency and recall at 100 to 10,000 notes, scoped vs unscoped (decides whether a vector database is needed). / 检索规模测试 |
 | `attest/memory/store.py`, `sqlite_store.py` | Memory storage: append-only JSONL event log (experiments; committed with results) or SQLite (shared team memory, used by the MCP server; several writers at once). Same interface; `python -m attest migrate` converts. / 记忆存储：JSONL 事件日志（实验用，随结果提交）或 SQLite（团队共享、MCP 默认、支持多进程并发写），接口一致，可互相迁移 |
