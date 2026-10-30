@@ -53,6 +53,7 @@ Results and a console log are committed back to `runs/<name>/`.
 | `attest/` | Runner, verifier and memory systems |
 | `attest/ablation.py`, `attest/memory/retrieval.py`, `embedding.py` | Retrieval ablation (exploratory): lexical vs embedding ranking on the same memory, offline retrieval metrics and end-to-end runs (PREREGISTRATION 4c). / 检索机制消融：同一份记忆上比较词法与语义排序 |
 | `REAL_HISTORY.md` | Results on real review history (Flask: development, Saleor: test); no recall advantage for Attest. / 真实评审历史上的结果 |
+| `ROADMAP.md` | What comes after the main experiment (conflict resolution, trust levels, poisoning defence, feedback loop, component ablation) and what is deliberately not added. / 路线图 |
 | `PROCESS_MEMORY.md` | Design of the next-phase process memory (rebase, backport, review threads, CI). / 流程记忆设计稿 |
 | `attest/memory/evidence.py` | Typed evidence for the write gate: source quote, applied line (code/test/doc/config, added/removed), verification, optional independent review. / 写入门槛的分类型证据 |
 | `scripts/retrieval_scale.py` | Retrieval latency and recall at 100 to 10,000 notes, scoped vs unscoped (decides whether a vector database is needed). / 检索规模测试 |

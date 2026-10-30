@@ -35,6 +35,49 @@ memory?
 **研究问题。** 编码 Agent 能否从这些历史中学习，让后续工作少犯同样的错误，同时不把规则带到错误的仓库、
 不死守过期政策、也不相信未经验证的记忆？
 
+### Business chain and scope / 业务链路与研究范围
+
+| # | Stage / 环节 | What happens / 内容 | In this benchmark / 本研究 |
+|---|---|---|---|
+| 01 | Subscriptions / 订阅管理 | sign-up, renewal, cancellation, plan change | background (E03, H05) |
+| 02 | Invoicing / 账单生成 | amounts, discounts, tax, period settlement | background (E01, E05, H01, H02) |
+| 03 | Payments / 支付处理 | capture, void, timeout retries, duplicate callbacks | **core** (E06, H06, H08) |
+| 04 | Refunds and credits / 退款与抵扣 | request, approval, idempotency, money back | **core** (E04, H04, H07, H10, H11, S04, S05) |
+| 05 | Finance audit / 财务审计 | operation records, money trail, anomaly tracing | **core** (C4 in every money-moving task) |
+| 06 | Policy and versions / 政策与版本管理 | rounding rules, approval thresholds, rule history | **core** (stale group, ledgerly 2.0.0) |
+
+Stages 01–02 give the business context; payments, refunds, amounts and audit are
+the core of the tasks. 前两个环节作为业务背景，支付、退款、金额与审计是任务的核心范围。
+
+### Roles / 业务角色
+
+| Role / 角色 | Responsibility / 职责 | Cares about / 关心的问题 | Convention that serves it / 对应规范 |
+|---|---|---|---|
+| Customer / 用户 | subscribes, pays, asks for refunds | money is right | C1 amounts, C5 no double refunds |
+| Support / 客服 | handles refund and credit requests | operations go through without friction | C6 *allows*: legitimate operations are not blocked |
+| Finance / 财务 | sets approval and billing policy | money risk is under control | C6 *blocks*, policy versions (FIN-2026-03, FIN-2026-09) |
+| Engineering / 研发 | maintains billing and payments | code follows the team's rules | C2 errors, C3 time zones, the agent's memory |
+| Auditor / 审计 | checks money operations | every movement can be traced | C4 audit entries, C5 keys in the trail |
+
+Each technical rule has a business reason: idempotency prevents paying a refund
+twice, approval controls money risk, audit entries trace every movement, and
+version management makes each release apply the policy in force.
+幂等是为了避免重复退款，审批是为了控制资金风险，审计记录是为了追踪每笔资金操作，版本管理是为了让每个版本执行当时有效的财务政策。
+
+### Core objective: safety without blocking / 核心目标：保证资金安全，同时少误拦合法操作
+
+| Option / 方案 | Benefit / 好处 | Risk / 风险 |
+|---|---|---|
+| Every refund needs approval / 所有退款都审批 | low money risk | legitimate refunds blocked, support queue grows |
+| Every refund goes through / 所有退款直接放行 | smooth for customers | unauthorised money movement |
+| By amount and approval, per policy version / 按金额、审批状态和政策版本判断 | balances both | the threshold must be kept current (FIN-2026-09) |
+
+So the business metrics point in two directions, and both are reported:
+业务指标因此有两个方向，同时报告：
+
+- **Risk control / 风险控制:** unauthorised-operation rate (C6 *blocks* failed), duplicate-money-operation rate (C5 failed), unaudited movements (C4 failed).
+- **Efficiency / 业务效率:** legitimate-operation-blocked rate (C6 *allows* failed, including a stale 500.00 threshold on 2.0.0). Processing time of a real request is not simulated; the agent's steps and tokens per task are reported as engineering cost, not as business processing time.
+
 ## The refund and adjustment flow / 退款与账务调整流程
 
 | Step / 步骤 | What happens / 内容 | Where team experience matters / 需要团队经验的地方 |
@@ -118,11 +161,11 @@ Computed from hidden-test outcomes on the first attempt (see `attest/analysis.py
 | Risk / 风险 | Metric / 指标 | From / 来源 |
 |---|---|---|
 | Duplicate money operation | Share of C5 checks where a retried request was applied again | C5 tests (retry with the same key) |
-| Unauthorised operation | Share of C6 checks where an over-threshold operation went through without approval | C6 "blocks" tests |
-| Legitimate operation blocked | Share of C6 checks where a below-threshold operation was refused | C6 "allows" tests, incl. 700.00 under the 2.0.0 threshold |
+| Unauthorised operation (risk control) | Share of C6 checks where an over-threshold operation went through without approval | C6 "blocks" tests |
+| Legitimate operation blocked (efficiency) | Share of C6 checks where an operation at or below the threshold, or an approved one, was refused | C6 "allows" tests, incl. 700.00 and 800.00 under the 2.0.0 threshold (S04, S05) |
 | Amount-precision violation | Share of C1 checks failed | C1 tests |
 | Unaudited money movement | Share of C4 checks failed | C4 tests |
-| Outdated policy applied | Failures of the policy-dependent checks on ledgerly 2.0.0 | S-group C1 and C6 tests |
+| Outdated policy applied | Failures of the checks an outdated v1 rule can fail on ledgerly 2.0.0 | S-group rounding-policy tests and C6 *allows* tests |
 | Rule carried into the wrong repository | Share of simkit checks failed, and ledgerly notes shown on simkit | B-group K1, K2; retrieval logs |
 
 These are risks in a simulated business. They show which mistakes memory

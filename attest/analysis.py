@@ -283,6 +283,100 @@ def stale_split(results: list[dict]) -> list[dict]:
             for (c, p), v in sorted(cells.items(), key=lambda kv: (CONDITIONS.index(kv[0][0]) if kv[0][0] in CONDITIONS else 99, kv[0][1]))]
 
 
+# ---------------------------------------------------------------- preregistered decision rules (PREREGISTRATION 5)
+
+DELTA = 0.10  # non-inferiority margin, fixed before any memory run: about one of the 11 held-out tasks lost
+SUPPORTED, INSUFFICIENT, NOT_SUPPORTED = "supported", "direction consistent, insufficient evidence", "not supported"
+
+
+def compare(results: list[dict], group: str, condition: str, baseline: str, tasks: set[str] | None = None,
+            resamples: int = 10000, seed: int = 0) -> dict | None:
+    """Paired per-task difference of pass@1 (condition - baseline), repetitions averaged first, bootstrap
+    95% interval with the task as the resampling unit (never the individual run)."""
+    rates: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+    for r in results:
+        if r["group"] == group and (tasks is None or r["task_id"] in tasks):
+            rates[r["condition"]][r["task_id"]].append(bool(r["first_pass"]))
+    common = sorted(set(rates.get(condition, {})) & set(rates.get(baseline, {})))
+    if not common:
+        return None
+    mean = lambda v: sum(v) / len(v)  # noqa: E731
+    diffs = [mean(rates[condition][t]) - mean(rates[baseline][t]) for t in common]
+    rng = random.Random(seed)
+    boots = sorted(sum(rng.choice(diffs) for _ in diffs) / len(diffs) for _ in range(resamples))
+    return {"condition": condition, "baseline": baseline, "group": group, "tasks": len(common),
+            "mean_diff": mean(diffs), "ci_low": boots[int(0.025 * resamples)], "ci_high": boots[int(0.975 * resamples) - 1],
+            "wins": sum(d > 0 for d in diffs), "losses": sum(d < 0 for d in diffs), "ties": sum(d == 0 for d in diffs)}
+
+
+def superiority(c: dict | None) -> str | None:
+    """Supported only if the whole interval is above 0; a positive estimate whose interval reaches 0 is insufficient."""
+    if c is None:
+        return None
+    if c["ci_low"] > 0:
+        return SUPPORTED
+    return INSUFFICIENT if c["mean_diff"] > 0 else NOT_SUPPORTED
+
+
+def non_inferiority(c: dict | None, delta: float = DELTA) -> str | None:
+    """Supported if the interval stays above -delta; not supported if the estimate itself is at or below -delta."""
+    if c is None:
+        return None
+    if c["ci_low"] > -delta:
+        return SUPPORTED
+    return INSUFFICIENT if c["mean_diff"] > -delta else NOT_SUPPORTED
+
+
+def _all(*verdicts):
+    if any(v is None for v in verdicts):
+        return None
+    if all(v == SUPPORTED for v in verdicts):
+        return SUPPORTED
+    return NOT_SUPPORTED if any(v == NOT_SUPPORTED for v in verdicts) else INSUFFICIENT
+
+
+def hypothesis_tests(results: list[dict]) -> list[dict]:
+    """H1-H6 exactly as preregistered (section 4, decision rules in section 5)."""
+    foreign_by = {c["condition"]: c.get("foreign_notes_shown") for c in contamination(results)}
+    regress = defaultdict(int)
+    for r in regressions(results):
+        if r["task_id"][0] in "HB":
+            regress[r["condition"]] += 1
+    out = []
+
+    h1 = compare(results, "heldout", "attest", "no_memory")
+    out.append({"id": "H1", "type": "superiority", "verdict": superiority(h1), "tests": [h1]})
+
+    foreign = foreign_by.get("attest")
+    b = compare(results, "control", "attest", "no_memory")
+    h2 = None if foreign is None else (SUPPORTED if foreign == 0 else NOT_SUPPORTED)
+    out.append({"id": "H2", "type": "leakage count (exact); control pass@1 descriptive", "verdict": h2,
+                "foreign_notes_shown": foreign, "tests": [b]})
+
+    s_all = compare(results, "stale", "attest", "no_memory")
+    s_thr = compare(results, "stale", "attest", "no_memory", tasks={"S04", "S05"})
+    out.append({"id": "H3", "type": "non-inferiority (all stale tasks and threshold tasks S04-S05)",
+                "verdict": _all(non_inferiority(s_all), non_inferiority(s_thr)), "tests": [s_all, s_thr]})
+
+    rb = compare(results, "heldout", "attest", "reasoningbank")
+    ace = compare(results, "heldout", "attest", "ace")
+    out.append({"id": "H4", "type": "non-inferiority vs each baseline", "verdict": _all(non_inferiority(rb), non_inferiority(ace)),
+                "tests": [rb, ace], "regressions": {c: regress.get(c, 0) for c in ("attest", "reasoningbank", "ace")}})
+
+    ns_foreign = foreign_by.get("attest_no_scope")
+    nsb = compare(results, "control", "attest", "attest_no_scope")
+    h5 = None if None in (ns_foreign, foreign) else (SUPPORTED if ns_foreign > 0 and foreign == 0 else NOT_SUPPORTED)
+    out.append({"id": "H5", "type": "leakage counts (exact); control pass@1 descriptive", "verdict": h5,
+                "foreign_notes_shown": {"attest": foreign, "attest_no_scope": ns_foreign}, "tests": [nsb]})
+
+    h6 = compare(results, "heldout", "attest", "attest_no_gate")
+    out.append({"id": "H6", "type": "non-inferiority vs the same system without the write gate", "verdict": non_inferiority(h6),
+                "tests": [h6], "regressions": {c: regress.get(c, 0) for c in ("attest", "attest_no_gate")}})
+    for h in out:
+        h["delta"] = DELTA
+    return out
+
+
 # ---------------------------------------------------------------- memory funnel: where did the needed note get lost?
 
 FUNNEL_STAGES = ("not_in_memory", "excluded", "not_retrieved", "retrieved_not_injected", "injected")
@@ -396,6 +490,7 @@ def summarise(root: Path) -> dict:
         "paired": paired(results),
         "attribution": attribution(results),
         "funnel": funnel(results),
+        "hypothesis_tests": hypothesis_tests(results),
         "transfer_split": transfer_split(results),
         "stale_split": stale_split(results),
         "business_risks": business_risks(results),

@@ -87,14 +87,22 @@ shows what the stricter gate costs.
 
 ## 4. Hypotheses / 假设
 
-| | Hypothesis | Supported if |
-|---|---|---|
-| H1 | Attest improves held-out tasks | pass@1 on H: `attest` > `no_memory` (pooled over 3 repetitions) |
-| H2 | Attest does not leak across repositories | on B, `attest` shows 0 ledgerly notes and its pass@1 ≥ `no_memory` |
-| H3 | Outdated experience does not make Attest worse than having none | pass@1 on S: `attest` ≥ `no_memory`, both pooled over S01–S05 **and** on the threshold tasks S04–S05 alone (S01–S03 are no-false-recall checks: following the v1 lesson passes them, audit M3). Mechanism check (reported, not a hypothesis): every note cited in an S task that failed a related review check ends the stale phase as suspect, retired or superseded |
-| H4 | Attest is at least as good as published designs on H, with fewer regressions | pass@1 on H: `attest` ≥ `reasoningbank` and ≥ `ace`; number of H/B regressions: `attest` ≤ each baseline |
-| H5 | Scope is what prevents leakage | on B, `attest_no_scope` shows ledgerly notes (> 0) while `attest` shows none, and pass@1 on B: `attest` ≥ `attest_no_scope` |
-| H6 | The write gate does not cost held-out performance | pass@1 on H: `attest` ≥ `attest_no_gate`, and H/B regressions: `attest` ≤ `attest_no_gate` |
+| | Hypothesis | Type | Supported if |
+|---|---|---|---|
+| H1 | Attest improves held-out tasks | superiority | paired difference of pass@1 on H, `attest` − `no_memory`: 95% CI lower bound **> 0** |
+| H2 | Attest does not leak across repositories | exact count | on B, `attest` shows **0** ledgerly notes; pass@1 on B vs `no_memory` reported descriptively (3 tasks are too few for an interval) |
+| H3 | Outdated experience does not make Attest worse than having none | non-inferiority | `attest` − `no_memory` on S: 95% CI lower bound **> −δ**, both over S01–S05 **and** over the threshold tasks S04–S05 (S01–S03 are no-false-recall checks, audit M3). Mechanism check (reported, not a hypothesis): every note cited in an S task that failed a related review check ends the stale phase as suspect, retired or superseded |
+| H4 | Attest is not worse than published designs | non-inferiority | `attest` − `reasoningbank` **and** `attest` − `ace` on H, each: 95% CI lower bound **> −δ**. Regressions (defined in section 5) are reported separately per condition and are not part of the verdict |
+| H5 | Scope is what prevents leakage | exact counts | on B, `attest_no_scope` shows ledgerly notes (> 0) while `attest` shows none; pass@1 on B vs `attest_no_scope` reported descriptively |
+| H6 | The write gate does not cost held-out performance | non-inferiority | `attest` − `attest_no_gate` on H: 95% CI lower bound **> −δ**. `attest_no_gate` is the same system with only the write gate switched off, so the comparison isolates the gate. Regressions reported separately |
+
+**Decision rules / 判定规则.** Fixed before any memory condition is run.
+
+- *Unit of analysis:* the task. For each task, pass@1 is averaged over the 3 repetitions, then the paired difference to the comparison condition is taken; the bootstrap (10,000 resamples, seed 0) resamples tasks, never the 33 individual held-out runs (`analysis.compare`).
+- *Superiority (H1):* supported if the 95% interval lies above 0. If the estimate is positive but the interval reaches 0: **direction consistent, insufficient evidence**. If the estimate is ≤ 0: not supported.
+- *Non-inferiority (H3, H4, H6):* margin **δ = 10 percentage points**, about one of the 11 held-out tasks lost entirely (1/11 ≈ 9 pp), the smallest difference this task set can resolve. Supported if the 95% interval lies above −δ. If the interval crosses −δ while the estimate is above it: **direction consistent, insufficient evidence**. If the estimate is ≤ −δ: not supported.
+- Where an interval crosses a decision boundary the result is reported as "direction consistent, insufficient evidence", never as success or failure. With 11 held-out tasks (5 stale, 2 of them threshold tasks) intervals will be wide; this is expected and stated, not a reason to change δ after seeing results.
+- 判定：H1 为优效性（区间下界 > 0）；H3、H4、H6 为非劣效性（区间下界 > −δ，δ = 10 个百分点，约等于 11 个留出任务中完全输掉 1 个）；区间跨过边界时统一写"方向一致，但证据不足"；以任务为重抽样单位。
 
 Exploratory, no prediction: steps and cost per task; which conventions are learned; whether baselines leak ledgerly habits into simkit; how many notes each Attest variant stores and how many candidates the gate rejects.
 
@@ -172,7 +180,7 @@ All numbers are computed by `attest/analysis.py` from `runs/<experiment>/**/resu
 
 - **Primary:** pass@1 = first attempt passes public and hidden tests.
 - **Secondary:** pass@2 (after one simulated review), steps, estimated cost, notes shown and cited.
-- **Regression:** a task whose pass@1 under a memory condition is lower than under `no_memory` (all repetitions pooled). Every regression is listed, not only counted.
+- **Regression:** a held-out or control task whose pass@1 under a memory condition (3 repetitions pooled) is lower than under `no_memory`. Every regression is listed with its task and rates, not only counted; regression counts are reported per condition next to H4 and H6 but do not decide them.
 - **Contamination:** notes learned on ledgerly that are shown on simkit tasks.
 - **Paired comparison:** per held-out task, pass@1 under each memory condition minus no memory (repetitions averaged), with wins / losses / ties and a bootstrap 95% interval over tasks.
 - **Tier split:** pass@1, steps and tokens on held-out tasks that need review-only knowledge (C5–C6) versus tasks that do not.
@@ -180,7 +188,7 @@ All numbers are computed by `attest/analysis.py` from `runs/<experiment>/**/resu
 - **Memory funnel:** for every convention a held-out or stale task needs, how far a note about it got: not in memory → filtered out (scope, version, status, with the reason) → not ranked into the top 10 (retrieved) → ranked but not among the 6 injected → injected; and whether the first attempt then satisfied the convention. Separates "never learned", "learned but filtered", "not found", "cut", and "injected but not followed". Notes are matched to conventions by the same regular expressions for every system (approximate).
 - **Convention hit rate:** for each convention, the share of first attempts that satisfy it, reported separately for discoverable (C1–C4) and review-only (C5–C6) conventions. Exploratory.
 - **Spread:** min and max pass@1 across the 3 repetitions is reported next to every pooled rate.
-- With 11 held-out tasks × 3 repetitions the sample is still small. Results are reported as counts and per-task tables; no significance tests are claimed.
+- With 11 held-out tasks × 3 repetitions the sample is still small. Verdicts follow the decision rules in section 4 (bootstrap intervals over tasks); no p-values are computed. Results are also reported as counts and per-task tables.
 
 ## 5b. Attest design changes before the freeze / 冻结前对 Attest 的设计修改
 

@@ -91,3 +91,28 @@ def test_funnel_locates_where_the_note_was_lost():
     trace2 = dict(trace, injected=["at-1"])
     rows = {r["convention"]: r for r in funnel([run("attest", trace2, [])])}
     assert rows["C5"]["injected_ok"] == 1 and rows["C5"]["followed_when_injected"] == 1.0
+
+
+def test_decision_rules_superiority_and_non_inferiority():
+    """The examples used to fix the rules before the freeze (PREREGISTRATION 5)."""
+    from attest.analysis import INSUFFICIENT, NOT_SUPPORTED, SUPPORTED, non_inferiority, superiority
+
+    c = lambda m, lo, hi: {"mean_diff": m, "ci_low": lo, "ci_high": hi}  # noqa: E731
+    assert superiority(c(0.15, 0.05, 0.25)) == SUPPORTED
+    assert superiority(c(0.10, -0.03, 0.23)) == INSUFFICIENT      # direction consistent, interval reaches 0
+    assert superiority(c(-0.05, -0.15, 0.05)) == NOT_SUPPORTED
+    assert non_inferiority(c(0.0, -0.03, 0.04)) == SUPPORTED       # interval above -10 pp
+    assert non_inferiority(c(-0.02, -0.18, 0.12)) == INSUFFICIENT  # interval crosses -10 pp
+    assert non_inferiority(c(-0.15, -0.30, 0.0)) == NOT_SUPPORTED  # the estimate itself is below -10 pp
+
+
+def test_compare_resamples_tasks_not_runs():
+    from attest.analysis import compare
+
+    rs = []
+    for t, (a, n) in {"H01": (1, 0), "H02": (1, 1), "H03": (0, 0)}.items():
+        for rep in range(3):
+            rs += [{"group": "heldout", "task_id": t, "condition": "attest", "first_pass": bool(a)},
+                   {"group": "heldout", "task_id": t, "condition": "no_memory", "first_pass": bool(n)}]
+    res = compare(rs, "heldout", "attest", "no_memory")
+    assert res["tasks"] == 3 and abs(res["mean_diff"] - 1 / 3) < 1e-9 and (res["wins"], res["losses"], res["ties"]) == (1, 0, 2)

@@ -132,43 +132,42 @@ def _hypotheses(summary: dict) -> list[dict]:
             regress[r["condition"]] = regress.get(r["condition"], 0) + 1
     contamination = {c["condition"]: c for c in summary["contamination"]}
 
-    def verdict(ok):
-        return "insufficient" if ok is None else ("supported" if ok else "not supported")
+    tests = {h["id"]: h for h in summary.get("hypothesis_tests", [])}
 
+    def verdict(hid):
+        v = (tests.get(hid) or {}).get("verdict")
+        return "insufficient data" if v is None else v
+
+    def ci(c):
+        if not c:
+            return "n/a"
+        pp = lambda x: f"{x * 100:+.0f} pp"  # noqa: E731
+        return f"{pp(c['mean_diff'])} [{pp(c['ci_low'])}, {pp(c['ci_high'])}] over {c['tasks']} tasks"
+
+    def t(hid, i=0):
+        return ci(((tests.get(hid) or {}).get("tests") or [None] * (i + 1))[i])
+
+    delta = f"δ = {analysis.DELTA * 100:.0f} pp"
     a, n = p1("attest", "heldout"), p1("no_memory", "heldout")
-    h1 = None if a is None or n is None else a > n
-    ab, nb = p1("attest", "control"), p1("no_memory", "control")
-    foreign = contamination.get("attest", {}).get("foreign_notes_shown")
-    h2 = None if ab is None or nb is None or foreign is None else (foreign == 0 and ab >= nb)
-    as_, ns = p1("attest", "stale"), p1("no_memory", "stale")
-    h3 = None if as_ is None or ns is None else as_ >= ns
-    rb, ace = p1("reasoningbank", "heldout"), p1("ace", "heldout")
-    h4 = None if None in (a, rb, ace) else (a >= rb and a >= ace and all(
-        regress.get("attest", 0) <= regress.get(c, 0) for c in ("reasoningbank", "ace")))
-    ns_foreign = contamination.get("attest_no_scope", {}).get("foreign_notes_shown")
-    abs_ = p1("attest_no_scope", "control")
-    h5 = None if None in (ns_foreign, foreign, ab, abs_) else (ns_foreign > 0 and foreign == 0 and ab >= abs_)
-    ang = p1("attest_no_gate", "heldout")
-    h6 = None if None in (a, ang) else (a >= ang and regress.get("attest", 0) <= regress.get("attest_no_gate", 0))
-    ablations = [
-        {"id": "H5", "claim": "Scope is what prevents leakage", "verdict": verdict(h5),
+    foreign = (tests.get("H2") or {}).get("foreign_notes_shown")
+    ns_foreign = ((tests.get("H5") or {}).get("foreign_notes_shown") or {}).get("attest_no_scope")
+    return [
+        {"id": "H1", "claim": "Attest improves held-out tasks (superiority: 95% CI above 0)", "verdict": verdict("H1"),
+         "evidence": f"pass@1 on H: attest {fmt(a)} vs no memory {fmt(n)}; paired difference {t('H1')}"},
+        {"id": "H2", "claim": "Attest does not leak across repositories", "verdict": verdict("H2"),
+         "evidence": f"ledgerly notes shown on simkit: {foreign if foreign is not None else 'n/a'}; pass@1 on B vs no memory (descriptive): {t('H2')}"},
+        {"id": "H3", "claim": f"Outdated experience does not make Attest worse than none (non-inferiority, {delta})", "verdict": verdict("H3"),
+         "evidence": f"all stale tasks {t('H3', 0)}; threshold tasks S04-S05 {t('H3', 1)}"},
+        {"id": "H4", "claim": f"Attest is not worse than published designs (non-inferiority, {delta})", "verdict": verdict("H4"),
+         "evidence": f"vs ReasoningBank {t('H4', 0)}; vs ACE {t('H4', 1)}; H/B regressions (reported separately): "
+                     f"attest {regress.get('attest', 0)}, ReasoningBank {regress.get('reasoningbank', 0)}, ACE {regress.get('ace', 0)}"},
+        {"id": "H5", "claim": "Scope is what prevents leakage", "verdict": verdict("H5"),
          "evidence": f"ledgerly notes shown on simkit: attest {foreign if foreign is not None else 'n/a'}, without scope "
-                     f"{ns_foreign if ns_foreign is not None else 'n/a'}; pass@1 on B: attest {fmt(ab)} vs without scope {fmt(abs_)}"},
-        {"id": "H6", "claim": "The write gate does not cost held-out performance", "verdict": verdict(h6),
-         "evidence": f"pass@1 on H: attest {fmt(a)} vs without gate {fmt(ang)}; H/B regressions: attest "
+                     f"{ns_foreign if ns_foreign is not None else 'n/a'}; pass@1 on B vs without scope (descriptive): {t('H5')}"},
+        {"id": "H6", "claim": f"The write gate does not cost held-out performance (non-inferiority, {delta})", "verdict": verdict("H6"),
+         "evidence": f"attest vs without gate {t('H6')}; H/B regressions (reported separately): attest "
                      f"{regress.get('attest', 0)}, without gate {regress.get('attest_no_gate', 0)}"},
     ]
-    return [
-        {"id": "H1", "claim": "Attest improves held-out tasks", "verdict": verdict(h1),
-         "evidence": f"pass@1 on H: attest {fmt(a)} vs no memory {fmt(n)}"},
-        {"id": "H2", "claim": "Attest does not leak across repositories", "verdict": verdict(h2),
-         "evidence": f"ledgerly notes shown on simkit: {foreign if foreign is not None else 'n/a'}; pass@1 on B: attest {fmt(ab)} vs no memory {fmt(nb)}"},
-        {"id": "H3", "claim": "Outdated experience does not make Attest worse than none", "verdict": verdict(h3),
-         "evidence": f"pass@1 on S: attest {fmt(as_)} vs no memory {fmt(ns)}"},
-        {"id": "H4", "claim": "Attest is at least as good as published designs, with fewer regressions", "verdict": verdict(h4),
-         "evidence": f"pass@1 on H: attest {fmt(a)}, ReasoningBank {fmt(rb)}, ACE {fmt(ace)}; "
-                     f"H/B regressions: attest {regress.get('attest', 0)}, ReasoningBank {regress.get('reasoningbank', 0)}, ACE {regress.get('ace', 0)}"},
-    ] + ablations
 
 
 def build(root: Path, out: Path) -> Path:
