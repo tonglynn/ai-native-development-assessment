@@ -17,11 +17,11 @@ Execution, feedback   diff · hidden tests · business risks · memory funnel (b
 
 | Layer | Built and measured | Built, not measured | Design only |
 |---|---|---|---|
-| Memory governance | evidence gate, scope, versions with supersede, retraction, poison and scale tests | SQLite shared store | conflict resolution, trust levels |
+| Memory governance | evidence gate, scope, versions with supersede, retraction, poison and scale tests; trust-tiered admission (policy / convention / repeated / candidate) against pollution | SQLite shared store | conflict resolution; quarantine tier for suspected poison |
 | Typed memory | (semantic rules) | | procedural, episodic, entity (taxonomy below) |
 | Context management | context manager on one long-session scenario (`RESULTS.md`) | archive layer (kept in memory, not persisted) | context recovery from the archive |
 | Agent execution | mini-swe-agent | MCP server and scripted client demo (`docs/MCP_DEMO.md`) | Claude Code session, LATS (not planned: adds search and variables unrelated to memory governance) |
-| Continuous learning | verified distillation, usage accounting, funnel; dynamic forgetting V1 (four policies, `RESULTS.md`) | reactivation of archived notes (tested offline) | trust-tiered admission (the fix the forgetting results point to), consolidation, conflict resolution |
+| Continuous learning | verified distillation, usage accounting, funnel; dynamic forgetting V1 (four policies, `RESULTS.md`) | reactivation of archived notes (tested offline) | consolidation, conflict resolution |
 
 ## P0, before the freeze / 冻结前 (done)
 

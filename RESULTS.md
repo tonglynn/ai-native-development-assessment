@@ -205,6 +205,44 @@ What it shows:
 Limits: simulated stream and "use" by pattern matching, one clutter generator, one
 threshold and half-lives chosen in advance and not tuned; 3 repetitions.
 
+## Trust-tiered admission against memory pollution (exploratory) / 可信度分级写入（探索性）
+
+The forgetting experiment pointed to admission, not forgetting, as the place to stop
+pollution. Admission tiers (`attest/memory/admission.py`, explainable rules): a note
+citing a policy or incident (**policy**), a review comment that states a team
+convention (**convention**) or a note verified in at least 2 independent tasks
+(**repeated**) may be injected anywhere in its repository; anything else is a
+**candidate**, stored but injected only in tasks that name a file it was learned in,
+and promoted when a second task verifies it. Rules rank before candidates. Same stream
+as the forgetting experiment, except that every one-off note is tied to the real module
+its topic belongs to, so details still reach tasks touching that file (harder than
+before). `scripts/admission_eval.py`, `runs/admission`, 132 runs, 0 crashed.
+
+| Arm | Needed rule injected | One-off notes injected / task | Active notes | Held-out pass@1 | C6 violated (H04, H07, H11) |
+|---|---|---|---|---|---|
+| main experiment, clean memory (reference) | – | 0 | 8–9 | 70% | – |
+| none | 44% | 4.1 | 208 | 36% | 4 of 9 |
+| type-aware forgetting only | 48% | 4.0 | 99 | 33% | 3 of 9 |
+| **tiered admission** | 82% | 1.7 | 208 | **67%** | 1 of 9 |
+| **tiered admission + type-aware forgetting** | 82% | 1.7 | 99 | **76%** | **0 of 9** |
+
+Paired per task against none (bootstrap 95% over the 11 tasks): tiered +30 pp
+[+9, +52], 5 better / 0 worse; tiered + type-aware forgetting +39 pp [+12, +64], 6 / 1.
+Adding forgetting to tiering: +9 pp [−6, +27], not distinguishable; forgetting alone:
+−3 pp [−12, +6]. 分级写入把被污染的记忆拉回到接近干净记忆的水平；遗忘主要负责把活跃笔记减半，且不误删政策规则。
+
+Division of labour that the experiments support: **admission tiers stop pollution,
+version ranges stop outdated rules, type-aware forgetting keeps memory small without
+removing policy rules, reactivation brings archived notes back.** 写入分级防污染，版本管理防过期，按类型遗忘控规模且不误删政策，重新激活负责恢复。
+
+Limits, stated as they are: the one-off notes have, by construction, no policy reference
+and no convention marker, and the benchmark's review comments mark team rules
+explicitly ("[team convention]"), which real reviewers rarely do (`REAL_HISTORY.md`). The
+claim is that the mechanism works when the signal exists; where the signal comes from
+in real repositories (policy references and repetition over time) is the next question.
+Tiering also has a cost: a real rule seen once with diff-only evidence (the audit rule in
+repetition 2) becomes a candidate and is not injected outside its file.
+
 ## What this supports / 结论边界
 
 - Supported: memory of review-only knowledge helps a lot (+36 pp over no memory,
@@ -214,6 +252,7 @@ threshold and half-lives chosen in advance and not tuned; 3 repetitions.
 - Retrieval: better recall from embeddings did not translate into better coding results; lexical retrieval is kept.
 - Context: under a 6k-token budget the context manager kept the session's review rule (2 of 3 S05 runs passed, 0 C6 failures) where a sliding window (0/3) and a plain summary (1/3) lost it; full history passes 3/3 at four times the tokens. Exploratory, one scenario, tuned after seeing results.
 - Forgetting: 200 one-off notes cut held-out pass@1 from 70% to 42%; no forgetting policy repaired it; uniform decay wrongly archived the approval rule (9 of 9 later C6 runs violated it), type-aware decay did not. Exploratory.
+- Pollution: trust-tiered admission brought held-out pass@1 under pollution from 36% back to 67% (76% with type-aware forgetting; clean memory 70%), with 0 approval violations in the combined arm. Exploratory; the separating signal exists by construction.
 - Not supported: that the write gate is free. Here it cost held-out passes; its value
   is protection (poison) and provenance, which the held-out pass rate does not reward.
 - Limits: one model, one synthetic benchmark designed by the author, simulated
