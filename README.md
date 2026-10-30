@@ -163,6 +163,12 @@ comments, 11 held-out tasks × 3 repetitions. Three held-out tasks closely mirro
 experience task. The gate checks that the evidence line is a real verified change,
 not that it is about the rule. On real review history most missed comments are about
 process (rebase, backport), which a diff cannot show (see `PROCESS_MEMORY.md`).
+Unsolved: **failure attribution**. Forgetting works best when a failure can be pinned on the
+note that caused it, and this project has no reliable way to do that yet. Model-generated
+checks were useful for 1 of 25 rules. Validating them against the review that created each
+rule did not help: real agent mistakes are often omissions, which the checks miss, and even
+validated checks were right about half the time (`RESULTS.md`, D33). Rules that no test or
+review names stay out of reach of every feedback signal tried.
 
 ## Repository map
 
@@ -218,4 +224,4 @@ process (rebase, backport), which a diff cannot show (see `PROCESS_MEMORY.md`).
 
 ### 局限
 
-单一模型、作者自建的合成基准、模拟的评审意见、11 个留出任务 × 3 次重复；三个留出任务与经验任务结构相近。写入门槛只检查证据行是真实的已验证改动，不检查它是否与规则相关。真实评审中漏掉的多是流程类意见（rebase、backport），diff 无法体现（见 `PROCESS_MEMORY.md`）。下一阶段（Attest 2.0：上下文管理、类型化记忆、动态遗忘）见 [`ROADMAP.md`](ROADMAP.md)。
+单一模型、作者自建的合成基准、模拟的评审意见、11 个留出任务 × 3 次重复；三个留出任务与经验任务结构相近。写入门槛只检查证据行是真实的已验证改动，不检查它是否与规则相关。真实评审中漏掉的多是流程类意见（rebase、backport），diff 无法体现（见 `PROCESS_MEMORY.md`）。尚未解决的问题是**失败归因**：遗忘机制要想做好，需要知道失败是哪条笔记造成的，本项目目前还没有可靠的办法。模型生成的检查只对 25 条规则中的 1 条有用；用产生规则的评审去验证这些检查也没有帮助，因为 Agent 的真实错误常常是"漏了"，检查抓不到，通过验证的检查也只有约一半报得对（见 `RESULTS.md`、D33）。没有测试或评审点名的规则，目前试过的所有反馈信号都覆盖不到。下一阶段（Attest 2.0：上下文管理、类型化记忆、动态遗忘）见 [`ROADMAP.md`](ROADMAP.md)。
