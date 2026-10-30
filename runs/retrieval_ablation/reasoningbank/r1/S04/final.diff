@@ -1,0 +1,59 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,16 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import audit
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money, to_money
++
++# Finance policy FIN-2026-09: support-initiated refunds/credits above this
++# amount require a second approver.
++APPROVAL_THRESHOLD = to_money("1000.00")
++
++# Idempotency keys already used for goodwill credits, mapped to their result.
++_GOODWILL_CREDITS: dict[str, dict] = {}
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +25,36 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def goodwill_credit(invoice, amount, reason):
+-    """Credit part of an issued invoice as a goodwill gesture."""
+-    raise NotImplementedError
++def goodwill_credit(invoice, amount, reason, *, idempotency_key=None, approved_by=None):
++    """Credit part of an issued invoice as a goodwill gesture.
++
++    ``amount`` must be positive and must not exceed the invoice total. Only
++    issued invoices can be credited. Credits above ``APPROVAL_THRESHOLD``
++    require ``approved_by``. Passing an ``idempotency_key`` makes the
++    operation safe to retry: a repeated key returns the original result.
++    """
++    if idempotency_key is not None and idempotency_key in _GOODWILL_CREDITS:
++        return _GOODWILL_CREDITS[idempotency_key]
++
++    value = round_money(to_money(amount))
++    if value <= ZERO:
++        raise BillingError("non_positive_amount", repr(amount))
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    total = invoice_total(invoice)
++    if value > total:
++        raise BillingError("amount_exceeds_total", f"{value} > {total}")
++    if value > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError("approval_required", str(value))
++
++    result = {"invoice_id": invoice.id, "amount": value, "reason": reason}
++    audit.record(
++        "goodwill_credit",
++        invoice_id=invoice.id,
++        amount=value,
++        reason=reason,
++        approved_by=approved_by,
++    )
++    if idempotency_key is not None:
++        _GOODWILL_CREDITS[idempotency_key] = result
++    return result

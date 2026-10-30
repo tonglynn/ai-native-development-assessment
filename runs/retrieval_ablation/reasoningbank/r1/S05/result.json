@@ -1,0 +1,224 @@
+{
+  "task_id": "S05",
+  "group": "stale",
+  "repo": "ledgerly_v2",
+  "repo_version": "2.0.0",
+  "conventions": [
+    "C2",
+    "C4",
+    "C6"
+  ],
+  "condition": "reasoningbank",
+  "model": "deepseek/deepseek-flash",
+  "thinking": "off",
+  "first_pass": true,
+  "final_pass": true,
+  "n_attempts": 1,
+  "steps": 8,
+  "cost_usd": 0.002283,
+  "seconds": 14.9,
+  "shown_notes": [
+    "rb-0016",
+    "rb-0030",
+    "rb-0011",
+    "rb-0017",
+    "rb-0021",
+    "rb-0010"
+  ],
+  "retrieved_notes": [
+    "rb-0016",
+    "rb-0030",
+    "rb-0011",
+    "rb-0017",
+    "rb-0021",
+    "rb-0010",
+    "rb-0012",
+    "rb-0028",
+    "rb-0001",
+    "rb-0002"
+  ],
+  "injected_notes": [
+    "rb-0016",
+    "rb-0030",
+    "rb-0011",
+    "rb-0017",
+    "rb-0021",
+    "rb-0010"
+  ],
+  "memory_tokens_approx": 752,
+  "agent_test_runs": 1,
+  "files_changed": [
+    "ledgerly/adjustments.py"
+  ],
+  "notes_context": "Memory items from past tasks:\n- [rb-0016] Check team conventions before implementing money-moving operations: The first attempt was rejected because it omitted the required keyword-only idempotency_key parameter that all payment/credit/invoice balance operations must support.\n  Before implementing any operation that moves money or changes a payment, credit or invoice balance, scan sibling modules and the README/CHANGELOG for cross-cutting conventions (idempotency, audit, rounding). These conventions are often not visible in the target function's stub or its tests, so passing local tests is not sufficient evidence of correctness.\n- [rb-0030] Validate in the order the spec states: The implementation checked positivity, then invoice status, then amount-vs-total, matching the issue's stated constraints.\n  When a spec lists multiple constraints, validate them in the stated order and raise distinct error codes for each. This makes failures predictable and matches test expectations for which error fires first.\n- [rb-0011] Apply approval thresholds to support-initiated money movements: Refunds/credits above the finance threshold require a second approver, exposed as an optional keyword-only `approved_by=None`.\n  Define a module-level threshold constant (e.g. `APPROVAL_THRESHOLD = to_money(\"500.00\")`); amounts at or below it need no approval, above it raise `BillingError(\"approval_required\")` when `approved_by` is None. Keep the parameter optional so existing callers still work.\n- [rb-0017] Implement idempotency by checking audit events first: Idempotent operations must look up prior audit entries by key before validating state, and return the original result without reapplying the operation.\n  Add `*, idempotency_key: str | None = None` to the signature, then at the very top of the function iterate `audit.events(<event_type>)` and return the original record if any entry's `idempotency_key` matches. Only after that check should you validate state (e.g. status == 'authorized') and mutate. Always include `idempotency_key` in the audit entry you write, even when None.\n- [rb-0021] Validate inputs via the shared converter, then check positivity: Route input through the repo's conversion helper first so type errors surface with the right codes, then enforce domain constraints like positivity.\n  Pattern: value = to_money(amount); if value <= ZERO: raise BillingError('non_positive_amount', repr(amount)). This separates type validation from business rules and produces distinct, testable error codes for each failure mode.\n- [rb-0010] Check idempotency key before any state validation: Money-moving operations must short-circuit on a repeated idempotency_key before validating payment state, so retries return the original result instead of raising.\n  Accept keyword-only `idempotency_key=None`; first scan `audit.events(<event>)` for a matching key and return the original record unchanged. Only then validate state/amounts, and include `idempotency_key` in the audit entry you write.",
+  "cited_notes": [
+    "rb-0010",
+    "rb-0011",
+    "rb-0016",
+    "rb-0017",
+    "rb-0021",
+    "rb-0030"
+  ],
+  "retrieval_debug": {
+    "scores": {
+      "rb-0016": 8.979,
+      "rb-0030": 7.943,
+      "rb-0011": 6.207,
+      "rb-0017": 5.17,
+      "rb-0021": 5.17,
+      "rb-0010": 2.773
+    },
+    "retriever": "lexical",
+    "retrieval_ms": 2.61,
+    "trace": {
+      "excluded": {},
+      "candidates": 30,
+      "retrieved": [
+        "rb-0016",
+        "rb-0030",
+        "rb-0011",
+        "rb-0017",
+        "rb-0021",
+        "rb-0010",
+        "rb-0012",
+        "rb-0028",
+        "rb-0001",
+        "rb-0002"
+      ],
+      "injected": [
+        "rb-0016",
+        "rb-0030",
+        "rb-0011",
+        "rb-0017",
+        "rb-0021",
+        "rb-0010"
+      ],
+      "texts": {
+        "rb-0001": "Reuse existing money helpers for Decimal arithmetic When implementing monetary calculations, use the project's existing money utilities (to_money, round_money, ZERO) instead of raw Decimal operations. Inspect ledgerly/money.py and sibling functions like line_total/invoice_total to learn the rounding",
+        "rb-0002": "Guard division by zero before computing averages For weighted-average functions, compute the denominator first and return the zero constant when it is zero to avoid ZeroDivisionError. Sum quantities (or weights) up front; if the total is 0, return ZERO immediately. This handles empty invoices and ze",
+        "rb-0003": "Read the target test and models before implementing Before writing a new function, inspect the existing test file and dataclass models to confirm signatures, field names, and expected return types. Cat tests/test_<feature>.py and ledgerly/models.py to learn exact field names (e.g., line.quantity, li",
+        "rb-0004": "Reuse existing money/error helpers for validation When implementing a billing function, delegate normalization and error signaling to the module's existing helpers rather than reimplementing them. Use the repo's `to_money`/`ZERO`/`round_money` helpers to normalize amounts and compare against zero, a",
+        "rb-0005": "Guard bool when validating integer inputs Python's `bool` is a subclass of `int`, so `isinstance(x, int)` accepts `True`/`False`; explicitly reject bools for integer-only parameters. For positive-integer validation write `isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0`.",
+        "rb-0006": "Read tests and sibling modules before implementing Exploring the target file, its models, error types, and the provided tests first let the implementation match expected signatures and conventions on the first try. Before writing code, cat the target module, related models/money/errors modules, and ",
+        "rb-0007": "Reuse existing time/error helpers for datetime logic Before implementing date arithmetic, grep the codebase for existing utilities like ensure_utc and BillingError and reuse them for consistency. Search for sibling modules (e.g. subscriptions.py, clock.py, errors.py) that already do similar period m",
+        "rb-0008": "Validate numeric fields defensively before arithmetic Guard against bool, non-int, and non-positive period values before using them in timedelta math. Check `isinstance(x, bool)` first (bool is an int subclass), then `isinstance(x, int)`, then `x <= 0`, raising the project's domain error. This preve",
+        "rb-0009": "Use floor-division formula for strictly-after recurrence Compute the first occurrence strictly after a timestamp with `n = (after - start) // length + 1`, handling the before-start case separately. For events at start + k*length (k>=1), the strictly-after answer is `start + ((after - start) // lengt",
+        "rb-0010": "Check idempotency key before any state validation Money-moving operations must short-circuit on a repeated idempotency_key before validating payment state, so retries return the original result instead of raising. Accept keyword-only `idempotency_key=None`; first scan `audit.events(<event>)` for a m",
+        "rb-0011": "Apply approval thresholds to support-initiated money movements Refunds/credits above the finance threshold require a second approver, exposed as an optional keyword-only `approved_by=None`. Define a module-level threshold constant (e.g. `APPROVAL_THRESHOLD = to_money(\"500.00\")`); amounts at or below",
+        "rb-0012": "Mirror sibling module conventions when implementing a stub Before writing a new function, read sibling modules (payments, audit, money, clock) and existing tests to copy their money rounding, error codes, and audit patterns. Use `to_money`/`round_money`/`ZERO` for all arithmetic, `ensure_utc` for ti",
+        "rb-0013": "Reuse existing money helpers instead of raw round() When implementing monetary functions, delegate to the repo's existing to_money/round_money helpers rather than Python's round() to match conventions and precision. Read sibling modules (invoice.py, money.py) to find canonical helpers like to_money ",
+        "rb-0014": "Validate numeric inputs against bool and type before arithmetic Guard against bools and unexpected types when accepting numeric parameters, since bool is an int subclass and would silently pass range checks. Check `isinstance(x, bool) or not isinstance(x, (int, Decimal))` before converting to Decima",
+        "rb-0015": "Read existing tests to infer expected return types and error conventions Inspect the test suite and sibling modules before implementing to learn expected types, error classes, and edge-case behavior. Tests like test_tax.py reveal that add_tax should return a Decimal comparable to ints, and core test",
+        "rb-0016": "Check team conventions before implementing money-moving operations The first attempt was rejected because it omitted the required keyword-only idempotency_key parameter that all payment/credit/invoice balance operations must support. Before implementing any operation that moves money or changes a pa",
+        "rb-0017": "Implement idempotency by checking audit events first Idempotent operations must look up prior audit entries by key before validating state, and return the original result without reapplying the operation. Add `*, idempotency_key: str | None = None` to the signature, then at the very top of the funct",
+        "rb-0018": "Match existing module idioms for validation, time and errors Reuse the module's established helpers (ensure_utc, BillingError with code/message, audit.record) rather than inventing new patterns. Read the sibling functions in the same file (e.g. authorize) and mirror their structure: normalize dateti",
+        "rb-0019": "Reuse existing money helpers instead of raw arithmetic When implementing monetary calculations in a repo that already has money utilities, build on them rather than using floats or ad-hoc rounding. Before writing fee/price logic, grep for existing helpers like to_money, round_money, ZERO, and error ",
+        "rb-0020": "Read the target file and its tests before implementing The stub file and its test file reveal the expected signature, error behavior, and conventions. When a task says 'add X in a new module', check whether the module already exists as a stub and read tests/test_<module>.py plus sibling modules. Thi",
+        "rb-0021": "Validate inputs via the shared converter, then check positivity Route input through the repo's conversion helper first so type errors surface with the right codes, then enforce domain constraints like positivity. Pattern: value = to_money(amount); if value <= ZERO: raise BillingError('non_positive_a",
+        "rb-0022": "Reuse existing money helpers instead of raw arithmetic When a repo already has to_money/round_money helpers, use them for input normalization and cent rounding rather than float math or round(). Search for money/rounding utilities and error classes before implementing financial functions. Normalize ",
+        "rb-0023": "Validate ranges with Decimal constants and repo error type Enforce numeric bounds using Decimal constants and raise the project's domain error (BillingError) with a short code, not ValueError. Define MIN/MAX as Decimal constants and compare after converting the input. Raise the repo's existing excep",
+        "rb-0024": "Read sibling modules and tests to infer conventions Before writing a new module, inspect neighboring modules and existing tests to copy naming, error codes, and validation patterns. Grep for the error class and similar validation across the package, and read the target test file if present. Matching",
+        "rb-0025": "Reuse existing money helpers for rounding When a task requires rounding to the cent, use the repo's existing money utilities instead of ad-hoc Decimal quantize calls. Search for a money module (e.g. to_money/round_money) before implementing rounding logic; reusing it matches repo conventions and avo",
+        "rb-0026": "Validate numeric inputs defensively against bool and non-int Guard against bool (subclass of int) and non-int types before arithmetic on period-like fields. Check `isinstance(x, bool) or not isinstance(x, int)` and `x <= 0` before dividing; raise the repo's domain error (e.g. BillingError with a cod",
+        "rb-0027": "Read sibling modules to infer conventions before coding Inspect related files (models, errors, money, existing tests) to learn error codes, helper functions, and expected behavior. Before implementing a stub, cat the module plus its dependencies and any existing tests; this reveals the exact error-c",
+        "rb-0028": "Mirror sibling module conventions before implementing Reading adjacent modules (payments.py, invoice.py) revealed the project's validation, error, and audit patterns, which the new function replicated exactly. Before writing a new function, grep and read sibling modules for how they validate amounts",
+        "rb-0029": "Check CHANGELOG for policy constants The CHANGELOG documented the approval threshold change (500.00 to 1000.00), which informed the APPROVAL_THRESHOLD constant. Read CHANGELOG.md and README for finance/business policy values that affect implementation. Hardcoding stale thresholds or ignoring documen",
+        "rb-0030": "Validate in the order the spec states The implementation checked positivity, then invoice status, then amount-vs-total, matching the issue's stated constraints. When a spec lists multiple constraints, validate them in the stated order and raise distinct error codes for each. This makes failures pred"
+      },
+      "memory_tokens_approx": 752
+    }
+  },
+  "leaks": [],
+  "attempts": [
+    {
+      "n": 1,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 8,
+      "seconds": 14.9,
+      "tokens": {
+        "prompt": 39341,
+        "completion": 2030,
+        "cache_hit": 32896,
+        "reasoning": 0
+      },
+      "cost_usd": 0.002283,
+      "cited": [
+        "rb-0016",
+        "rb-0030",
+        "rb-0011",
+        "rb-0017",
+        "rb-0021",
+        "rb-0010"
+      ],
+      "leaks": [],
+      "passed": true,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [],
+      "tests_failed": [],
+      "review_comments": []
+    }
+  ],
+  "memory_events": [
+    {
+      "seq": 31,
+      "ts": 1793357402.332,
+      "type": "add",
+      "item": {
+        "id": "rb-0031",
+        "title": "Read CHANGELOG and sibling modules before implementing",
+        "description": "The agent inspected CHANGELOG.md, models, errors, audit, money, and payments modules before writing code, catching the FIN-2026-09 threshold change and existing conventions.",
+        "content": "Before implementing a new function, read CHANGELOG.md and the modules it will import from (errors, money, audit, clock, models) plus a sibling function like payments.authorize. This reveals current policy constants, error codes, and validation patterns to mirror.",
+        "source": {
+          "task_id": "S05",
+          "repo": "ledgerly",
+          "version": "2.0.0",
+          "final_pass": true
+        },
+        "status": "active"
+      },
+      "reason": "extracted from task S05"
+    },
+    {
+      "seq": 32,
+      "ts": 1793357402.332,
+      "type": "add",
+      "item": {
+        "id": "rb-0032",
+        "title": "Mirror existing validation order and error codes",
+        "description": "The implementation reused BillingError codes and the same check sequence (positive amount, state, limits) as payments.authorize, matching hidden-test expectations.",
+        "content": "When adding a function to a module with existing siblings, copy their validation order and error-code strings (e.g. 'non_positive_amount', 'invalid_state') rather than inventing new ones; hidden tests likely assert on these exact codes.",
+        "source": {
+          "task_id": "S05",
+          "repo": "ledgerly",
+          "version": "2.0.0",
+          "final_pass": true
+        },
+        "status": "active"
+      },
+      "reason": "extracted from task S05"
+    },
+    {
+      "seq": 33,
+      "ts": 1793357402.332,
+      "type": "add",
+      "item": {
+        "id": "rb-0033",
+        "title": "Use money helpers instead of raw arithmetic",
+        "description": "The agent used to_money/round_money/ZERO from ledgerly.money and ensure_utc from clock, respecting the banker's-rounding policy noted in the changelog.",
+        "content": "Never do raw Decimal/float math on monetary fields; route amounts through the project's money helpers (to_money, round_money, ZERO) and timestamps through ensure_utc so rounding and timezone policies are applied consistently.",
+        "source": {
+          "task_id": "S05",
+          "repo": "ledgerly",
+          "version": "2.0.0",
+          "final_pass": true
+        },
+        "status": "active"
+      },
+      "reason": "extracted from task S05"
+    }
+  ],
+  "phase": "stale",
+  "rep": 1
+}

@@ -1,0 +1,55 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,26 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from decimal import Decimal
++
++from . import __version__, audit
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money
++
++# Finance policy FIN-2026-09 raised the approval threshold for support-initiated
++# refunds and credits from 500.00 to 1000.00 in 2.0.0.
++_APPROVAL_THRESHOLD_BEFORE_2_0_0 = Decimal("500.00")
++_APPROVAL_THRESHOLD_SINCE_2_0_0 = Decimal("1000.00")
++
++
++def _approval_threshold() -> Decimal:
++    try:
++        major = int(__version__.split(".", 1)[0])
++    except (ValueError, AttributeError):
++        major = 2
++    if major >= 2:
++        return _APPROVAL_THRESHOLD_SINCE_2_0_0
++    return _APPROVAL_THRESHOLD_BEFORE_2_0_0
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +35,23 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def goodwill_credit(invoice, amount, reason):
++def goodwill_credit(invoice, amount, reason, *, idempotency_key=None, approved_by=None):
+     """Credit part of an issued invoice as a goodwill gesture."""
+-    raise NotImplementedError
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    if amount > invoice_total(invoice):
++        raise BillingError("exceeds_invoice_total", str(amount))
++    if amount > _approval_threshold() and not approved_by:
++        raise BillingError("approval_required", str(amount))
++    audit.record(
++        "goodwill_credit",
++        invoice_id=invoice.id,
++        amount=amount,
++        reason=reason,
++        idempotency_key=idempotency_key,
++        approved_by=approved_by,
++    )
++    return {"invoice_id": invoice.id, "amount": amount, "reason": reason}
