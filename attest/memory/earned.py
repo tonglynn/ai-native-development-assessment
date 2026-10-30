@@ -340,7 +340,7 @@ class EarnedMemory(MemorySystem):
         items = self.store.items()
         # Items this one may duplicate or replace: same repository, still in use for some version.
         existing = [it for it in items.values() if self._same_scope(it, task)
-                    and (it["status"] in VISIBLE or it["status"] == "archived"
+                    and (it["status"] in VISIBLE or it["status"] in ("archived", "quarantined")
                          or (it["status"] == "superseded" and it["scope"].get("valid_until")))]
         relations = {}
         if existing:
@@ -358,6 +358,12 @@ class EarnedMemory(MemorySystem):
         verification = {"task_id": task.id, "version": repo_version, "result": "passed" if run["final_pass"] else "unverified",
                         "how": f"learned from a task whose final change {'passed' if run['final_pass'] else 'did not pass'} verification"}
 
+        # A quarantined note must not come back as a "new" note (D45). A note that corrects or
+        # replaces it is learned normally and never replaces it automatically (see below).
+        held = next((it for it in existing if it["status"] == "quarantined" and relations.get(it["id"]) == "duplicate"), None)
+        if held:
+            return [self.store.append("reject", task_id=task.id, candidate=cand,
+                                      reason=f"repeats quarantined note {held['id']}: held until a person reviews it")]
         duplicate = next((it for it in existing if relations.get(it["id"]) == "duplicate"
                           and (it["status"] == "archived" or not validity(it, repo_version))), None)
         if duplicate:
@@ -374,7 +380,7 @@ class EarnedMemory(MemorySystem):
         # Only newer (or same-version) verified evidence may replace an older rule.
         replaced = [
             it for it in existing
-            if relations.get(it["id"]) in ("supersedes", "corrects")
+            if relations.get(it["id"]) in ("supersedes", "corrects") and it["status"] != "quarantined"
             and _version_tuple(repo_version) >= _version_tuple(it["scope"]["observed_version"])
         ]
         changes = {it["id"]: ("version" if relations[it["id"]] == "supersedes"
