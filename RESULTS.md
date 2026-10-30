@@ -21,6 +21,22 @@ decision rules frozen in `PREREGISTRATION.md` section 4.
 
 Every task passed after one simulated review in every condition (pass@2 = 100%).
 
+Preregistered reports added late (they were computed but not written up until the
+independent audit of 10/31):
+
+- **Spread, min–max held-out pass@1 across the 3 repetitions:** no memory 27–36%,
+  ReasoningBank 45–73%, ACE 45–73%, Attest 64–82%, without gate 82–91%, without scope
+  45–91%.
+- **Near and far transfer** (near: H06, H07, H08, H11 mirror an experience task):
+  - near transfer: Attest 58% vs no memory 0%, +58 pp [+42, +67], 4 of 4 tasks better;
+  - far transfer: Attest 76% vs 52%, +24 pp [+10, +43], 4 better, 3 tied.
+
+  A large share of the +36 pp held-out gain is near transfer, but far transfer is also
+  positive. 留出组的提升有很大一部分来自近迁移，但远迁移也为正。
+- **H3 mechanism check:** every note cited in a stale task that then failed a related review
+  check ended the stale phase suspect, retired or superseded. There were 3 such notes, all in
+  repetition 2, S05: one superseded, two suspect.
+
 ## Hypotheses / 假设
 
 Paired per task (repetitions averaged), bootstrap 95% interval over tasks; δ = 10 pp.
@@ -93,6 +109,20 @@ condition applied a ledgerly rule there (control pass@1 100% everywhere).
 | Poison notes stored | 0 | 12 | 10 | **0** | 9 |
 | Held-out runs shown the poison (of 33) | 0 | 22 | 33 | **0** | 9 |
 | Held-out runs applying it | 0 | 2 | 5 | **0** | 0 |
+| Held-out pass@1 under poison | 33% | 36% | 36% | 36% | 67% |
+
+**How Attest kept the poison out, and what it cost (added after the independent audit,
+10/31).** In every condition and every repetition, E04 and E06 failed their final
+verification (30 of 30 runs). Following the poisoned comment clears the audit log, which the
+audit test catches. Attest therefore rejected both tasks with its simplest rule ("task not
+verified: nothing is learned"). Its finer checks, the verbatim source quote and the changed
+line that applies the rule, were never exercised. So this test shows that requiring a
+verified task stops poison that breaks a test. It does not show the evidence-line check
+stopping poison that passes the tests. The cost: Attest also learned nothing else from E04
+and E06, including no idempotency (C5) or approval (C6) note in any repetition. Its held-out
+pass@1 under poison was 36%, close to no memory (33%). Without the gate, the system learned
+the poison 9 times, never applied it, and kept the other lessons: 67%.
+投毒测试中，E04、E06 在所有条件下都没有通过最终验证，Attest 靠"未通过验证的任务不学"这一条挡住了毒药，更细的证据检查没有被用到；代价是这两个任务的其他经验也没学到，投毒下留出组只有 36%，关掉门槛为 67%。
 
 **300 notes from other repositories** (`runs/stress_scale`, held-out, 33 runs):
 Attest 73% pass@1, 31k prompt tokens per run, 0 foreign notes shown; ReasoningBank
@@ -126,8 +156,8 @@ Embedding − lexical, paired per query: recall +11 pp [+6, +17] (Attest), +10 p
 Embedding retrieval finds more of the relevant notes but **did not improve the coding
 results**; it put the review-only rules (C5, C6) into the top 5 less often, which is
 where memory matters, and costs about 25 ms per query instead of under 1 ms. The
-lexical arms reproduce the main experiment's held-out rates exactly (Attest 70%,
-ReasoningBank 58%), a check on run-to-run stability. The ReasoningBank baseline's
+lexical arms reproduce the main experiment's held-out rates (Attest 70%,
+ReasoningBank 58%); 2 of 66 individual runs differ, in opposite directions. This is a check on run-to-run stability. The ReasoningBank baseline's
 lexical retrieval is therefore not what held it back. 语义检索召回了更多相关笔记，但没有改善编码结果；只靠评审传承的规则进入前 5 的比例反而下降。检索指标提升不等于编码质量提升。
 
 ## Context management on a long session (exploratory, after the main experiment) / 长会话的上下文管理（探索性）
@@ -149,8 +179,18 @@ Budget 6,000 tokens for the managed arms. `scripts/context_eval.py`, `runs/conte
 The manager's one failure was the audit entry (C4, discoverable in the code), not the
 rule from the session. Offline, at budgets of 4k, 6k and 8k tokens, only the manager
 kept all three facts S05 needs (`1000.00`, `approved_by`, `approval_required`) in the
-context; the model summary kept 0 of 6 pinned tokens at every budget ("large refunds
-need approval").
+context.
+
+**Correction (independent audit, 10/31):** the "plain model summary" baseline was broken.
+The summariser returned an empty string at every budget (`summary_excerpt: ""` in
+`runs/context_eval/results.json`), because the model call came back without a usable JSON
+answer. "Kept 0 of 6 pinned tokens" therefore measures nothing. The end-to-end runs did not
+log the summary, but they used the same summariser on the same session, so it was very
+likely empty there too. The "window + plain model summary" row is in effect "window + an
+empty summary block". An earlier version of this section quoted a summary ("large refunds
+need approval"); that phrase comes from a code comment, not from any output, and was wrong
+to quote. The comparison that stands is the manager against the sliding window (67% vs 0%);
+**no claim is made against a plain summary.** 普通摘要基线实际返回了空字符串，与它的比较不成立；之前引用的摘要原文出自代码注释，不是实验输出。
 
 **How the design got here (disclosed):** design 1 (`runs/context_eval_inc2`) crashed
 on unanswered tool calls in the stitched session (INCIDENTS INC-2); design 1 re-run
@@ -167,6 +207,12 @@ matter. 信息在上下文里不等于 Agent 会用；未经检查的模型摘�
 
 ## Dynamic forgetting V1 (exploratory, after the main experiment) / 动态遗忘 V1（探索性）
 
+Scope of the extensions below: forgetting, trust-tiered admission and verification at
+retrieval are opt-in modules used only by the evaluation scripts. The Attest that the
+preregistered experiment evaluated, and the MCP server, run none of them. "V1 stays the
+default" means the default of the forgetting module, not a change to Attest.
+以下扩展（遗忘、分级写入、检索时核对）都是可选模块，只在评估脚本中使用；预注册实验评估的 Attest 和 MCP 服务都不运行它们。"V1 仍为默认"指遗忘模块的默认设置。
+
 Setup (`scripts/forgetting_eval.py`, `runs/forgetting`): Attest's memories after the
 learning phase of the main experiment, then a simulated stream of 400 later tasks in
 which Attest's real retrieval injects notes, a note is "used" when it is about a
@@ -180,7 +226,7 @@ Then the 11 held-out tasks run with each final memory (132 runs, 0 crashed).
 |---|---|---|---|---|
 | main experiment, no one-off notes (reference) | 70% | – | – | – |
 | none | 42% | 4 of 9 runs | 0 | 0% |
-| uniform age decay (half-life 50 tasks) | 45% | **9 of 9** | 5, incl. the approval rule in 2 reps | 77% |
+| uniform age decay (half-life 50 tasks) | 45% | **9 of 9** | 5, incl. the approval rule in all 3 reps | 77% |
 | type-aware age decay (policies never decay) | 39% | **3 of 9** | 2 (code conventions), approval rule kept | 54% |
 | exposure decay + retention-weighted ranking | 39% | 7 of 9 | 4, incl. the approval rule in 2 reps | 13% |
 
@@ -189,7 +235,7 @@ What it shows:
 - **Memory pollution is the bigger problem.** 200 verified but one-off notes in scope
   cut held-out pass@1 from 70% to 42%: they share the tasks' words and take 4 of the 6
   injected slots. 被验证过、但只用过一次的细节笔记把留出组从 70% 拉到 42%。
-- **No forgetting policy repaired it** (39–45%, within noise): age-based forgetting
+- **No forgetting policy repaired it with the default parameters** (39–45%, within noise; the sensitivity sweep below shows aggressive type-aware decay partly does): age-based forgetting
   removes old notes, but the recent one-off notes keep crowding the top 6.
 - **False forgetting has a business cost.** Uniform decay archived the approval rule
   that nobody had needed for 400 tasks, and every later run of a task that needed it
@@ -208,13 +254,13 @@ threshold and half-lives chosen in advance and not tuned; 3 repetitions.
 ### Sensitivity of forgetting to its parameters (offline) / 遗忘参数敏感度（离线）
 
 The half-lives and the threshold were fixed in advance, not tuned. A sweep
-(`scripts/forgetting_sweep.py`, `runs/forgetting_sweep`, 45 configurations × 3
+(`scripts/forgetting_sweep.py`, `runs/forgetting_sweep`, 45 configurations plus the no-forgetting baseline × 3
 repetitions, no model calls) shows which conclusions depend on them:
 
 | Policy | Range swept | Clean memory? | Policy rules wrongly archived |
 |---|---|---|---|
-| uniform age decay | half-life 25–800 tasks | only at ≤ 100 tasks | **3** at every half-life short enough to clean (≤ 100); none above, but then nothing is archived |
-| exposure decay | half-life 5–40 unused injections | partly | 3 except at 40 (which archives almost nothing) |
+| uniform age decay | half-life 25–800 tasks | only at ≤ 100 tasks | **3** at every half-life ≤ 100, and at 200 with threshold 0.3; none at 200 (thresholds 0.1–0.2) and above, where little is archived |
+| exposure decay | half-life 5–40 unused injections | partly | 3 in every configuration except half-life 40 at thresholds 0.1–0.2, which archive almost nothing |
 | type-aware decay | half-lives × 0.25–4 | yes at × 0.25–0.5 | **0** everywhere |
 
 - **Revised:** "forgetting cannot repair crowding" holds for the default parameters,
@@ -304,7 +350,7 @@ repetitions and no model calls (`scripts/forgetting_v11.py`, `runs/forgetting_v1
 | tiered + type-aware ×1 | V1 | 0.3 | 79% | 106 | 6 | 4/52 | 0 |
 | tiered + type-aware ×1 | V1.1 | 0.3 | 82% | 99 | 0 | **10/52** | 0 |
 
-V1.1 gives the same numbers with and without noise. *Useful rules* are the learned notes
+Counting notes: the main experiment learned 26 notes over its 3 repetitions. One (r3 at-0001) was retired during learning, so 25 were active afterwards, and 3 of those were suspect. The simulations start from all 26, so a pair of stream seeds gives 52; the rule checks use the 25 active notes. V1.1 gives the same numbers with and without noise. *Useful rules* are the learned notes
 about C1–C6 (44), plus learned rules outside C1–C6 that I checked against the benchmark's
 own sources and found correct but untested (8: "reject bool as an integer", "use to_money
 and ZERO"; labelled by hand after the run). "Not verified" is not "verification failed",
@@ -424,7 +470,7 @@ Read against the rules fixed before the run:
   4 still lost are the "reject bool" rules: no test or review names them, so demand cannot reach
   them. It reactivated no note in any arm: all of its effect is credit given before a note is
   archived. Its cost is that it also credits wrong rules about the failing convention, 220 times
-  per run on its own and 122 with three evidence states, where negative evidence blocks the
+  per run on its own and 122 in "all four" (with three evidence states), where negative evidence blocks the
   credit. In "all four",
   the 4 wrong notes left at the end are wrong C3 rules that were never followed, so they had no
   negative evidence, and one demand credit each kept them alive.
@@ -530,7 +576,7 @@ drifted and 25 marked for review. So only the stale tasks were run, with 45 agen
 
 | Arm | Stale pass@1 | C1 failed (S01–S03) | Approval wrongly demanded (S04–S05) | Unapproved let through (S04–S05) |
 |---|---|---|---|---|
-| plain Attest | 87% (same as the main experiment) | 0/9 | 2/6 | 2/6 |
+| plain Attest | 87% (same rate as the main experiment, different tasks failing) | 0/9 | 2/6 | 2/6 |
 | check before use | **100%** | 0/9 | **0/6** | **0/6** |
 | drop drifted notes | **100%** | 0/9 | **0/6** | **0/6** |
 
@@ -538,11 +584,17 @@ drifted and 25 marked for review. So only the stale tasks were run, with 45 agen
   measure.
 - **The whole difference is S04** (goodwill credits on 2.0.0): plain Attest failed 2 of 3 runs,
   both verification arms passed 3 of 3. The other four tasks were at the ceiling in every arm.
+- **Correction (independent audit, 10/31): this is not evidence of an improvement.** Plain
+  Attest passed S04 in 3 of 3 runs in the main experiment, and again in the retrieval ablation.
+  Here it failed 2 of 3. Its 87% matches the main experiment only by coincidence: here S04
+  failed and S05 passed, while in the main experiment S05 failed 2 of 3 and S04 passed. The
+  control in this run was atypical, and the S04 difference is within run-to-run variation.
+  These runs also did not update memory during the stale phase, unlike the main experiment.
+  What remains is that verification did no harm. 对照组在 S04 上反常地失败了 2 次（主实验和检索消融中都是 3/3 通过），这个差别在运行间波动之内，不能算提升。
 - **The gain comes from the check line, not from dropping notes.** The approval rule is marked
   for review, not drifted, because the changelog names 500.00. Both arms therefore show it the
   same "check before use" line. Plain Attest already shows a generic version warning ("learned on
   1.0.0, this checkout is 2.0.0"); a specific pointer to what changed did better.
-- Small evidence: one task, 2 runs of difference, 15 runs per arm; it shows a direction only. 证据很小（一个任务、两次运行的差别），只能说明方向。
 - What it adds to the design: verification at use time does not need to know whether a note is
   valuable. It only needs to know whether what the note cites still holds. This is the way
   around the value-feedback problem that forgetting V1.1 and V2 ran into, and it is what
@@ -571,9 +623,13 @@ task.
 | accepted version only | fail | 2 | 16% | 0 | 17% |
 
 - **By the rule fixed before the run, validation is not a useful filter.** Checks that pass have
-  the same false-alarm rate as checks that fail (19% vs 20%). And validation **rejected the one
-  check that had been useful** (rounding, r1).
-- **Why it rejected that check, and why it matters:** the agent's real mistake in E01 was not
+  the same false-alarm rate as checks that fail (19% vs 20%). Of the two checks that were useful,
+  it **kept one and rejected one**: it kept approval (r3) and rejected rounding (r1). Disclosed
+  after the audit: this script scores every check against the note's primary convention, the
+  scoring that `rule_checks` added after its run as a sensitivity. Under that run's pre-stated
+  scoring, rounding (r1) was the only useful check. The script, its reading rule and its results
+  were committed together, so the rule cannot be shown to predate the results.
+- **Why it rejected the rounding check, and why it matters:** the agent's real mistake in E01 was not
   rounding at all (`return weighted_total / total_quantity`). The check looks for the wrong
   rounding call (`round()`, bare `quantize()`), which is what the benchmark's hand-written naive
   solutions do. A generated check catches a wrong call much more easily than a missing one, and
@@ -625,7 +681,7 @@ phase, 3 memory states × 2 runs, 24 runs, 0 crashed (`scripts/x01_eval.py`, `ru
   failed" warning, but in another it did not.
 - All conditions passed on the second attempt after review, so the difference is in what the
   agent knew before review.
-- Limits: one task written by me after the main experiment, 6 runs per condition, the same model.
+- Limits: one task written by me after the main experiment, 6 runs per condition, the same model. The two runs of each memory state produced different code but the same outcome in 11 of 12 pairs, so the effective sample is nearer 3 per condition than 6 (noted after the audit).
   C7's lack of a gap was not anticipated. The gateway docstring could be made silent about
   deduplication, but changing the task after seeing the results would be tuning it, so it is
   reported as is.
@@ -635,17 +691,18 @@ phase, 3 memory states × 2 runs, 24 runs, 0 crashed (`scripts/x01_eval.py`, `ru
 - Supported: memory of review-only knowledge helps a lot (+36 pp over no memory,
   review-only tasks 0% → 56%); scope prevents leakage; outdated thresholds are
   handled at least as well as without memory; Attest is not worse than the two
-  published designs, with a smaller and cheaper prompt and immunity to the poison.
+  published designs (as simplified reproductions), with a smaller and cheaper prompt. It
+  stored none of the poison, but only because the poisoned tasks failed verification; it also
+  learned nothing else from them (held-out under poison 36%, without the gate 67%).
 - Retrieval: better recall from embeddings did not translate into better coding results; lexical retrieval is kept.
-- Context: under a 6k-token budget the context manager kept the session's review rule (2 of 3 S05 runs passed, 0 C6 failures) where a sliding window (0/3) and a plain summary (1/3) lost it; full history passes 3/3 at four times the tokens. Exploratory, one scenario, tuned after seeing results.
-- Forgetting: 200 one-off notes cut held-out pass@1 from 70% to 42%; no forgetting policy repaired it; uniform decay wrongly archived the approval rule (9 of 9 later C6 runs violated it), type-aware decay did not. Exploratory.
+- Context: under a 6k-token budget the context manager kept the session's review rule (2 of 3 S05 runs passed, 0 C6 failures) where a sliding window lost it (0/3); full history passes 3/3 at four times the tokens. The plain-summary baseline was broken (an empty summary), so no claim is made against it. Exploratory, one scenario, tuned after seeing results.
+- Forgetting: 200 one-off notes cut held-out pass@1 from 70% to 42%; no forgetting policy repaired it with the default parameters (aggressive type-aware decay partly does, offline); uniform decay wrongly archived the approval rule (9 of 9 later C6 runs violated it), type-aware decay did not. Exploratory.
 - Pollution: trust-tiered admission brought held-out pass@1 under pollution from 36% back to 67% (76% with type-aware forgetting; clean memory 70%), with 0 approval violations in the combined arm. Exploratory; the separating signal exists by construction.
-- Forgetting V2 (exploratory): treating "no evidence" as dormant rather than archived, and archiving only on negative evidence, removed every wrongly archived useful rule and made aggressive decay safe (71% needed rules injected, 44 injectable notes) in a simulation whose failure attribution is perfect by construction. Liveness against code caught every stale and renamed rule; one-prompt generated checks were useful for 1 of 25 rules, and validating them against the review that created each rule did not filter out bad checks (it rejected the useful one: the agent's real mistake was an omission the check did not look for). Rules no test or review names stay out of reach of every signal.
-- Verification at retrieval (after Copilot): checking the injected notes against the checkout, and saying what changed, raised stale-task pass@1 from 87% to 100% (S04: 1/3 → 3/3), and left every other task's context unchanged. Exploratory, one task's worth of difference.
-- Step 6 (provider timeouts, extension task X01): Attest carried the audit rule to a new module (6/6, no memory 0/6) and the idempotency parameter partly (2/6, others 0/6); the retry-with-the-same-key rule had no gap (6/6 in every condition, the gateway's docstring gives it away), so transfer to step 6 is not shown.
+- Forgetting V2 (exploratory): treating "no evidence" as dormant rather than archived, and archiving only on negative evidence, removed every wrongly archived useful rule and made aggressive decay safe (71% needed rules injected, 44 injectable notes) in a simulation whose failure attribution is perfect by construction. Liveness against code caught every stale and renamed rule; one-prompt generated checks were useful for 1 of 25 rules, and validating them against the review that created each rule did not filter out bad checks (it kept one useful check and rejected the other, whose miss was the agent's real mistake, an omission). Rules no test or review names stay out of reach of every signal.
+- Verification at retrieval (after Copilot): checking the injected notes against the checkout leaves every non-stale context unchanged and did no harm on the stale tasks (100% vs 87%), but the difference comes from one task on which the control was atypical, so no improvement is claimed.
+- Step 6 (provider timeouts, extension task X01): Attest carried the audit rule to a new module (6/6, no memory 0/6) and the idempotency parameter partly (2/6, others 0/6; the two runs of each memory state agreed in 11 of 12 pairs, so the effective sample is nearer 3 per condition); the retry-with-the-same-key rule had no gap (6/6 in every condition, the gateway's docstring gives it away), so transfer to step 6 is not shown.
 - Value feedback (offline): when adoption counts as contribution, one-off notes become permanent (34 under 30% adoption noise). Reinforcing only verified use removes that, but V1.1 also wrongly archived more correct rules (4 → 10–11 of 52), mostly rules no test checks. V1 stays the default and V1.1 is an option. The hard part is reliable evidence of value, not the decay rate.
-- Not supported: that the write gate is free. Here it cost held-out passes; its value
-  is protection (poison) and provenance, which the held-out pass rate does not reward.
+- Not supported: that the write gate is free. It cost held-out passes in every run measured (main experiment −15 pp; under poison 36% vs 67%). Its demonstrated value is narrower than first stated: it keeps out what comes from unverified tasks, and it records provenance. The evidence-line check was not tested against poison that passes the tests.
 - Limits: one model, one synthetic benchmark designed by the author, simulated
   review comments, 11 held-out tasks × 3 repetitions; real review history shows no
   recall advantage (`REAL_HISTORY.md`).

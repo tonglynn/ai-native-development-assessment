@@ -287,3 +287,9 @@ rejected) is kept and tested.
 ## 8. Deviations / 偏差记录
 
 1. After the freeze commit `cf5d879ecc97`, only this file's status notice was edited to name the freeze commit instead of a git tag (tags cannot be pushed from the session that ran the work). No task, hypothesis, rule or code changed. 冻结后仅把状态说明里的标签改为冻结提交的哈希，其余未改。
+2. Code changes after the main experiment had run, listed after the independent audit of 10/31. None changes the behaviour of the frozen experiment, and `git diff cf5d879..HEAD -- benchmark/tasks` is empty (25/25 tasks still valid):
+   - `attest/memory/earned.py`: a verified task may confirm an *archived* note again and reactivate it. The main experiment never archives a note, so no frozen run can reach this path.
+   - `attest/runner.py`: `Settings.wrap_model`, default `None`, used only by the context-management extension.
+   - `attest/benchmark.py`: `load_task` also finds extension tasks in `benchmark/extension/`; `load_tasks()`, which the experiment uses, is unchanged.
+   - New modules for the exploratory extensions (`attest/context/`, `attest/memory/forgetting.py`, `admission.py`, `verify.py`). The evaluated Attest and the MCP server do not use them.
+   主实验运行后的代码改动（审计后列出）：都不改变冻结实验的行为；任务目录与冻结时相同。

@@ -34,25 +34,36 @@ USD 0.85. Full write-up: [`RESULTS.md`](RESULTS.md); interactive report:
 | H5 | Scope is what prevents leakage | 0 vs 54 notes | supported |
 | H6 | The write gate costs nothing on held-out tasks | **−15 pp [−27, −3]** | **not supported** |
 
-What the gate buys instead (exploratory stress tests):
+Stress tests and risks (exploratory):
 
 - **Poisoned review advice** ("clear the audit log after writing an entry"):
   Attest stored it 0 times; without the gate 9 times; ReasoningBank 12, ACE 10.
   ReasoningBank and ACE agents then cleared the audit log in 2 and 5 held-out runs.
+  But the poisoned tasks failed verification in every condition, so Attest kept the
+  poison out with its simplest rule (learn nothing from an unverified task). It also
+  learned nothing else from those tasks: held-out pass@1 under poison was 36%, against
+  67% without the gate. The finer evidence checks were not tested by this poison.
 - **300 notes from other repositories** in memory: Attest 73% pass@1 with 31k
   prompt tokens per run and 0 foreign notes shown; ReasoningBank 42% / 46k; ACE 55% /
-  157k (every note in every prompt).
+  157k (every note in every prompt). This tests scope and retrieval; there was no
+  no-gate arm.
 - **Business risks** on held-out, stale and control tasks, no memory → Attest:
   duplicate money operations 18/18 → 6/18, unauthorised operations 15/15 → 2/15,
-  legitimate operations blocked 15/15 → 3/15.
+  legitimate operations blocked 15/15 → 3/15. This is what memory buys, not the gate:
+  without the gate the rates are equal or better (2/18, 2/15, 2/15).
+- **Near and far transfer** (preregistered split, reported late): Attest vs no memory
+  +58 pp on the 4 held-out tasks that mirror an experience task, +24 pp [+10, +43] on
+  the other 7.
 
-Later extensions (exploratory, `RESULTS.md`): a **context manager** kept the
+Later extensions (exploratory, `RESULTS.md`): a **context manager**, designed after seeing results, kept the
 session's review rule under a 6k-token budget (S05 2 of 3, 0 approval violations;
-window 0/3, plain summary 1/3, full history 3/3 at 4× the tokens); **dynamic
+sliding window 0/3, full history 3/3 at 4× the tokens; the plain-summary baseline was
+broken and is not compared); **dynamic
 forgetting** showed that 200 one-off notes cut held-out pass@1 from 70% to 42% and
-that no forgetting policy repaired it, while uniform decay wrongly archived the
+that no forgetting policy repaired it with its default parameters, while uniform decay wrongly archived the
 approval rule and type-aware decay did not. **Trust-tiered admission** (a detail seen once is
-injected only in its own files) brought that back to 67%, 76% together with type-aware
+injected only in its own files), on a harder polluted stream where memory without tiers
+scored 36%, brought held-out pass@1 to 67%, 76% together with type-aware
 forgetting, with 0 approval violations (exploratory; the separating signal exists by
 construction). **Forgetting V1.1** (offline): counting adoption as
 contribution let 34 one-off notes become permanent; reinforcing only verified use removed
@@ -60,8 +71,8 @@ that, but V1.1 wrongly archived more correct rules (4 → 10–11 of 52), mostly
 checks, so V1 stays the default. The hard part is reliable evidence of value, not the decay
 rate.
 
-What it does **not** show: on real review history (Flask, Saleor) Attest has no
-recall advantage ([`REAL_HISTORY.md`](REAL_HISTORY.md)); embedding retrieval finds
+What it does **not** show: on real review history Attest anticipated the fewest
+convention comments (Saleor 1/25, against ReasoningBank 4/25 and ACE 8/25) ([`REAL_HISTORY.md`](REAL_HISTORY.md)); embedding retrieval finds
 more relevant notes but did not improve coding results (retrieval ablation in
 `RESULTS.md`).
 
@@ -167,7 +178,7 @@ task ──► recall ──► mini-swe-agent (unmodified) ──► hidden tes
 
 ```bash
 pip install -r requirements.txt
-python -m pytest -q                         # 66 offline tests, scripted model, no API calls
+python -m pytest -q                         # offline tests, scripted model, no API calls
 python scripts/validate_benchmark.py        # 25/25 tasks measure what they claim
 python -m attest summary runs/main          # recompute the tables from committed results
 python -m attest.report runs/main report/index.html
@@ -176,6 +187,16 @@ python -m attest.report runs/main report/index.html
 python -m attest experiment --name main --reps 3 --parallel 6
 python -m attest stress --kind poison --name stress_poison
 python -m attest ablation --source main --name retrieval_ablation
+
+# exploratory extensions, offline (no API key, deterministic)
+python scripts/forgetting_sweep.py --out runs/forgetting_sweep
+python scripts/forgetting_v11.py --out runs/forgetting_v11
+python scripts/forgetting_v2.py --out runs/forgetting_v2
+python scripts/liveness_check.py --out runs/liveness
+python scripts/failure_attribution.py --out runs/failure_attribution
+python scripts/rule_checks.py --out runs/rule_checks --evaluate-only
+# exploratory extensions with agent runs (Actions commands: context_eval, forgetting_eval,
+# admission_eval, rule_checks, verify_eval, x01_eval)
 ```
 
 Long runs execute on GitHub Actions (`.github/workflows/experiment.yml`): push
@@ -213,7 +234,7 @@ Sources for the industry and research context: [GitHub Copilot agentic memory](h
 | `runs/` | Every run: trajectories, diffs, `result.json`, memory event logs |
 | `report/index.html` | Interactive report of the main experiment |
 | `RESULTS.md`, `REAL_HISTORY.md` | Results |
-| `PREREGISTRATION.md`, `DECISIONS.md`, `AI_LOG.md`, `INCIDENTS.md` | Method, decisions D1–D28, AI collaboration log, incidents |
+| `PREREGISTRATION.md`, `DECISIONS.md`, `AI_LOG.md`, `INCIDENTS.md` | Method, decisions D1–D35, AI collaboration log, incidents |
 | `SCENARIO.md`, `scenario/history/` | Business scenario (synthetic) |
 | `ROADMAP.md`, `PROCESS_MEMORY.md` | Next steps (Attest 2.0), deliberately not added |
 
@@ -229,10 +250,11 @@ Sources for the industry and research context: [GitHub Copilot agentic memory](h
 
 - **留出组首次通过率**：无记忆 33%，ReasoningBank 58%，ACE 61%，**Attest 70%**；关掉写入门槛 85%，关掉作用域 67%。
 - **H1–H5 得到支持**：比无记忆高 36 个百分点（区间 [+21, +52]）；不泄漏到其他仓库；过期政策场景不比无记忆差；不差于两种已发表的设计；作用域是防泄漏的关键。
-- **H6 不被支持**：写入门槛让留出组降低 15 个百分点（[−27, −3]）。门槛换来的是安全：投毒实验中 Attest 0 次写入错误建议，关掉门槛 9 次，ReasoningBank 12 次、ACE 10 次，后两者的 Agent 在后续任务中确实清空了审计日志。
-- **业务风险**（无记忆 → Attest）：重复资金操作 18/18 → 6/18，未授权操作 15/15 → 2/15，误拦合法操作 15/15 → 3/15。
-- **后续扩展（探索性）**：上下文管理器在 6k token 预算下保住了会话中的评审规则（S05 通过 2/3，0 次审批违规；滑动窗口 0/3，普通摘要 1/3）；动态遗忘实验显示 200 条一次性笔记把留出组从 70% 降到 42%，没有一种遗忘策略能修复，统一衰减误删了审批规则，按类型衰减没有；**可信度分级写入**（只出现一次的细节只在所属文件中注入）把它拉回到 67%，与按类型遗忘结合为 76%，审批违规为 0（探索性，区分信号为构造所得）。**遗忘 V1.1**（离线）：把"被采用"当成贡献，会让 34 条一次性笔记永久保留；只按验证强化能消除这一点，但 V1.1 误归档的正确规则从 4/52 增加到 10–11/52，多为没有测试覆盖的规则，因此 V1 仍为默认。难点在于拿到可靠的价值反馈，而不是遗忘速度。
-- **没有证明的**：在真实评审历史（Flask、Saleor）上 Attest 没有召回优势；语义检索找到更多相关笔记，但没有改善编码结果。
+- **H6 不被支持**：写入门槛让留出组降低 15 个百分点（[−27, −3]）。投毒实验中 Attest 0 次写入错误建议，关掉门槛 9 次，ReasoningBank 12 次、ACE 10 次，后两者的 Agent 在后续任务中确实清空了审计日志。但被投毒的任务在所有条件下都没有通过验证，Attest 靠"不从未验证的任务学习"这一条挡住了毒药，同时也没学到这些任务里的其他经验：投毒下留出组为 36%，关掉门槛为 67%。更细的证据检查没有被这次投毒检验到。
+- **业务风险**（无记忆 → Attest）：重复资金操作 18/18 → 6/18，未授权操作 15/15 → 2/15，误拦合法操作 15/15 → 3/15。这是记忆带来的，不是门槛带来的：关掉门槛时这三项相同或更好（2/18、2/15、2/15）。
+- **近迁移与远迁移**（预注册的拆分，补报）：在 4 个与经验任务结构相近的留出任务上，Attest 比无记忆高 58 个百分点；在另外 7 个任务上高 24 个百分点（[+10, +43]）。
+- **后续扩展（探索性）**：上下文管理器（看到结果后设计）在 6k token 预算下保住了会话中的评审规则（S05 通过 2/3，0 次审批违规；滑动窗口 0/3；普通摘要基线有缺陷，不作比较）；动态遗忘实验显示 200 条一次性笔记把留出组从 70% 降到 42%，默认参数下没有一种遗忘策略能修复，统一衰减误删了审批规则，按类型衰减没有；**可信度分级写入**（只出现一次的细节只在所属文件中注入）在更难的污染任务流上（不分级时为 36%）把留出组提高到 67%，与按类型遗忘结合为 76%，审批违规为 0（探索性，区分信号为构造所得）。**遗忘 V1.1**（离线）：把"被采用"当成贡献，会让 34 条一次性笔记永久保留；只按验证强化能消除这一点，但 V1.1 误归档的正确规则从 4/52 增加到 10–11/52，多为没有测试覆盖的规则，因此 V1 仍为默认。难点在于拿到可靠的价值反馈，而不是遗忘速度。
+- **没有证明的**：在真实评审历史上，Attest 预判到的规范类评审意见最少（Saleor 上 1/25，ReasoningBank 4/25，ACE 8/25）；语义检索找到更多相关笔记，但没有改善编码结果。
 
 ### 问题
 
