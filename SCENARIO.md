@@ -83,8 +83,8 @@ docstrings that cite INC-204 and FIN-2026-03).
 | Workflow / 工作流 | Tasks / 任务 | What it tests / 检验什么 |
 |---|---|---|
 | 1 Refund features / 退款功能 | E01–E05, H01–H03, H05, H09 | Discoverable conventions in everyday feature work |
-| 2 Retries and approvals / 重复请求与审批 | E04, E06, H04, H06–H08, H10 (and the end-to-end refund-request task) | Inheriting C5–C6 from earlier review |
-| 3 Policy upgrade / 政策升级 | S01–S04 on ledgerly 2.0.0 | Noticing that remembered policy (rounding, threshold) is out of date |
+| 2 Retries and approvals / 重复请求与审批 | E04, E06, H04, H06–H08, H10, H11 (end-to-end support refund request) | Inheriting C5–C6 from earlier review |
+| 3 Policy upgrade / 政策升级 | S01–S05 on ledgerly 2.0.0 | Noticing that remembered policy (rounding, threshold) is out of date |
 
 The four task groups follow one system's life: **E** the team's earlier work and
 reviews, **H** new work on the same system, **S** the same system after a finance

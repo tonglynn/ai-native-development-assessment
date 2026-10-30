@@ -23,12 +23,12 @@ are only partly visible in existing code, and are enforced in code review.
 ledgerly also contains six **legacy modules** "moved over from the old billing
 monolith" (`pricing`, `promotions`, `importers`, `reporting`, `adjustments`,
 `renewals`). They predate the conventions: floats, `ValueError`, naive
-datetimes, no audit entries. Seven tasks add a function to one of them, where
+datetimes, no audit entries. Ten tasks add a function to one of them, where
 copying the surrounding code is exactly the wrong move. This mirrors real
 codebases, where the nearest example is often older than the current rules.
 
 ledgerly 还包含六个从旧单体系统迁过来的**遗留模块**，它们早于现行规范：用 float、
-`ValueError`、不带时区的时间、不写审计记录。有 7 个任务要在这些模块里新增函数，此时照抄周围
+`ValueError`、不带时区的时间、不写审计记录。有 10 个任务要在这些模块里新增函数，此时照抄周围
 代码恰恰是错的。真实代码库也是这样：离你最近的示例往往比现行规矩更老。
 
 ### ledgerly conventions / ledgerly 的隐性规范
@@ -55,13 +55,14 @@ simkit conventions: **K1** float-only (no `Decimal`, no `datetime`), **K2** buil
 ## Tasks / 任务
 
 Tasks placed in legacy modules / 放在遗留模块中的任务: E03 (`renewals`), E04 (`adjustments`),
-E05 (`pricing`), H01 (`promotions`), H02 (`importers`), H03 (`reporting`), H04 (`adjustments`).
+E05 (`pricing`), H01 (`promotions`), H02 (`importers`), H03 (`reporting`), H04, H07, H10, S04, S05
+(`adjustments`). H11 adds a new module (`support`).
 
 | Group / 组 | Tasks | Repo | Purpose / 用途 |
 |---|---|---|---|
 | experience / 经验生成 | E01–E06 | ledgerly_v1 | The only tasks memory may be written from / 只有这组可以写入记忆 |
-| heldout / 留出 | H01–H10 | ledgerly_v1 | Same conventions, different functions; never used to write memory / 同样的规范，不同的函数；从不用来写记忆 |
-| stale / 过期 | S01–S04 | ledgerly_v2 | Rounding policy (S01–S03) and approval threshold (S04) changed; v1 memories about them are now wrong / 舍入政策和审批阈值已变，v1 的相关经验失效 |
+| heldout / 留出 | H01–H11 | ledgerly_v1 | Same conventions, different functions; never used to write memory. H06, H07 and H11 mirror an experience task (near transfer), the rest are far transfer. H11 is the end-to-end support refund request (C1–C6) / 同样的规范，不同的函数；从不用来写记忆。H06、H07、H11 与某个经验任务结构相近（近迁移）；H11 是端到端客服退款请求 |
+| stale / 过期 | S01–S05 | ledgerly_v2 | Approval threshold 500 → 1000 (S04, S05): a remembered 500.00 rule now blocks legitimate operations. Rounding policy (S01–S03): v2's `round_money` already rounds half-even, so following the v1 lesson passes; these are no-false-recall checks, failed only by hard-coding half-up (audit M3). S04 is a credit and in C5's scope but not tested for C5, to keep it about the threshold / 审批阈值变化（S04、S05）会让记住的 500 规则误拦合法操作；舍入任务（S01–S03）只检查「不误用旧经验」 |
 | control / 对照 | B01–B03 | simkit | ledgerly memories must **not** transfer here / ledgerly 的经验不应迁移到这里 |
 
 Convention coverage / 规范覆盖：
@@ -69,7 +70,12 @@ Convention coverage / 规范覆盖：
 | | C1 | C2 | C3 | C4 | C5 | C6 |
 |---|---|---|---|---|---|---|
 | experience | E01 E05 | E02 E04 E05 E06 | E03 E06 | E04 E06 | E04 E06 | E04 |
-| heldout | H01 H02 H05 H08 | H02 H04 H06–H10 | H03 H05 H08 H09 H10 | H04 H06 H07 H08 H10 | H04 H06 H07 H08 H10 | H04 H07 |
+| heldout | H01 H02 H05 H08 H11 | H02 H04 H06–H11 | H03 H08 H09 H10 H11 | H04 H06 H07 H08 H10 H11 | H04 H06 H07 H08 H10 H11 | H04 H07 H11 |
+| stale | S01–S03 | S01 S02 S04 S05 | | S04 S05 | | S04 S05 |
+
+C6 is checked by two tests per task: `test_conv_c6_blocks_*` (an unapproved amount above the threshold is rejected:
+*unauthorised operation*) and `test_conv_c6_allows_*` (at or below the threshold, or approved, it goes through:
+*legitimate operation blocked*). C6 每个任务两条测试：拦截未审批的大额操作 / 放行阈值以内或已审批的操作。
 
 ## Task layout / 单个任务的结构
 
@@ -98,10 +104,10 @@ are the docstrings of failing hidden tests, not written by a person.
 `python scripts/validate_benchmark.py` checks every task: the stub fails, the
 naive solution passes public and behaviour tests but misses at least one
 convention, and the reference solution passes everything. Latest result:
-`validation.json` (23/23 valid).
+`validation.json` (25/25 valid).
 
 `python scripts/validate_benchmark.py` 会逐个检查：初始代码会失败；naive 解能通过公开测试和功能测试，
-但至少违反一条规范；参考解全部通过。最新结果见 `validation.json`（23/23 有效）。
+但至少违反一条规范；参考解全部通过。最新结果见 `validation.json`（25/25 有效）。
 
 ## Known risks / 已知风险
 
@@ -125,6 +131,10 @@ convention, and the reference solution passes everything. Latest result:
   pilot on the held-out group checks they keep the difficulty in range.
   第三次基线达标后，为缓解样本量过小的问题，新增 4 个留出任务（6 → 10），并对留出组再做一次无记忆基线，
   确认难度仍在目标区间。
+- **Independent audit** (`AUDIT.md`), after pilot 4: one blocker and six majors, all fixed before
+  pilot 5 — split C6 checks, clearer C6/C5/C4 wording, audit entries found by entity id, new stale
+  task S05, varied boundary amounts, near/far transfer tags, S04 issue text; plus the end-to-end task
+  H11. See `PREREGISTRATION.md`, section 3. 独立审计后修复了 1 个阻断问题和 6 个主要问题，并加入 H11、S05。
 - Conventions C1–C4 are still visible in the modern modules, so a careful agent can
   infer them without memory. That is intended: memory should save effort and
   mistakes, not be the only way to succeed.

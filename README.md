@@ -23,11 +23,11 @@ first; it is never stored in the repository.
 ```bash
 pip install --user -r requirements.txt     # done automatically when the codespace is created
 python -m pytest -q                         # pipeline tests with a scripted model, no API calls
-python scripts/validate_benchmark.py        # checks that all 23 tasks measure what they claim
+python scripts/validate_benchmark.py        # checks that all 25 tasks measure what they claim
 python scripts/check_model.py               # one tiny real call to verify the key and model
 
 python -m attest run --task E01 --name smoke     # one real agent run (no memory)
-python -m attest pilot --name pilot_nomem        # all 23 tasks, no memory
+python -m attest pilot --name pilot_nomem        # all 25 tasks, no memory
 python -m attest summary runs/pilot_nomem        # results table
 ```
 
@@ -49,7 +49,7 @@ Results and a console log are committed back to `runs/<name>/`.
 
 | Path | What it is |
 |---|---|
-| `benchmark/` | Simulated team repositories and 23 tasks — see `benchmark/README.md` |
+| `benchmark/` | Simulated team repositories and 25 tasks — see `benchmark/README.md` |
 | `attest/` | Runner, verifier and memory systems |
 | `attest/ablation.py`, `attest/memory/retrieval.py`, `embedding.py` | Retrieval ablation (exploratory): lexical vs embedding ranking on the same memory, offline retrieval metrics and end-to-end runs (PREREGISTRATION 4c). / 检索机制消融：同一份记忆上比较词法与语义排序 |
 | `REAL_HISTORY.md` | Results on real review history (Flask: development, Saleor: test); no recall advantage for Attest. / 真实评审历史上的结果 |
