@@ -517,6 +517,37 @@ Ground truth comes from the benchmark design.
   the reviewer rejected and pass the accepted diff. That is not tested here. Also not tested:
   whether a rule enforced by a check can leave the prompt.
 
+### Just-in-time verification at retrieval (after GitHub Copilot's agentic memory) / 检索时核对
+
+`attest/memory/verify.py`, `scripts/verify_eval.py`, `runs/verify_eval`. Before a note is
+injected, the liveness check (point 5) runs against the checkout the agent works on. A
+drifted note, or one that a newer changelog entry mentions, gets a line telling the agent to
+check it before use, so the agent re-reads the code instead of trusting the note. A second
+mode drops drifted notes instead. Offline, with the main experiment's memories, the injected
+context is byte-identical to plain Attest on every experience, held-out and control task run
+(18/18, 33/33, 9/9). Only the 15 stale runs change: of the 90 notes injected there, 10 were
+drifted and 25 marked for review. So only the stale tasks were run, with 45 agent runs.
+
+| Arm | Stale pass@1 | C1 failed (S01–S03) | Approval wrongly demanded (S04–S05) | Unapproved let through (S04–S05) |
+|---|---|---|---|---|
+| plain Attest | 87% (same as the main experiment) | 0/9 | 2/6 | 2/6 |
+| check before use | **100%** | 0/9 | **0/6** | **0/6** |
+| drop drifted notes | **100%** | 0/9 | **0/6** | **0/6** |
+
+- **By the rule fixed before the run, verification is kept as an option.** It is not lower on any
+  measure.
+- **The whole difference is S04** (goodwill credits on 2.0.0): plain Attest failed 2 of 3 runs,
+  both verification arms passed 3 of 3. The other four tasks were at the ceiling in every arm.
+- **The gain comes from the check line, not from dropping notes.** The approval rule is marked
+  for review, not drifted, because the changelog names 500.00. Both arms therefore show it the
+  same "check before use" line. Plain Attest already shows a generic version warning ("learned on
+  1.0.0, this checkout is 2.0.0"); a specific pointer to what changed did better.
+- Small evidence: one task, 2 runs of difference, 15 runs per arm; it shows a direction only. 证据很小（一个任务、两次运行的差别），只能说明方向。
+- What it adds to the design: verification at use time does not need to know whether a note is
+  valuable. It only needs to know whether what the note cites still holds. This is the way
+  around the value-feedback problem that forgetting V1.1 and V2 ran into, and it is what
+  Copilot does.
+
 ### Failure attribution, step 1: validate a check against its own evidence / 失败归因第一步
 
 Three evidence states only pay off if a failure can be pinned on the note that caused it.
@@ -573,6 +604,7 @@ task.
 - Forgetting: 200 one-off notes cut held-out pass@1 from 70% to 42%; no forgetting policy repaired it; uniform decay wrongly archived the approval rule (9 of 9 later C6 runs violated it), type-aware decay did not. Exploratory.
 - Pollution: trust-tiered admission brought held-out pass@1 under pollution from 36% back to 67% (76% with type-aware forgetting; clean memory 70%), with 0 approval violations in the combined arm. Exploratory; the separating signal exists by construction.
 - Forgetting V2 (exploratory): treating "no evidence" as dormant rather than archived, and archiving only on negative evidence, removed every wrongly archived useful rule and made aggressive decay safe (71% needed rules injected, 44 injectable notes) in a simulation whose failure attribution is perfect by construction. Liveness against code caught every stale and renamed rule; one-prompt generated checks were useful for 1 of 25 rules, and validating them against the review that created each rule did not filter out bad checks (it rejected the useful one: the agent's real mistake was an omission the check did not look for). Rules no test or review names stay out of reach of every signal.
+- Verification at retrieval (after Copilot): checking the injected notes against the checkout, and saying what changed, raised stale-task pass@1 from 87% to 100% (S04: 1/3 → 3/3), and left every other task's context unchanged. Exploratory, one task's worth of difference.
 - Value feedback (offline): when adoption counts as contribution, one-off notes become permanent (34 under 30% adoption noise). Reinforcing only verified use removes that, but V1.1 also wrongly archived more correct rules (4 → 10–11 of 52), mostly rules no test checks. V1 stays the default and V1.1 is an option. The hard part is reliable evidence of value, not the decay rate.
 - Not supported: that the write gate is free. Here it cost held-out passes; its value
   is protection (poison) and provenance, which the held-out pass rate does not reward.
