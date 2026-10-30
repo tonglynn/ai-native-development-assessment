@@ -1,13 +1,11 @@
 # Preregistration / 预注册
 
-> **Status: DRAFT.** This file is frozen by the commit that removes this line,
-> after the no-memory pilot and before any memory condition is run. The commit
-> hash and time of that commit are the evidence that the tasks, hypotheses and
-> analysis were fixed before results with memory existed. Any later change is
+> **Status: FROZEN** on 2026-10-30, by the commit that replaced the draft notice with
+> this line (tag `prereg-frozen`), after the no-memory pilots, the independent audit and
+> its two re-checks, and before any memory condition was run. Any later change is
 > listed under *Deviations*.
 >
-> **状态：草案。** 无记忆基线跑完、任何有记忆的实验开始之前，删除本段的那次提交即为冻结。
-> 该提交的哈希和时间证明：任务、假设和分析方法都在看到有记忆的结果之前就已确定。之后的任何修改都列在"偏差"一节。
+> **状态：已冻结**（2026-10-30，标签 `prereg-frozen`）。在无记忆基线、独立审计及两次复核之后、任何有记忆的实验运行之前冻结。之后的任何修改都列在"偏差"一节。
 
 ## 1. Question / 研究问题
 
