@@ -67,20 +67,50 @@ more relevant notes but did not improve coding results (retrieval ablation in
 
 ## The problem
 
-A team's rules about money live partly in code and partly only in reviewers' heads:
-an idempotency key after a double-refund incident, a second approver above a
-threshold set by finance. An agent that does not know them repeats mistakes the team
-already paid for. Memory can help, but naive memory adds new failure modes:
+**Why it is a real problem.** Coding agents repeat mistakes a team has already paid
+for, because the lessons live in code review and incident write-ups, not in the code.
+Products now ship memory for this: GitHub Copilot Memory (memories with code
+citations, re-checked before use; in an A/B test the coding agent's PR merge rate rose
+from 83% to 90%), CodeRabbit Learnings (preferences from review comments, optionally
+approved by an admin) and Qodo's auto best practices (rules mined from accepted
+suggestions). Research on real repositories is less encouraging. In VibeMemBench,
+11 of 12 pairings of existing memory systems and agents did not beat no memory.
+MemDev-Bench finds that memory makes agents fail tasks they could otherwise solve,
+because they reuse it without checking that it applies. What none of these publish
+is a controlled measure of the governance questions: wrong advice, rules leaking to
+the wrong place, rules that changed. That is the question here.
 
-1. it learns from unverified attempts and from wrong advice,
-2. it applies one repository's rules to another,
-3. it keeps applying a rule after the policy changed.
+**The scenario: Ledgerly** (synthetic, [`SCENARIO.md`](SCENARIO.md)). A B2B SaaS
+company is moving its billing from a monolith to modules, while finance policy keeps
+changing. The lessons came from review, an incident review and finance decisions.
+The main thread is: a problem happens → review or an incident review turns it into
+experience → the agent learns it → reuses it on new work → corrects it when the policy
+changes. The business flow the tasks exercise is a support-initiated refund or credit:
 
-The benchmark is a synthetic billing library, `ledgerly`, migrating from a monolith,
-with a 2.0 release that changes the rounding policy and raises the approval threshold
-from 500.00 to 1000.00, and a control library, `simkit`, with opposite conventions.
-The business context, roles and the incident and policy history are in
-[`SCENARIO.md`](SCENARIO.md) (clearly marked synthetic).
+| Step | Requirement | Experience | Covered by the benchmark |
+|---|---|---|---|
+| 1 Receive the request | the amount the agent typed, the payment, who asked | C1 money precision | yes (H11 parses "49.99" to two-decimal `Decimal`) |
+| 2 Check, deduplicate | a retried request must not refund twice | C5 idempotency (incident A, double refund) | yes (E04, H04, H06–H08, H10, H11) |
+| 3 Approval | support refunds above a threshold need a second approver | C6 approval (policy B: 500.00, later 1000.00) | yes, including the change (S04, S05 on 2.0) |
+| 4 Compute and move money | current rounding rule (half-up in 1.0, half-even in 2.0) | C1 rounding | partly: **no real payment provider is called** |
+| 5 Update and audit | every money movement is recorded | C4 audit | yes |
+| 6 Errors and retries | business failures vs system faults; retries | C2 errors, C5 | partly: **no timeouts, partial failures or recovery** |
+
+C1–C4 can be discovered in the code; C5 and C6 pass only through review. The incident
+and the policy change are synthetic, not taken from a real company. Only H11 runs the
+whole flow in one task; the other tasks each cover part of it.
+
+**Two-layer study design.**
+
+1. **Controlled experiment (done).** The Ledgerly benchmark, with experience,
+   held-out, stale and control tasks, compares no memory, ReasoningBank-style and
+   ACE-style memory, and Attest with ablations. Preregistered; results above.
+2. **Real history (partly done).** A retrospective on real pull requests and review
+   comments from Flask and Saleor ([`REAL_HISTORY.md`](REAL_HISTORY.md)): Attest
+   showed no recall advantage there, because real reviewers rarely state rules and
+   many missed comments are about process. Not done: an agent completing later tasks of
+   a real repository with memory learned from its history (as in MemDev-Bench); that
+   is the most important next step ([`ROADMAP.md`](ROADMAP.md)).
 
 ## How Attest works
 
@@ -170,6 +200,8 @@ rule did not help: real agent mistakes are often omissions, which the checks mis
 validated checks were right about half the time (`RESULTS.md`, D33). Rules that no test or
 review names stay out of reach of every feedback signal tried.
 
+Sources for the industry and research context: [GitHub Copilot agentic memory](https://github.blog/2026-01-09-building-an-agentic-memory-system-for-github-copilot), [CodeRabbit Learnings](https://docs.coderabbit.ai/guides/learnings), [Qodo auto best practices](https://docs.qodo.ai/qodo-documentation/qodo-merge/pr-agent/core-abilities/auto_best_practices), [VibeMemBench](https://arxiv.org/abs/2609.23570), [MemDev-Bench](https://arxiv.org/abs/2610.27524v1).
+
 ## Repository map
 
 | Path | What it is |
@@ -204,7 +236,25 @@ review names stay out of reach of every feedback signal tried.
 
 ### 问题
 
-团队关于"钱怎么处理"的规矩，一部分写在代码里，一部分只在评审者脑子里：重复退款事故后引入的幂等键、财务规定的审批阈值。不知道这些的 Agent 会重犯团队已经付过代价的错误。记忆能帮忙，但朴素的记忆会带来新问题：从没验证过的尝试和错误建议中学习；把一个仓库的规矩用到另一个仓库；政策变了还继续用旧规则。基准是一个从单体迁出的合成计费库 `ledgerly`（2.0 版改了舍入政策、把审批阈值从 500 提到 1000）和一个规矩相反的对照库 `simkit`。业务背景、角色、事故与政策历史见 [`SCENARIO.md`](SCENARIO.md)（明确标注为合成材料）。
+**为什么这是真实问题。**编码 Agent 会重犯团队已经付过代价的错误，因为这些经验存在于代码评审和事故复盘里，而不在代码里。业界已经在做这件事：GitHub Copilot Memory 让记忆带上代码引用，用之前先核对（A/B 测试中编码 Agent 的 PR 合并率从 83% 提高到 90%）；CodeRabbit Learnings 从评审评论中记住团队偏好，可设管理员审批；Qodo 从被采纳的建议中提炼规则。但真实仓库上的研究结论并不乐观：VibeMemBench 中现有记忆系统与 Agent 的 12 种组合里有 11 种不比无记忆好；MemDev-Bench 发现，记忆会让 Agent 做错原本能做对的任务，原因是不检查记忆是否适用。这些工作都没有公开回答治理问题：错误建议、规则用错地方、规则已经变了。这正是本项目要回答的。
+
+**场景：Ledgerly**（合成材料，见 [`SCENARIO.md`](SCENARIO.md)）。一家 B2B SaaS 企业正把计费系统从单体迁移到模块化架构，财务政策不断变化；经验来自代码评审、事故复盘和财务决策。主线是：出现问题 → 评审或复盘形成经验 → Agent 学会 → 在新需求中复用 → 政策变化后修正。任务覆盖的业务流程是客服发起的退款或抵扣：
+
+| 环节 | 业务要求 | 对应经验 | 基准是否覆盖 |
+|---|---|---|---|
+| 1 接收请求 | 客服输入的金额、交易、发起人 | C1 金额精度 | 是（H11 把 "49.99" 解析为两位小数的 `Decimal`） |
+| 2 校验与去重 | 重试的请求不能重复退款 | C5 幂等（事件 A：重复退款） | 是（E04、H04、H06–H08、H10、H11） |
+| 3 审批判断 | 客服发起、超过阈值需第二人审批 | C6 审批（政策 B：500，后改为 1000） | 是，含政策变化（2.0 上的 S04、S05） |
+| 4 计算与资金操作 | 当前舍入规则（1.0 为 half-up，2.0 为 half-even） | C1 舍入 | 部分：**没有调用真实支付服务** |
+| 5 更新账务与审计 | 每笔资金变动都要记录 | C4 审计 | 是 |
+| 6 异常与重试 | 区分业务失败与系统故障；重试 | C2 异常、C5 | 部分：**没有超时、部分失败与恢复** |
+
+C1–C4 可以从代码中发现，C5、C6 只能靠评审传承。事故与政策变化都是模拟设定，不来自真实企业。只有 H11 一个任务完整走完六个环节，其余任务各覆盖其中一段。
+
+**两层研究设计。**
+
+1. **受控实验（已完成）**：Ledgerly 基准（经验、留出、过期、对照四组任务），比较无记忆、ReasoningBank 式、ACE 式与 Attest 及其消融；预注册，结果见上。
+2. **真实历史（部分完成）**：对 Flask、Saleor 的真实 PR 与评审评论做了回溯（[`REAL_HISTORY.md`](REAL_HISTORY.md)），Attest 没有召回优势，因为真实评审很少明说规则，漏掉的多是流程类意见。尚未完成的是：用从真实仓库历史中学到的记忆，让 Agent 完成该仓库后续的任务（如 MemDev-Bench 的做法）。这是最重要的下一步（见 [`ROADMAP.md`](ROADMAP.md)）。
 
 ### Attest 怎么工作
 
