@@ -27,6 +27,7 @@ Usage (needs DEEPSEEK_API_KEY): python scripts/context_eval.py --out runs/contex
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -66,7 +67,7 @@ def summarizer(transcript: str) -> str:
 
 def offline(prefix: list[dict], budgets=(4000, 6000, 8000)) -> list[dict]:
     system = {"role": "system", "content": "You are a helpful assistant that can interact with a computer."}
-    task = {"role": "user", "content": "New task in the same repository: " + load_task("S05").issue}
+    task = {"role": "user", "content": "New task in the same repository: " + load_task("S05").issue + FOLLOW_UP}
     full = [system] + prefix + [task]
     rows = []
     for budget in budgets:
@@ -85,8 +86,14 @@ def offline(prefix: list[dict], budgets=(4000, 6000, 8000)) -> list[dict]:
     return rows
 
 
+# Design 2 (after design 1 had a ceiling of 0: with the whole session in context the agent still did not
+# apply the earlier review rule to a new task). The user now says what a user would say; the no_session
+# arm gets the same sentence. Design 1 is kept in runs/context_eval_design1.
+FOLLOW_UP = " Apply the review guidance you received earlier in this session."
+
+
 def one(arm: str, rep: int, prefix: list[dict], out: Path, budget: int) -> dict:
-    task = load_task("S05")
+    task = dataclasses.replace(load_task("S05"), issue=load_task("S05").issue + FOLLOW_UP)
     if arm == "no_session":
         settings = Settings()
     else:
