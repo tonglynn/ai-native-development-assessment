@@ -1,0 +1,68 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,16 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from decimal import Decimal
++
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money, to_money
++
++# Finance policy FIN-2026-09: support-initiated refunds/credits above this
++# amount require a second approver. (Was 500.00 before 2.0.0.)
++APPROVAL_THRESHOLD = Decimal("1000.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +25,45 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def outage_refund(payment, amount, at):
+-    """Refund part of a captured payment after a service outage."""
+-    raise NotImplementedError
++def outage_refund(payment, amount, at, *, approved_by=None):
++    """Refund part of a captured payment after a service outage.
++
++    ``amount`` is added to ``payment.refunded_amount``; once the whole
++    captured amount has been refunded the payment status becomes
++    ``"refunded"``.  The amount must be positive, the cumulative refunded
++    total may not exceed the captured amount, and only captured payments can
++    be refunded.  Refunds above the finance approval threshold require a
++    second approver via ``approved_by``.
++    """
++    at = ensure_utc(at)
++    amount = round_money(to_money(amount))
++
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++
++    captured = round_money(to_money(payment.amount))
++    refunded = round_money(to_money(payment.refunded_amount))
++    if refunded + amount > captured:
++        raise BillingError(
++            "refund_exceeds_captured",
++            f"{refunded + amount} > {captured}",
++        )
++
++    if amount > APPROVAL_THRESHOLD and not approved_by:
++        raise BillingError("approval_required")
++
++    payment.refunded_amount = refunded + amount
++    if payment.refunded_amount >= captured:
++        payment.status = "refunded"
++
++    audit.record(
++        "outage_refund",
++        payment_id=payment.id,
++        amount=amount,
++        refunded_amount=payment.refunded_amount,
++        approved_by=approved_by,
++        at=at,
++    )
++    return payment

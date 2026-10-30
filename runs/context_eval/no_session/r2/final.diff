@@ -1,0 +1,62 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,28 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from decimal import Decimal
++
++from . import __version__, audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money
++
++# Finance policy FIN-2026-09 raised the approval threshold from 500.00 to
++# 1000.00 in 2.0.0 (see CHANGELOG).
++APPROVAL_THRESHOLD_BEFORE_2_0_0 = Decimal("500.00")
++APPROVAL_THRESHOLD_SINCE_2_0_0 = Decimal("1000.00")
++
++
++def _approval_threshold() -> Decimal:
++    """Return the support-refund approval threshold for this release."""
++    try:
++        major = int(str(__version__).split(".", 1)[0])
++    except (TypeError, ValueError):
++        major = 2
++    if major >= 2:
++        return APPROVAL_THRESHOLD_SINCE_2_0_0
++    return APPROVAL_THRESHOLD_BEFORE_2_0_0
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +37,28 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def outage_refund(payment, amount, at):
++def outage_refund(payment, amount, at, *, approved_by=None):
+     """Refund part of a captured payment after a service outage."""
+-    raise NotImplementedError
++    at = ensure_utc(at)
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    if amount > _approval_threshold() and approved_by is None:
++        raise BillingError("approval_required")
++    remaining = round_money(payment.amount) - round_money(payment.refunded_amount)
++    if amount > remaining:
++        raise BillingError("refund_exceeds_captured", str(amount))
++    payment.refunded_amount = round_money(payment.refunded_amount) + amount
++    if payment.refunded_amount >= round_money(payment.amount):
++        payment.status = "refunded"
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        refunded_amount=payment.refunded_amount,
++        at=at,
++        approved_by=approved_by,
++    )
++    return payment

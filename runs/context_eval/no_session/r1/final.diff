@@ -1,0 +1,52 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,10 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import __version__, audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money, to_money
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +19,36 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def outage_refund(payment, amount, at):
++def _approval_threshold():
++    """Finance policy FIN-2026-09 raised the threshold to 1000.00 in 2.0.0."""
++    major = int(__version__.split(".")[0])
++    return to_money("1000.00") if major >= 2 else to_money("500.00")
++
++
++def outage_refund(payment, amount, at, *, approved_by=None):
+     """Refund part of a captured payment after a service outage."""
+-    raise NotImplementedError
++    at = ensure_utc(at)
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if amount > _approval_threshold() and not approved_by:
++        raise BillingError("approval_required")
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    refunded = round_money(payment.refunded_amount + amount)
++    if refunded > payment.amount:
++        raise BillingError(
++            "refund_exceeds_captured",
++            f"refunded {refunded} exceeds captured {payment.amount}",
++        )
++    payment.refunded_amount = refunded
++    if refunded == payment.amount:
++        payment.status = "refunded"
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        refunded_amount=refunded,
++        at=at,
++    )
++    return payment
