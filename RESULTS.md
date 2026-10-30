@@ -205,6 +205,36 @@ What it shows:
 Limits: simulated stream and "use" by pattern matching, one clutter generator, one
 threshold and half-lives chosen in advance and not tuned; 3 repetitions.
 
+### Sensitivity of forgetting to its parameters (offline) / 遗忘参数敏感度（离线）
+
+The half-lives and the threshold were fixed in advance, not tuned. A sweep
+(`scripts/forgetting_sweep.py`, `runs/forgetting_sweep`, 45 configurations × 3
+repetitions, no model calls) shows which conclusions depend on them:
+
+| Policy | Range swept | Clean memory? | Policy rules wrongly archived |
+|---|---|---|---|
+| uniform age decay | half-life 25–800 tasks | only at ≤ 100 tasks | **3** at every half-life short enough to clean (≤ 100); none above, but then nothing is archived |
+| exposure decay | half-life 5–40 unused injections | partly | 3 except at 40 (which archives almost nothing) |
+| type-aware decay | half-lives × 0.25–4 | yes at × 0.25–0.5 | **0** everywhere |
+
+- **Revised:** "forgetting cannot repair crowding" holds for the default parameters,
+  not in general. Aggressive type-aware decay (half-lives × 0.25, threshold 0.2–0.3)
+  raised the share of needed rules injected from 44% to 68–69% without archiving a
+  policy rule, but wrongly archived 2–5 other learned rules. Tiered admission reached 82%
+  with none archived. 修正：默认参数下遗忘解决不了挤占；激进的按类型遗忘能部分缓解，但会误删 2–5 条普通规则。
+- **Robust:** uniform and exposure decay archive policy rules whenever they are strong
+  enough to clean; type-aware decay never does.
+- The selection rule fixed before the sweep (no policy rule archived, at most one other
+  learned note, then most needed rules injected) chose type-aware × 1 at threshold 0.1;
+  on a second stream it gave 44% injected, 0 archived: safe, but no cleaner than no
+  forgetting.
+- **Why the curves flatten:** the formula R = E × max(D, U) gives every note that was used
+  once in a passing task R ≥ 0.25 (E ≥ 0.5, U ≥ 0.5), above the 0.2 threshold, whatever its
+  age. 21 of 26 learned notes are protected this way; only the 5 never reused (k = 0) can be
+  archived, so half-lives only ever move those 5. One-off notes are never "used" in this
+  simulation, so the floor did not protect them here; with a looser notion of use it
+  would make them permanent (see V1.1 below). 公式里的效用下限让"用过一次"的笔记永远不会被归档。
+
 ## Trust-tiered admission against memory pollution (exploratory) / 可信度分级写入（探索性）
 
 The forgetting experiment pointed to admission, not forgetting, as the place to stop
