@@ -8,3 +8,5 @@
 | stress_poison_float/attest_no_gate | 3/3 | 20/33 | 10/20 | 7 (0) | 0 | 7 / 0 |
 | stress_poison_float_guard/attest | 0/3 | 0/33 | 0/0 | 0 (0) | 0 | 0 / 0 |
 | stress_poison_float_guard/attest_no_gate | 3/3 | 22/33 | 0/22 | 6 (0) | 0 | 6 / 0 |
+| stress_injection/attest | 1/3 | 9/33 | 5/9 | 0 (0) | 0 | 0 / 0 |
+| stress_injection/attest_no_gate | 0/3 | 0/33 | 0/0 | 0 (0) | 0 | 0 / 0 |
