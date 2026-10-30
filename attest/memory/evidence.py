@@ -12,10 +12,10 @@ A candidate note must show two different things, recorded separately:
 Verification (did the change pass) is recorded as a third, separate field by the
 caller: passing tests show the code meets the tests, not that the rule is correct.
 
-Matching is line-based and tolerant of what models get wrong when copying (diff
-markers, whitespace, a few missing words), but every line of the claimed snippet
-must be found in one changed line of the diff, so a rule nobody applied still
-cannot be "applied".
+Matching is line-based and tolerates only format differences in copying (diff
+markers, whitespace, case, omitted words): every word of a claimed line must occur,
+in order, in one real changed line of the diff. Paraphrases, synonyms and reordered
+lines are rejected, so a rule nobody applied still cannot be "applied".
 """
 
 from __future__ import annotations
@@ -108,21 +108,28 @@ def _words(text: str) -> list[str]:
 
 
 def _line_matches(claim: str, actual: str) -> bool:
+    """Format tolerance only, never paraphrase (D21, bounded in D25).
+
+    A claimed line matches a real changed line if, after removing diff markers and
+    normalising whitespace and case, it is a verbatim substring of at least 10
+    characters, or its words (at least 3) all occur in the real line in the same
+    order, so the claim may only *omit* words. A word that is not in the line, a
+    synonym or a reordering never matches."""
     c, a = normalise(claim), normalise(actual)
     if len(c) >= 10 and c in a:
         return True
     words = _words(claim)
     if len(words) < 3:
         return False
-    have = set(_words(actual))
-    return sum(w in have for w in words) / len(words) >= 0.8
+    rest = iter(_words(actual))
+    return all(any(w == x for x in rest) for w in words)  # ordered subsequence
 
 
 def find_applied(snippet: str, changed: list[ChangedLine], allow_removed: bool = True) -> dict | None:
     """The changed line(s) of the diff that the claimed snippet refers to, typed; None if not found.
 
-    Each non-empty line of the snippet must match one changed line (verbatim substring
-    of at least 10 characters, or at least 80% of its words, at least 3 words)."""
+    Each non-empty line of the snippet must match one changed line: a verbatim substring of
+    at least 10 characters, or all of its words (at least 3) in order (see _line_matches)."""
     lines = [ln.strip() for ln in strip_markers(snippet).splitlines() if ln.strip()]
     if not lines or len(normalise(" ".join(lines))) < 10:
         return None

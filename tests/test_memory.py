@@ -366,3 +366,16 @@ def test_type_given_as_kind_is_repaired(tmp_path, scripted):
     assert learn_round_note.__name__ and mem.learn(load_task("E01"), "1.0.0", run(False, True, [ROUND_COMMENT]), "t", DIFF)[0]["type"] == "add"
     item = mem.store.items()["at-0001"]
     assert item["kind"] == "project_fact" and item["type"] == "process"
+
+
+def test_applied_line_tolerates_format_not_paraphrase():
+    """D25: omitted words, diff markers, whitespace and case are tolerated; paraphrase is not."""
+    from attest.memory.evidence import find_applied, parse_diff
+
+    changed = parse_diff("--- a/x.py\n+++ b/x.py\n@@\n+    if amount > APPROVAL_THRESHOLD and not approved_by:\n")
+    assert find_applied("+    if amount > APPROVAL_THRESHOLD and not approved_by:", changed)   # verbatim with marker
+    assert find_applied("IF amount > approval_threshold   and not approved_by", changed)     # case, whitespace
+    assert find_applied("if amount APPROVAL_THRESHOLD approved_by", changed)                  # words omitted, in order
+    assert not find_applied("if amount > LIMIT and not approved_by", changed)                 # a word not in the line
+    assert not find_applied("if not approved_by and amount > APPROVAL_THRESHOLD", changed)    # reordered
+    assert not find_applied("when the amount exceeds the threshold require an approver", changed)  # paraphrase
