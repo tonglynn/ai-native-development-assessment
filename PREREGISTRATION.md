@@ -157,9 +157,44 @@ All numbers are computed by `attest/analysis.py` from `runs/<experiment>/**/resu
 - **Paired comparison:** per held-out task, pass@1 under each memory condition minus no memory (repetitions averaged), with wins / losses / ties and a bootstrap 95% interval over tasks.
 - **Tier split:** pass@1, steps and tokens on held-out tasks that need review-only knowledge (C5–C6) versus tasks that do not.
 - **Behavioural attribution:** whether a note about a convention was shown or cited, against whether the first attempt actually satisfied that convention (hidden test), instead of trusting the agent's own citation.
+- **Memory funnel:** for every convention a held-out or stale task needs, how far a note about it got: not in memory → filtered out (scope, version, status, with the reason) → not ranked into the top 10 (retrieved) → ranked but not among the 6 injected → injected; and whether the first attempt then satisfied the convention. Separates "never learned", "learned but filtered", "not found", "cut", and "injected but not followed". Notes are matched to conventions by the same regular expressions for every system (approximate).
 - **Convention hit rate:** for each convention, the share of first attempts that satisfy it, reported separately for discoverable (C1–C4) and review-only (C5–C6) conventions. Exploratory.
 - **Spread:** min and max pass@1 across the 3 repetitions is reported next to every pooled rate.
 - With 10 held-out tasks × 3 repetitions the sample is still small. Results are reported as counts and per-task tables; no significance tests are claimed.
+
+## 5b. Attest design changes before the freeze / 冻结前对 Attest 的设计修改
+
+Made on 10/30, before any main-experiment run, and disclosed here because two of
+them were informed by data (DECISIONS D21):
+
+1. **Lifecycle and versions.** Every note records its source references
+   (e.g. `FIN-2026-03`, `INC-204`, extracted from the quoted review comment), the
+   files it was observed in, the version range it is valid for
+   (`valid_from`..`valid_until`), its supersede relation and its last
+   verification. A rule that *changed* in a newer version keeps the old note
+   valid for older versions (`valid_until`) instead of only warning; a rule
+   shown to be *wrong* is invalid everywhere.
+2. **Typed evidence.** The gate records source (verbatim quote), applied line
+   (typed code / test / doc / config, added or removed) and verification
+   separately, and an optional independent review (off in all preregistered
+   runs). Matching of the applied line became line-based and tolerant of
+   imprecise copying (every claimed line must match one changed line: verbatim
+   substring ≥ 10 characters or ≥ 80% of its words, ≥ 3 words); quotes are matched
+   against the before and after text of the diff, so diff markers no longer break
+   multi-line quotes. **Informed by data:** the Flask retrospective
+   (`runs/retro_flask`) showed 8 of 49 candidates rejected, at least 5 of them
+   sound rules lost to brittle string matching (a changelog line quoted
+   imprecisely, a rule applied by deleting code, quotes spanning diff markers).
+   Flask is therefore **development data** for the gate from now on; a second
+   repository not looked at before is used as the real-history test.
+3. **Retrieval trace.** Every run records excluded notes with reasons, the
+   10 retrieved and the 6 injected notes, and the approximate tokens of the memory
+   block, for the funnel above. The prompt shown to the agent is unchanged except
+   that Attest notes now name their source references and validity range.
+
+The synthetic experience tasks only produce code diffs, so change 2 matters
+mostly for real repositories; the poison check (a rule nobody applied is
+rejected) is kept and tested.
 
 ## 6. Exclusions / 排除规则
 

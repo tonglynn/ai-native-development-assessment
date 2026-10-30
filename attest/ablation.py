@@ -34,7 +34,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from . import llm
-from .benchmark import load_tasks
+from .benchmark import REPOS_DIR, load_tasks, repo_version
 from .experiment import PHASES, run_sequence
 from .memory import ABLATION_CONDITIONS, make_memory
 from .memory import embedding
@@ -155,14 +155,15 @@ def retrieval_quality(source: Path, out: Path, reps: int) -> dict:
                 memory = make_memory(system if retriever == "lexical" else f"{system}_emb", None)
                 seed(memory, items)
                 arms[retriever] = memory
-            all_texts = sorted({t for q in queries for t in arms["lexical"].candidates(q).values()})
+            version = {q.id: repo_version(REPOS_DIR / q.repo) for q in queries}
+            all_texts = sorted({t for q in queries for t in arms["lexical"].candidates(q, version[q.id]).values()})
             labels = label_notes(all_texts, out / "labels.json")
             for q in queries:
-                cands = arms["lexical"].candidates(q)
+                cands = arms["lexical"].candidates(q, version[q.id])
                 relevant = {i for i, t in cands.items() if set(labels[t]) & set(q.conventions)}
                 for retriever, memory in arms.items():
-                    memory.ranking(q, None)  # warm-up: encodes the notes once, so latency below is per query
-                    ranked, ms = memory.ranking(q, None)
+                    memory.ranking(q, None, version[q.id])  # warm-up: encodes the notes once, so latency below is per query
+                    ranked, ms = memory.ranking(q, None, version[q.id])
                     m = metrics([i for i, _ in ranked], relevant)
                     tier = {c: bool({i for i in [x for x, _ in ranked][:K] if c in labels[cands[i]]}) for c in q.conventions}
                     rows.append({"system": system, "rep": rep, "retriever": retriever, "task": q.id, "group": q.group,

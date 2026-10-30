@@ -77,7 +77,7 @@ def main() -> None:
     systems = {s: make_memory(s, args.out / s) for s in SYSTEMS}
     for pr in train:
         task = SimpleNamespace(id=f"PR#{pr['number']}", title=pr["title"], issue=f"{pr['title']}\n\n{pr['body']}", repo_name=name)
-        run = {"first_pass": False, "final_pass": True, "shown_notes": [], "cited_notes": [],
+        run = {"first_pass": False, "final_pass": True, "verified_by": "merged by the maintainers", "shown_notes": [], "cited_notes": [],
                "attempts": [{"passed": False, "review_comments": pr["comments"]}]}
         for s, memory in systems.items():
             memory.learn(task, "main", run, "", pr["diff"])

@@ -255,6 +255,60 @@ def attribution(results: list[dict]) -> list[dict]:
     return rows
 
 
+# ---------------------------------------------------------------- memory funnel: where did the needed note get lost?
+
+FUNNEL_STAGES = ("not_in_memory", "excluded", "not_retrieved", "retrieved_not_injected", "injected")
+
+
+def funnel_stage(trace: dict, pattern: str) -> tuple[str, list[str]]:
+    """How far the notes about one convention got: (furthest stage, excluded reasons if stuck there)."""
+    about = {i for i, text in (trace.get("texts") or {}).items() if re.search(pattern, text, re.I)}
+    if not about:
+        return "not_in_memory", []
+    if about & set(trace.get("injected") or []):
+        return "injected", []
+    if about & set(trace.get("retrieved") or []):
+        return "retrieved_not_injected", []
+    excluded = trace.get("excluded") or {}
+    if about <= set(excluded):
+        return "excluded", sorted({excluded[i].split(":")[0].split(" by ")[0] for i in about})
+    return "not_retrieved", []
+
+
+def funnel(results: list[dict], groups=("heldout", "stale")) -> list[dict]:
+    """For every (run, convention the task needs): how far a note about it got, and whether the first
+    attempt then satisfied the convention (its hidden test). Separates "memory never had it" from
+    "had it but filtered", "not ranked high enough", "cut before injection" and "injected but not followed".
+
+    Notes are matched to conventions with CONVENTION_PATTERNS (approximate, the same for every system).
+    """
+    cells = defaultdict(lambda: {"checked": 0, **{f"{s}_{o}": 0 for s in FUNNEL_STAGES for o in ("ok", "fail")}})
+    reasons = defaultdict(lambda: defaultdict(int))
+    for r in results:
+        first = r["attempts"][0]
+        trace = (r.get("retrieval_debug") or {}).get("trace")
+        if first.get("crashed") or r["group"] not in groups or trace is None:
+            continue
+        for conv in r.get("conventions", []):
+            pattern = CONVENTION_PATTERNS.get(conv)
+            if not pattern:
+                continue
+            stage, why = funnel_stage(trace, pattern)
+            ok = conv not in first["conv_failed"]
+            c = cells[(r["condition"], conv)]
+            c["checked"] += 1
+            c[f"{stage}_{'ok' if ok else 'fail'}"] += 1
+            for w in why:
+                reasons[(r["condition"], conv)][w] += 1
+    rows = []
+    for (cond, conv), c in sorted(cells.items(), key=lambda kv: (CONDITIONS.index(kv[0][0]) if kv[0][0] in CONDITIONS else 99, kv[0][1])):
+        injected = c["injected_ok"] + c["injected_fail"]
+        rows.append({"condition": cond, "convention": conv, **c,
+                     "followed_when_injected": c["injected_ok"] / injected if injected else None,
+                     "excluded_reasons": dict(reasons[(cond, conv)])})
+    return rows
+
+
 # ---------------------------------------------------------------- business risks (see SCENARIO.md)
 
 RISKS = {
@@ -311,6 +365,7 @@ def summarise(root: Path) -> dict:
         "tier_split": tier_split(results),
         "paired": paired(results),
         "attribution": attribution(results),
+        "funnel": funnel(results),
         "business_risks": business_risks(results),
         "stale_timeline": stale_timeline(results),
         "total_cost_usd": round(sum(r["cost_usd"] for r in results), 4),

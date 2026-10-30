@@ -76,7 +76,12 @@ def test_write_gate(tmp_path, scripted):
     # a grounded candidate from a verified task is admitted
     events = learn_round_note(mem, scripted)
     assert events[0]["type"] == "add"
-    assert mem.store.items()["at-0001"]["scope"] == {"repo": "ledgerly", "observed_version": "1.0.0"}
+    item = mem.store.items()["at-0001"]
+    assert item["scope"] == {"repo": "ledgerly", "observed_version": "1.0.0", "valid_from": "1.0.0", "valid_until": None,
+                             "files": ["ledgerly/invoice.py"]}
+    ev = item["evidence"][0]
+    assert ev["source"]["kind"] == "review_comment" and ev["applied"]["kind"] == "code" and ev["applied"]["change"] == "added"
+    assert ev["verification"]["passed"] is True and item["last_verification"]["result"] == "passed"
 
 
 def test_scope_and_version_warning(tmp_path, scripted):
@@ -189,7 +194,7 @@ def test_ablation_without_gate_learns_unverified_and_ungrounded(tmp_path, script
     scripted.answers[DISTILL_SYSTEM].append({"candidates": [bad]})
     events = mem.learn(load_task("E01"), "1.0.0", run(False, False, [ROUND_COMMENT]), "t", "d")
     assert [e["type"] for e in events] == ["add"]
-    assert mem.store.items()["at-0001"]["evidence"][0]["verified"] is False
+    assert mem.store.items()["at-0001"]["evidence"][0]["verification"]["passed"] is False
 
 
 def test_ablation_without_scope_leaks_and_drops_version_warning(tmp_path, scripted):
@@ -221,3 +226,134 @@ def test_applied_snippet_may_keep_diff_markers(tmp_path, scripted):
     scripted.answers[DISTILL_SYSTEM].append({"candidates": [dict(ROUND_NOTE, applied_in_diff="+    return round_money(weighted_total / total_quantity)")]})
     events = mem.learn(load_task("E01"), "1.0.0", run(False, True, [ROUND_COMMENT]), "t", DIFF)
     assert events[0]["type"] == "add"
+
+
+# ---------------------------------------------------------------- lifecycle and versioning
+
+APPROVAL_V1 = ('[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): '
+               'accept a keyword-only `approved_by` and raise BillingError("approval_required") when it is missing for amounts above the threshold.')
+APPROVAL_V2 = ('[team convention] Support-initiated refunds and credits above the approval threshold need a second approver: accept a keyword-only '
+               '`approved_by` and raise BillingError("approval_required") when it is missing. The threshold is set by finance policy: '
+               '500.00 before 2.0.0, 1000.00 since 2.0.0 (see CHANGELOG).')
+APPROVAL_DIFF = """--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@
++    if amount > Decimal("500.00") and not approved_by:
++        raise BillingError("approval_required", str(amount))
+"""
+APPROVAL_DIFF_V2 = APPROVAL_DIFF.replace("500.00", "1000.00")
+OLD_RULE = {"kind": "project_fact", "type": "business_policy", "topic": "refund-approval", "title": "Approval above 500",
+            "content": "Support refunds and credits above 500.00 require approved_by, else BillingError('approval_required').",
+            "evidence_quote": "above 500.00 need a second approver (finance policy FIN-2026-03)",
+            "applied_in_diff": 'if amount > Decimal("500.00") and not approved_by:'}
+NEW_RULE = {"kind": "project_fact", "type": "business_policy", "topic": "refund-approval", "title": "Approval above 1000 since 2.0",
+            "content": "Since 2.0.0 support refunds and credits above 1000.00 require approved_by, else BillingError('approval_required').",
+            "evidence_quote": "500.00 before 2.0.0, 1000.00 since 2.0.0",
+            "applied_in_diff": 'if amount > Decimal("1000.00") and not approved_by:'}
+
+
+def _learn_both(mem, scripted, relation="supersedes", new_version="2.0.0"):
+    scripted.answers[DISTILL_SYSTEM].append({"candidates": [OLD_RULE]})
+    mem.learn(load_task("E04"), "1.0.0", run(False, True, [APPROVAL_V1]), "t", APPROVAL_DIFF)
+    scripted.answers[DISTILL_SYSTEM].append({"candidates": [NEW_RULE]})
+    scripted.answers[RELATE_SYSTEM].append({"relations": [{"id": "at-0001", "relation": relation}]})
+    mem.learn(load_task("S04"), new_version, run(False, True, [APPROVAL_V2]), "t", APPROVAL_DIFF_V2)
+    return mem.store.items()
+
+
+def test_changed_rule_stays_valid_for_older_versions(tmp_path, scripted):
+    mem = make_memory("attest", tmp_path)
+    items = _learn_both(mem, scripted)
+    old, new = items["at-0001"], items["at-0002"]
+    assert old["type"] == "business_policy" and old["source"]["references"] == ["FIN-2026-03"]
+    assert old["status"] == "superseded" and old["superseded_by"] == "at-0002" and old["supersede_kind"] == "rule changed"
+    assert old["scope"]["valid_until"] == "2.0.0" and new["scope"]["valid_from"] == "2.0.0"
+    # on 2.x only the new rule is used, and the trace says why the old one is not
+    v2 = mem.retrieve(load_task("S04"), "2.0.0")
+    assert v2.ids == ["at-0002"]
+    assert v2.debug["trace"]["excluded"]["at-0001"] == "superseded by at-0002 from 2.0.0"
+    # on 1.x the old rule is still right and the new one is not yet in force
+    v1 = mem.retrieve(load_task("H04"), "1.0.0")
+    assert v1.ids == ["at-0001"]
+    assert v1.debug["trace"]["excluded"]["at-0002"] == "not yet effective: valid from 2.0.0"
+
+
+def test_corrected_rule_is_invalid_everywhere(tmp_path, scripted):
+    mem = make_memory("attest", tmp_path)
+    items = _learn_both(mem, scripted, relation="corrects")
+    assert items["at-0001"]["supersede_kind"] == "corrected" and items["at-0001"]["scope"]["valid_until"] is None
+    assert items["at-0002"]["scope"]["valid_from"] == "1.0.0"  # the fix inherits the range of the rule it replaces
+    assert mem.retrieve(load_task("H04"), "1.0.0").ids == ["at-0002"]
+    assert "the old rule was wrong" in mem.retrieve(load_task("H04"), "1.0.0").debug["trace"]["excluded"]["at-0001"]
+
+
+def test_same_version_change_counts_as_correction(tmp_path, scripted):
+    mem = make_memory("attest", tmp_path)
+    items = _learn_both(mem, scripted, relation="supersedes", new_version="1.0.0")
+    assert items["at-0001"]["supersede_kind"] == "corrected"
+
+
+def test_trace_separates_retrieved_and_injected(tmp_path, scripted):
+    mem = make_memory("attest", tmp_path)
+    for n in range(8):  # eight notes in scope; MAX_RETRIEVED=10 ranks all, MAX_SHOWN=6 are injected
+        mem.store.append("add", item={"id": f"at-{n + 1:04d}", "kind": "lesson", "title": f"Note {n}", "content": f"round money note {n}",
+                                      "scope": {"repo": "ledgerly", "observed_version": "1.0.0", "valid_from": "1.0.0", "valid_until": None},
+                                      "source": {"task_id": "E01"}, "status": "active",
+                                      "usage": {"shown": 0, "cited": 0, "cited_pass": 0, "cited_fail": 0, "fail_streak": 0}})
+    mem.store.append("add", item={"id": "at-0009", "kind": "lesson", "title": "Floats", "content": "simkit returns floats",
+                                  "scope": {"repo": "simkit", "observed_version": "0.4.0"}, "source": {"task_id": "B01"},
+                                  "status": "active", "usage": {"shown": 0, "cited": 0, "cited_pass": 0, "cited_fail": 0, "fail_streak": 0}})
+    trace = mem.retrieve(load_task("H01"), "1.0.0").debug["trace"]
+    assert len(trace["retrieved"]) == 8 and len(trace["injected"]) == 6 and trace["injected"] == trace["retrieved"][:6]
+    assert trace["excluded"] == {"at-0009": "other repository: simkit"} and trace["memory_tokens_approx"] > 0
+
+
+def test_doc_and_removal_evidence_are_accepted_and_typed(tmp_path, scripted):
+    """Real Flask cases the old verbatim gate rejected: a changelog line copied imprecisely, and a rule applied by deleting code."""
+    diff = """--- a/CHANGES.rst
++++ b/CHANGES.rst
+@@
++    decorators to accept functions with no arguments. :issue:`4098`
+--- a/src/flask/scaffold.py
++++ b/src/flask/scaffold.py
+@@
+-# def old_helper(f):
+-#     return f
+"""
+    comments = ["Please follow the style used in the rest of the changelog for linking to issues.", "Remove this leftover commented code."]
+    changelog = {"kind": "project_fact", "type": "process", "title": "Link issues in the changelog",
+                 "content": "In CHANGES.rst link issues with the :issue: role, like the surrounding entries.",
+                 "evidence_quote": "follow the style used in the rest of the changelog", "applied_in_diff": "+    decorators. :issue:`4098`"}
+    leftover = {"kind": "lesson", "type": "code_convention", "title": "No commented-out code",
+                "content": "Delete commented-out code instead of leaving it in the source.",
+                "evidence_quote": "Remove this leftover commented code", "applied_in_diff": "-# def old_helper(f):"}
+    scripted.answers[DISTILL_SYSTEM].append({"candidates": [changelog, leftover]})
+    mem = make_memory("attest", tmp_path)
+    events = mem.learn(load_task("E01"), "1.0.0", run(False, True, comments), "t", diff)
+    assert [e["type"] for e in events] == ["add", "add"]
+    items = mem.store.items()
+    assert items["at-0001"]["evidence"][0]["applied"]["kind"] == "doc" and items["at-0001"]["type"] == "process"
+    assert items["at-0002"]["evidence"][0]["applied"]["change"] == "removed"
+
+
+def test_multiline_quote_across_diff_lines(tmp_path, scripted):
+    diff = "--- a/x.py\n+++ b/x.py\n@@\n-    ) -> t.Callable:\n+    ) -> None:\n         \"\"\"Register a rule for routing\n"
+    cand = {"kind": "project_fact", "title": "add_url_rule returns None", "content": "Scaffold.add_url_rule returns None, annotate it so.",
+            "evidence_quote": ") -> t.Callable:\n        \"\"\"Register a rule for routing", "applied_in_diff": "+    ) -> None:"}
+    scripted.answers[DISTILL_SYSTEM].append({"candidates": [cand]})
+    mem = make_memory("attest", tmp_path)
+    assert mem.learn(load_task("E01"), "1.0.0", run(True), "t", diff)[0]["type"] == "add"
+
+
+def test_optional_independent_review(tmp_path, scripted):
+    from attest.memory.earned import EarnedMemory, REVIEW_SYSTEM
+
+    scripted.answers[REVIEW_SYSTEM] = [{"verdict": "reject", "reason": "one-off detail of this change"}]
+    scripted.answers[DISTILL_SYSTEM].append({"candidates": [ROUND_NOTE]})
+    mem = EarnedMemory(tmp_path, review_model="deepseek/deepseek-v4-pro")
+    events = mem.learn(load_task("E01"), "1.0.0", run(False, True, [ROUND_COMMENT]), "t", DIFF)
+    assert events[0]["type"] == "reject" and "independent review" in events[0]["reason"]
+    scripted.answers[REVIEW_SYSTEM] = [{"verdict": "accept", "reason": "repository-wide rounding rule"}]
+    learn_round_note(mem, scripted)
+    review = mem.store.items()["at-0001"]["evidence"][0]["independent_review"]
+    assert review["verdict"] == "accept" and review["model"] == "deepseek/deepseek-v4-pro"

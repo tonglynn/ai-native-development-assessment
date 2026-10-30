@@ -169,6 +169,12 @@ footer { border-top: 1px solid var(--rule); padding-top: var(--s2); display: gri
     <div class="scroll"><table id="attr"></table></div>
   </section>
 
+  <section id="funnel" aria-labelledby="h-funnel">
+    <h2 id="h-funnel">Where did the needed note get lost?</h2>
+    <p class="muted">For every convention a held-out or stale task needs: how far a note about it got (in memory → passed the scope and version filters → ranked into the top 10 → injected into the prompt), and whether the first attempt then satisfied it. Each cell is satisfied / total.</p>
+    <div class="scroll"><table id="funneltable"></table></div>
+  </section>
+
   <section id="leaks" aria-labelledby="h-leaks">
     <h2 id="h-leaks">Regressions and leakage</h2>
     <div class="two">
@@ -318,6 +324,15 @@ python -m attest.report runs/main report/index.html</pre>
         <td class="num">${frac(r.cited_ok || 0, r.cited || 0)}</td><td class="num">${r.followed_uncited || 0}</td></tr>`).join("") + "</tbody>"
     : `<tbody><tr><td class="muted">No memory-condition runs.</td></tr></tbody>`;
 
+  const fu = D.summary.funnel || [];
+  const cell = (r, st) => { const ok = r[st + "_ok"] || 0, n = ok + (r[st + "_fail"] || 0); return n ? `${ok}/${n}` : "–"; };
+  $("funneltable").innerHTML = fu.length
+    ? `<thead><tr><th>Condition</th><th>Convention</th><th class="num">Not in memory</th><th class="num">Filtered out</th><th class="num">Not ranked</th><th class="num">Ranked, not injected</th><th class="num">Injected</th><th>Why filtered</th></tr></thead><tbody>` +
+      fu.map((r) => `<tr><td>${esc(name(r.condition))}</td><td class="mono">${esc(r.convention)}</td>` +
+        ["not_in_memory", "excluded", "not_retrieved", "retrieved_not_injected", "injected"].map((st) => `<td class="num">${cell(r, st)}</td>`).join("") +
+        `<td class="small">${esc(Object.entries(r.excluded_reasons || {}).map(([k, v]) => `${k} ×${v}`).join(", "))}</td></tr>`).join("") + "</tbody>"
+    : `<tbody><tr><td class="muted">No runs with a retrieval trace.</td></tr></tbody>`;
+
   // Per-task matrix.
   const pt = D.summary.per_task;
   const order = ["experience", "heldout", "control", "stale"];
@@ -372,7 +387,7 @@ python -m attest.report runs/main report/index.html</pre>
       const scope = it.scope ? `${esc(it.scope.repo)} ${esc(it.scope.observed_version)}` : it.source ? `${esc(it.source.repo || "")} ${esc(it.source.version || "")}` : "";
       const src = it.source && it.source.task_id ? `from ${esc(it.source.task_id)}` : "";
       const usage = it.usage ? `shown ${it.usage.shown}× · cited ${it.usage.cited}× · ${it.usage.cited_pass} passed · ${it.usage.cited_fail} failed` : it.helpful != null ? `helpful ${it.helpful} · harmful ${it.harmful}` : "";
-      const quotes = (it.evidence || []).map((e) => `<div class="quote">“${esc(e.quote)}” <span class="small">(${esc(e.task_id)}, ${esc(e.version)})</span></div>`).join("");
+      const quotes = (it.evidence || []).map((e) => `<div class="quote">“${esc((e.source && e.source.quote) || e.quote || "")}” <span class="small">(${esc(e.task_id)}, ${esc(e.version)}${e.applied ? ", applied in " + esc(e.applied.kind) + " " + esc(e.applied.file) : ""})</span></div>`).join("");
       const links = [it.supersedes && it.supersedes.length ? `replaces ${it.supersedes.join(", ")}` : "", it.superseded_by ? `replaced by ${it.superseded_by}` : ""].filter(Boolean).join(" · ");
       const hist = (it.history || []).map((h) => `#${h.seq} ${esc(h.reason)}`).join("<br>");
       return `<div class="note ${esc(status)}"><div class="nid">${esc(it.id)}<br><span class="pill ${statusPill[status] || "na"}">${esc(status)}</span></div>

@@ -50,9 +50,16 @@ class AcePlaybookMemory(MemorySystem):
 
     def retrieve(self, task: Task, repo_version: str) -> Retrieved:
         bullets = self._bullets()
+        items = self.store.items()
+        excluded = {i: f"status {it['status']}" for i, it in items.items() if i not in bullets}
+        context = self._render(bullets) if bullets else ""
+        # ACE has no retrieval step: the whole playbook is injected, so retrieved == injected.
+        trace = {"excluded": excluded, "candidates": len(bullets), "retrieved": sorted(bullets), "injected": sorted(bullets),
+                 "memory_tokens_approx": len(context) // 4,
+                 "texts": {i: f"{it.get('section', '')} {it['content']}"[:300] for i, it in items.items()}}
         if not bullets:
-            return Retrieved()
-        return Retrieved(ids=sorted(bullets), context=self._render(bullets))
+            return Retrieved(debug={"trace": trace})
+        return Retrieved(ids=sorted(bullets), context=context, debug={"trace": trace})
 
     def learn(self, task: Task, repo_version: str, run: dict, transcript: str, diff: str) -> list[dict]:
         bullets = self._bullets()

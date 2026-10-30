@@ -39,7 +39,7 @@ def main() -> None:
     for pr in prs:
         diff = pr["diff"]
         task = SimpleNamespace(id=f"PR#{pr['number']}", title=pr["title"], issue=f"{pr['title']}\n\n{pr['body']}", repo_name=name)
-        run = {"first_pass": False, "final_pass": True, "shown_notes": [], "cited_notes": [],
+        run = {"first_pass": False, "final_pass": True, "verified_by": "merged by the maintainers", "shown_notes": [], "cited_notes": [],
                "attempts": [{"passed": False, "review_comments": pr["comments"]}]}
         entry = {"pr": pr["number"], "url": pr["url"], "title": pr["title"], "review_comments": len(pr["comments"])}
         for cond, memory in systems.items():
@@ -59,7 +59,8 @@ def main() -> None:
         report += [f"## {cond}: {len(items)} notes kept, {len(rejected)} candidates rejected", ""]
         for it in items.values():
             src = (it.get("source") or {}).get("task_id", "")
-            quote = (it.get("evidence") or [{}])[0].get("quote", "")
+            ev = (it.get("evidence") or [{}])[0]
+            quote = (ev.get("source") or {}).get("quote") or ev.get("quote", "")
             report.append(f"- `{it['id']}` ({src}) **{it.get('title', '')}**: {it['content']}"
                           + (f"  \n  evidence: “{quote[:160]}”" if quote else ""))
         if rejected:

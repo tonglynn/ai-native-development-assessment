@@ -85,7 +85,7 @@ def learn(repo_path: str, task: str, review_comments: list[str], candidates: lis
     if not diff:
         return {"admitted": [], "rejected": [], "message": f"no changes against {base_ref}: nothing to learn"}
     verified, output = _verify(repo)
-    run = {"first_pass": not review_comments, "final_pass": verified, "shown_notes": [], "cited_notes": [],
+    run = {"first_pass": not review_comments, "final_pass": verified, "verified_by": f"verification command: {VERIFY_CMD}", "shown_notes": [], "cited_notes": [],
            "attempts": [{"passed": not review_comments, "review_comments": list(review_comments)}]}
     events = _memory(name).learn(_task(name, task), version, run, "", diff, candidates=candidates)
     return {

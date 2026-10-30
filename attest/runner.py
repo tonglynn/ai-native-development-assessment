@@ -128,6 +128,11 @@ def transcript_text(messages: list[dict], limit: int = 12000) -> str:
     return text if len(text) <= limit else text[: limit // 2] + "\n...\n" + text[-limit // 2:]
 
 
+def agent_test_runs(messages: list[dict]) -> int:
+    """How many of the agent's commands ran the tests."""
+    return sum(bool(re.search(r"\bpytest\b|unittest", c)) for c in commands_of(messages))
+
+
 def workspace_diff(task: Task, workspace: Path, tmp_root: Path) -> str:
     """Unified diff of source files (tests excluded) between the stub and the final workspace."""
     stub = materialize(task, tmp_root / "_stub_for_diff", "stub")
@@ -252,7 +257,12 @@ def run_task(
         "steps": sum(a["steps"] for a in attempts),
         "cost_usd": round(sum(a["cost_usd"] for a in attempts), 6),
         "seconds": round(time.time() - started, 1),
-        "shown_notes": retrieved.ids,
+        "shown_notes": retrieved.ids,  # = injected_notes (kept for older analyses)
+        "retrieved_notes": (retrieved.debug.get("trace") or {}).get("retrieved", retrieved.ids),
+        "injected_notes": retrieved.ids,
+        "memory_tokens_approx": (retrieved.debug.get("trace") or {}).get("memory_tokens_approx", len(retrieved.context) // 4),
+        "agent_test_runs": agent_test_runs(all_messages),
+        "files_changed": sorted({ln[6:] for ln in diff.splitlines() if ln.startswith("+++ b/")}),
         "notes_context": retrieved.context,
         "cited_notes": cited,
         "retrieval_debug": retrieved.debug,

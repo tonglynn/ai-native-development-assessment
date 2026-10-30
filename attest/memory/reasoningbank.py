@@ -20,6 +20,7 @@ from .retrieval import check_retriever, timed_rank
 from .sqlite_store import open_store
 
 MAX_SHOWN = 6
+MAX_RETRIEVED = 10
 
 EXTRACT_SYSTEM = """You extract reusable reasoning strategies ("memory items") from a coding agent's finished task.
 Learn from successes (what worked) and from failures (what to avoid).
@@ -33,22 +34,31 @@ class ReasoningBankMemory(MemorySystem):
         self.retriever = check_retriever(retriever)
         self.name = "reasoningbank" + ("_emb" if retriever == "embedding" else "")
 
-    def candidates(self, task: Task) -> dict[str, str]:
+    def candidates(self, task: Task, version: str | None = None) -> dict[str, str]:
+        """Every item: ReasoningBank has no repository or version scope."""
         return {i: f"{it['title']} {it['description']} {it['content']}" for i, it in self.store.items().items()}
 
-    def ranking(self, task: Task, k: int | None = MAX_SHOWN) -> tuple[list[tuple[str, float]], float]:
+    def ranking(self, task: Task, k: int | None = MAX_SHOWN, version: str | None = None) -> tuple[list[tuple[str, float]], float]:
         return timed_rank(self.retriever, f"{task.title} {task.issue}", self.candidates(task), k)
 
     def retrieve(self, task: Task, repo_version: str) -> Retrieved:
         items = self.store.items()
-        ranked, ms = self.ranking(task)
+        ranked, ms = self.ranking(task, MAX_RETRIEVED)
+        trace = {"excluded": {}, "candidates": len(items), "retrieved": [i for i, _ in ranked],
+                 "injected": [i for i, _ in ranked[:MAX_SHOWN]],
+                 "texts": {i: f"{it['title']} {it['description']} {it['content']}"[:300] for i, it in items.items()}}
+        ranked = ranked[:MAX_SHOWN]
         if not ranked:
-            return Retrieved(debug={"retriever": self.retriever, "retrieval_ms": ms})
+            trace["memory_tokens_approx"] = 0
+            return Retrieved(debug={"retriever": self.retriever, "retrieval_ms": ms, "trace": trace})
         lines = ["Memory items from past tasks:"]
         for i, _ in ranked:
             it = items[i]
             lines.append(f"- [{i}] {it['title']}: {it['description']}\n  {it['content']}")
-        return Retrieved(ids=[i for i, _ in ranked], context="\n".join(lines), debug={"scores": dict(ranked), "retriever": self.retriever, "retrieval_ms": ms})
+        context = "\n".join(lines)
+        trace["memory_tokens_approx"] = len(context) // 4
+        return Retrieved(ids=[i for i, _ in ranked], context=context,
+                         debug={"scores": dict(ranked), "retriever": self.retriever, "retrieval_ms": ms, "trace": trace})
 
     def learn(self, task: Task, repo_version: str, run: dict, transcript: str, diff: str) -> list[dict]:
         data = llm.complete_json(EXTRACT_SYSTEM, experience_packet(task, repo_version, run, transcript, diff))

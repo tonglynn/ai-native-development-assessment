@@ -61,3 +61,22 @@ def test_business_risks_from_failed_test_names():
     assert rows[("no_memory", "duplicate_money_operation")]["failed"] == 1
     assert rows[("no_memory", "unauthorised_operation")]["rate"] == 1.0
     assert rows[("attest", "duplicate_money_operation")]["failed"] == 0
+
+
+def test_funnel_locates_where_the_note_was_lost():
+    from attest.analysis import funnel
+
+    def run(cond, trace, conv_failed):
+        return {"condition": cond, "group": "heldout", "task_id": "H04", "conventions": ["C5", "C6", "C4"],
+                "attempts": [{"crashed": False, "conv_failed": conv_failed}], "retrieval_debug": {"trace": trace}}
+
+    texts = {"at-1": "Accept idempotency_key and skip retried requests", "at-2": "Refunds above 500 need approved_by",
+             "at-3": "Round money with round_money"}
+    trace = {"texts": texts, "excluded": {"at-2": "superseded by at-9 from 2.0.0"}, "retrieved": ["at-1", "at-3"], "injected": ["at-3"]}
+    rows = {r["convention"]: r for r in funnel([run("attest", trace, ["C5", "C6", "C4"])])}
+    assert rows["C5"]["retrieved_not_injected_fail"] == 1      # found, but cut before the prompt
+    assert rows["C6"]["excluded_fail"] == 1 and rows["C6"]["excluded_reasons"] == {"superseded": 1}
+    assert rows["C4"]["not_in_memory_fail"] == 1               # memory never had it
+    trace2 = dict(trace, injected=["at-1"])
+    rows = {r["convention"]: r for r in funnel([run("attest", trace2, [])])}
+    assert rows["C5"]["injected_ok"] == 1 and rows["C5"]["followed_when_injected"] == 1.0
