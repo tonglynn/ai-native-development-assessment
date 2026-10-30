@@ -174,13 +174,17 @@ def simulate(arm: str, rep: int, seed: int):
         if use_demand:
             demand = [i for i in items if prim[i] in failed and i not in injected and i not in followed
                       and items[i]["status"] not in ("retired", "superseded")]
-            stats["demand_reactivated"] += sum(items[i]["status"] in ("archived", "dormant") for i in demand)
-            stats["wrong_demanded"] += sum(i.startswith("at-w") for i in demand)
         relevant = None
         if scoped:
             named = admission.files_named(task)
             relevant = [i for i in injected if set((items[i].get("scope") or {}).get("files") or []) & named]
+        n_events = len(memory.store.events)
         forgetting.observe(memory, tick, task.id, injected, used, not failed, verified, negative=negative, demand=demand, relevant=relevant)
+        # counted from what observe actually did (the first run counted the demand list before
+        # observe's rules skip negative-evidence notes; fixed after that run, then rerun)
+        credited = [e for e in memory.store.events[n_events:] if "needed in" in (e.get("reason") or "")]
+        stats["demand_reactivated"] += sum("reactivated" in e["reason"] for e in credited)
+        stats["wrong_demanded"] += sum(e["id"].startswith("at-w") for e in credited)
         if tick % MAINTAIN_EVERY == 0:
             forgetting.maintain(memory, tick, policy, forgetting.THRESHOLD, params)
     return memory, conv_of, verified_once, stats, params, policy
