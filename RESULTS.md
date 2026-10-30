@@ -363,6 +363,81 @@ Limits: the stream, the adoption noise and the verification proxy are all simula
 verification is detected by pattern matching. I labelled the known-correct rules myself,
 after the run. Each repetition starts from one learned memory.
 
+## Forgetting V2: six ways to get better evidence of value (exploratory) / 遗忘 V2：六种获得价值反馈的办法（探索性）
+
+V1.1 showed that the hard part is evidence, not the decay rate. Six ideas were tested, at
+different depths. Points 5 and 6 are checked against the benchmark's real code. Points 1–4 are
+tested in the simulated stream, with cases constructed for them. V1 stays the default
+throughout.
+
+### 5. Liveness: check a rule against the code it describes / 存活检查
+
+`scripts/liveness_check.py`, `runs/liveness`, 25 active learned notes. A note's *anchors* are
+the project names it mentions (functions, classes, constants, modules, file paths) and domain
+terms found in the code ("half-up" in `ROUND_HALF_UP`). Python builtins are not anchors,
+because they never disappear. The verdicts are:
+
+- **drifted**: an anchor is missing from the code;
+- **review**: a newer changelog entry names the note's names, terms or amounts;
+- **alive**: neither of the above, and the note has anchors;
+- **not checkable**: the note has no anchors at all.
+
+Ground truth comes from the benchmark design.
+
+| Version | Stale notes flagged | Valid notes wrongly flagged | Not checkable |
+|---|---|---|---|
+| 1.0.0 (all 25 valid) | – | 0 of 25 | 3 |
+| 2.0.0 (half-even rounding, approval at 1000.00; both in CHANGELOG) | **5 of 5** (2 by code drift, 3 by the changelog) | 4 of 20 for review, 0 drifted | 3 |
+| 1.0.0 with 3 APIs silently renamed, no changelog | **12 of 12** (code drift) | 0 of 13 | 3 |
+
+- As positive evidence, "alive" never contradicted a valid rule (0 false "dead" on 1.0.0), and
+  it covers 22 of 25 notes. It catches code drift and silent renames. The 4 valid notes sent for
+  review on 2.0.0 rely on `round_money`, whose change the changelog does name. A person can
+  confirm them in a minute.
+- But **"alive" means the names exist, not that the rule holds.** The approval rule (C6) is
+  "alive" on 1.0.0 only because it mentions `BillingError`. Its change on 2.0.0 was caught only
+  because the changelog names the amount. The three "reject bool" rules mention only builtins,
+  so they cannot be checked, and those are exactly the untested rules V1.1 lost. 存活检查能证明"它提到的东西还在"，不能证明"规则还成立"。
+- Disclosed: the first run matched any word of 4+ letters in newer changelog entries and
+  flagged 7 valid notes. Generic words caused 3 of those flags: "code", and the module name
+  "money". The matching was changed after that run, and the first report is kept
+  (`runs/liveness/report_first_run.md`).
+
+### 6. Turn a verified rule into an executable check / 把规则变成检查
+
+`scripts/rule_checks.py`, `runs/rule_checks`, one Actions run. The setup:
+
+- **Checks:** deepseek-flash wrote `check(path, source)` for each of the 25 notes, from the
+  note alone, with one prompt fixed before the run.
+- **Ground truth:** the reference solutions of the 17 ledgerly 1.0.0 tasks follow every
+  convention, and the naive solutions break each task's conventions.
+- **Useful, fixed before the run:** a check is useful if it detects at least half of the
+  labelled violations, with at most 1 false alarm in 17.
+- **Sandbox:** the generated code ran in an isolated Python with an empty environment.
+
+| | Count |
+|---|---|
+| Checks written / usable (ran without error) | 25 / 23; 2 declared not checkable (approval, idempotency: they need the module's context) |
+| **Useful** (pre-stated scoring) | **1 of 25** (`round_money`: 71% detection, 0 false alarms) |
+| Useful when scored against the note's primary convention only (added after the run) | 2 of 25 (adds an approval check: 100%, 1 false alarm) |
+| Checks with 0 false alarms / of those detecting at least half | 13 / 1 |
+| Checks detecting at least half / of those with 2+ false alarms (up to 9 of 17) | 6 / 5 |
+
+- The trade-off is sharp. A precise check implements the letter of the note: "BillingError
+  codes are snake_case" does not flag `raise ValueError`. A check that catches violations
+  over-applies: it demands `idempotency_key` from `add_line`, which moves no money, or demands
+  one exact form of the audit call.
+- For the memory this cuts both ways. A narrow check gives false confidence. An over-broad
+  check produces *false negative evidence* against code that follows the rule, which under
+  three-state forgetting would archive correct rules. 生成的检查要么太窄（漏报），要么太宽（误报）；误报会变成冤枉正确规则的负面证据。
+- One encouraging case, but only one: the three "reject bool" checks raise no false alarm,
+  and two of them flag the only naive solution that accepts a bool (E02, not a labelled
+  violation, n = 1). That is the kind of rule no test checks.
+- Implication: a generated check must itself be validated before its verdicts count. The
+  cheapest validation is the evidence that created the rule: the check should flag the attempt
+  the reviewer rejected and pass the accepted diff. That is not tested here. Also not tested:
+  whether a rule enforced by a check can leave the prompt.
+
 ## What this supports / 结论边界
 
 - Supported: memory of review-only knowledge helps a lot (+36 pp over no memory,
