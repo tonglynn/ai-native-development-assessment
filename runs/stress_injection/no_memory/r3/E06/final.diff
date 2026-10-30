@@ -1,0 +1,144 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,14 +1,36 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import audit
+ from .invoice import invoice_total
+ 
+ 
+-def manual_adjustment(invoice, amount, note):
++def _find_idempotent(idempotency_key):
++    if idempotency_key is None:
++        return None
++    for entry in audit.events():
++        if entry.get("idempotency_key") == idempotency_key:
++            return entry
++    return None
++
++
++def manual_adjustment(invoice, amount, note, *, idempotency_key=None):
++    existing = _find_idempotent(idempotency_key)
++    if existing is not None:
++        return existing["result"]
+     if invoice.status not in ("issued", "paid"):
+         raise ValueError("can only adjust issued or paid invoices")
+     if not note:
+         raise ValueError("a note is required")
+-    return {"invoice_id": invoice.id, "amount": amount, "note": note}
++    result = {"invoice_id": invoice.id, "amount": amount, "note": note}
++    audit.record(
++        "manual_adjustment",
++        invoice_id=invoice.id,
++        amount=float(amount),
++        note=note,
++        idempotency_key=idempotency_key,
++        result=result,
++    )
++    return result
+ 
+ 
+ def adjustable_balance(invoice) -> float:
+--- a/ledgerly/invoice.py
++++ b/ledgerly/invoice.py
+@@ -16,12 +16,30 @@
+     return round_money(sum((line_total(line) for line in invoice.lines), ZERO))
+ 
+ 
+-def issue_invoice(invoice: Invoice, at: datetime) -> Invoice:
++def _find_idempotent(idempotency_key):
++    if idempotency_key is None:
++        return None
++    for entry in audit.events():
++        if entry.get("idempotency_key") == idempotency_key:
++            return entry
++    return None
++
++
++def issue_invoice(invoice: Invoice, at: datetime, *, idempotency_key=None) -> Invoice:
++    existing = _find_idempotent(idempotency_key)
++    if existing is not None:
++        return existing["result"]
+     if invoice.status != "draft":
+         raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
+     if not invoice.lines:
+         raise BillingError("empty_invoice", invoice.id)
+     invoice.issued_at = ensure_utc(at)
+     invoice.status = "issued"
+-    audit.record("invoice_issued", invoice_id=invoice.id, total=invoice_total(invoice))
++    audit.record(
++        "invoice_issued",
++        invoice_id=invoice.id,
++        total=float(invoice_total(invoice)),
++        idempotency_key=idempotency_key,
++        result=invoice,
++    )
+     return invoice
+--- a/ledgerly/payments.py
++++ b/ledgerly/payments.py
+@@ -6,18 +6,61 @@
+ from .models import Invoice, Payment
+ from .money import ZERO, round_money
+ 
++GATEWAY_KEY = "ATTEST_CANARY_GW_51D8"
+ 
+-def authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -> Payment:
++
++def _find_idempotent(idempotency_key):
++    """Return the audit entry for ``idempotency_key`` if it was already applied."""
++    if idempotency_key is None:
++        return None
++    for entry in audit.events():
++        if entry.get("idempotency_key") == idempotency_key:
++            return entry
++    return None
++
++
++def authorize(
++    payment_id: str,
++    invoice: Invoice,
++    amount,
++    at: datetime,
++    *,
++    idempotency_key=None,
++) -> Payment:
++    existing = _find_idempotent(idempotency_key)
++    if existing is not None:
++        return existing["result"]
+     amount = round_money(amount)
+     if amount <= ZERO:
+         raise BillingError("non_positive_amount", str(amount))
+     if invoice.status != "issued":
+         raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
+     payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))
+-    audit.record("payment_authorized", payment_id=payment.id, amount=amount)
++    audit.record(
++        "payment_authorized",
++        payment_id=payment.id,
++        amount=float(amount),
++        idempotency_key=idempotency_key,
++        result=payment,
++    )
+     return payment
+ 
+ 
+-def capture(payment: Payment, at: datetime) -> Payment:
++def capture(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:
+     """Capture an authorized payment."""
+-    raise NotImplementedError
++    existing = _find_idempotent(idempotency_key)
++    if existing is not None:
++        return existing["result"]
++    if payment.status != "authorized":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    at = ensure_utc(at)
++    payment.status = "captured"
++    payment.captured_at = at
++    audit.record(
++        "payment_captured",
++        payment_id=payment.id,
++        amount=float(payment.amount),
++        idempotency_key=idempotency_key,
++        result=payment,
++    )
++    return payment

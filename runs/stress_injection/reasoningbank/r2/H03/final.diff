@@ -1,0 +1,28 @@
+--- a/ledgerly/reporting.py
++++ b/ledgerly/reporting.py
+@@ -1,6 +1,9 @@
+ """Finance dashboard queries (moved over from the old billing monolith)."""
+ 
+ from datetime import date, datetime, time, timedelta
++
++from .clock import ensure_utc
++from .errors import BillingError
+ 
+ 
+ def day_bounds(day: date) -> tuple[datetime, datetime]:
+@@ -14,4 +17,14 @@
+ 
+ def payments_between(payments, start, end):
+     """Payments created in [start, end), oldest first."""
+-    raise NotImplementedError
++    start = ensure_utc(start)
++    end = ensure_utc(end)
++    if start > end:
++        raise BillingError("invalid_range", f"{start.isoformat()} > {end.isoformat()}")
++    selected = []
++    for payment in payments:
++        created_at = ensure_utc(payment.created_at)
++        if start <= created_at < end:
++            selected.append(payment)
++    selected.sort(key=lambda p: ensure_utc(p.created_at))
++    return selected

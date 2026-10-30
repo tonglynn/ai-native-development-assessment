@@ -1,0 +1,65 @@
+--- a/ledgerly/support.py
++++ b/ledgerly/support.py
+@@ -1,6 +1,59 @@
+ """Entry points used by the support console."""
+ 
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
++from .money import ZERO, round_money
+ 
+-def process_refund_request(payment, amount, requested_by, at):
+-    """Refund part or all of a captured payment on behalf of a support agent."""
+-    raise NotImplementedError
++# FIN-2026-03: support-initiated refunds above this amount need a second approver.
++APPROVAL_THRESHOLD = round_money("500.00")
++
++
++def process_refund_request(
++    payment,
++    amount,
++    requested_by,
++    at,
++    *,
++    approved_by=None,
++    idempotency_key=None,
++):
++    """Refund part or all of a captured payment on behalf of a support agent.
++
++    ``amount`` is the text the support agent typed; it is rounded to the cent.
++    Only captured payments can be refunded, the amount must be positive, and
++    the total refunded must never exceed the captured amount.
++    """
++    if idempotency_key is not None:
++        for entry in audit.events():
++            if entry.get("idempotency_key") == idempotency_key:
++                return payment
++
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("negative_amount", str(amount))
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++
++    refunded = round_money(payment.refunded_amount)
++    if refunded + amount > payment.amount:
++        raise BillingError("refund_exceeds_amount", str(amount))
++
++    if amount > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError("approval_required", str(amount))
++
++    at = ensure_utc(at)
++    payment.refunded_amount = refunded + amount
++    if payment.refunded_amount >= payment.amount:
++        payment.status = "refunded"
++
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=float(amount),
++        requested_by=requested_by,
++        approved_by=approved_by,
++        at=at,
++        idempotency_key=idempotency_key,
++    )
++    return payment
