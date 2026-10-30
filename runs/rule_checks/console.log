@@ -1,0 +1,73 @@
+Available models: deepseek-flash, deepseek-v4-pro
+Model: deepseek/deepseek-flash
+Reply: pong
+Usage: Usage(completion_tokens=19, prompt_tokens=38, total_tokens=57, completion_tokens_details=CompletionTokensDetailsWrapper(accepted_prediction_tokens=None, audio_tokens=None, reasoning_tokens=16, rejected_prediction_tokens=None, text_tokens=None, image_tokens=None, video_tokens=None), prompt_tokens_details=PromptTokensDetailsWrapper(audio_tokens=None, cached_tokens=0, text_tokens=None, image_tokens=None, video_tokens=None), prompt_cache_hit_tokens=0, prompt_cache_miss_tokens=38)
+Latency: 1.3s
+{"key": "r1/at-0001", "checkable": true, "why": "The rule is checkable from the added code alone by scanning the AST for calls to round() or .quantize() and flagging them, since round_money is the required alternative."}
+{"key": "r1/at-0002", "checkable": true, "why": "The rule is specific to ledgerly/invoice.py and can be checked syntactically by detecting raw price attributes not wrapped in to_money() and sum/accumulation calls not starting from ZERO."}
+{"key": "r1/at-0003", "checkable": true, "why": "The rule is checkable from the added code: we can parse it with ast, find raises of BillingError, and verify the first argument is a snake_case string literal."}
+{"key": "r1/at-0004", "checkable": true, "why": "The rule is checkable from the added code: we parse it with ast, find isinstance(x, int) validations, and flag any whose argument is not also guarded by an isinstance(x, bool) check in the same function."}
+{"key": "r1/at-0005", "checkable": true, "why": "The rule is checkable from the added code: we can detect datetime-producing calls or datetime-like names used in comparisons/arithmetic without being wrapped in ensure_utc, though the heuristic for datetime-typed variables may miss some cases."}
+{"key": "r1/at-0006", "checkable": true, "why": "The rule is checkable from the added code via AST: detect money-moving functions by name, then verify keyword-only idempotency_key, an audit.events() lookup, and idempotency_key in audit.record."}
+{"key": "r1/at-0007", "checkable": false, "why": "The rule concerns runtime behavior of refund/credit functions (keyword-only approved_by parameter, threshold logic, and raising BillingError), but the added code alone cannot be reliably identified as a refund/credit function or verified to implement the required semantics without executing it or inspecting the rest of the module."}
+{"key": "r1/at-0008", "checkable": true, "why": "The rule is checkable from the added code: we can detect money/timestamp parameters and verify calls to round_money, ZERO, ensure_utc, and BillingError raises via AST."}
+{"key": "r1/at-0009", "checkable": true, "why": "The rule is checkable from the added code: we parse each top-level function whose name suggests a money/balance operation and require a valid ledgerly.audit.record call with a past-tense event string, an amount, and a payment_id or invoice_id keyword."}
+{"key": "r2/at-0001", "checkable": true, "why": "The rule is checkable from the added code: we can detect calls to round() on money-like values and any Decimal.quantize() usage via AST, and flag them as violations of the round_money requirement."}
+{"key": "r2/at-0002", "checkable": true, "why": "The rule is checkable from the added code: we can detect literal Decimal comparisons, unwrapped monetary assignments, and direct use of money-typed parameters via AST analysis."}
+{"key": "r2/at-0003", "checkable": true, "why": "The rule is checkable from the added code: we can parse it with ast and verify every BillingError raise uses a snake_case string-literal code as its first argument."}
+{"key": "r2/at-0004", "checkable": true, "why": "The rule is a purely local pattern on isinstance checks against int, which can be detected from the added source with ast without importing ledgerly."}
+{"key": "r2/at-0005", "checkable": true, "why": "The rule is checkable from the added code: we can detect datetime-like values used in comparisons or arithmetic that are not wrapped in ensure_utc, though the heuristic may miss some cases."}
+{"key": "r2/at-0006", "checkable": true, "why": "The rule is checkable from the added code alone: we can detect money-moving functions by name/calls, verify the keyword-only idempotency_key=None parameter, confirm an early audit.events() lookup, and ensure the key is forwarded to audit.record(...)."}
+{"key": "r2/at-0007", "checkable": true, "why": "The rule is fully checkable from the added code: we can verify the keyword-only approved_by=None parameter, the BillingError('approval_required') raise, and the 500.00 threshold comparison in each refund/credit-related function."}
+{"key": "r2/at-0008", "checkable": true, "why": "The rule is checkable from the added code: we can parse the source and verify that any audit.record call uses a snake_case string event name and passes both a payment id and an amount."}
+{"key": "r3/at-0002", "checkable": true, "why": "The rule is checkable from the added code: we can detect assignments of money-like expressions to attributes and comparisons against ZERO that are not wrapped in round_money, though the money-expression heuristic may miss some cases."}
+{"key": "r3/at-0003", "checkable": true, "why": "The rule is checkable from the added code: we can parse it with ast, find BillingError calls, and verify the first argument is a snake_case string literal, flagging non-literal codes as unverifiable."}
+{"key": "r3/at-0004", "checkable": true, "why": "The rule is checkable from the added code: we can detect isinstance(..., int) checks in conditionals and verify that bool is explicitly excluded in the same test."}
+{"key": "r3/at-0005", "checkable": true, "why": "The rule is checkable from the added code: we can detect datetime-producing expressions used directly in comparisons or arithmetic without being wrapped in ensure_utc, though the heuristic may miss some datetime sources."}
+{"key": "r3/at-0006", "checkable": true, "why": "The rule is checkable from the added code: detect functions that move money (by name, money-related calls, or balance/amount assignments) and flag any that lack a ledgerly.audit.record(...) call."}
+{"key": "r3/at-0007", "checkable": false, "why": "The rule requires knowing which functions are money-moving operations and verifying runtime behavior against ledgerly.audit.events(), which cannot be determined from the added source alone without the module's existing context and the audit library's semantics."}
+{"key": "r3/at-0008", "checkable": true, "why": "The rule is checkable from the added code: it requires refund/credit functions to accept keyword-only approved_by=None and raise BillingError(\"approval_required\") when the amount exceeds 500.00, which can be verified via AST inspection of signatures and raise statements."}
+{"key": "r3/at-0009", "checkable": true, "why": "The rule is checkable from the added code alone by scanning the AST for float literals, float() calls, float arithmetic, and Decimal operations with unconverted operands."}
+# Learned rules as executable checks (exploratory)
+
+25 active learned notes of the main experiment; checks written by deepseek-flash from the note alone; evaluated on the reference (follows every convention) and naive (breaks the task's conventions) solutions of the 17 ledgerly 1.0.0 tasks.
+
+| Note | Conventions | Checkable | Usable | Detection | False alarms (of 17 references) | Useful |
+|---|---|---|---|---|---|---|
+| r1/at-0001 Round money only with round_money | C1 | yes | yes | 71% | 0 | **yes** |
+| r1/at-0002 Convert line prices with to_money and ZERO | outside C1-C6 | yes | yes | – | 2 | no |
+| r1/at-0003 Raise BillingError with stable snake_case codes | C2 | yes | yes | 0% | 0 | no |
+| r1/at-0004 Exclude bool when validating integers | outside C1-C6 | yes | yes | – | 0 | no |
+| r1/at-0005 Normalize datetimes with ensure_utc | C3 | yes | yes | 0% | 0 | no |
+| r1/at-0006 Money-moving functions take idempotency_key | C4, C5 | yes | yes | 88% | 2 | no |
+| r1/at-0007 Refunds above 500 need approved_by | C2, C6 | no | no | – | – | no |
+| r1/at-0008 Normalize money and timestamps at entry | C1, C2, C3 | yes | yes | 76% | 9 | no |
+| r1/at-0009 Record audit entry for every balance change | C4 | yes | yes | 62% | 8 | no |
+| r2/at-0001 Round money only with round_money | C1 | yes | yes | 14% | 0 | no |
+| r2/at-0002 Normalize money via to_money and round_money | C1 | yes | yes | 0% | 0 | no |
+| r2/at-0003 Raise BillingError with stable snake_case codes | C2 | yes | yes | 0% | 0 | no |
+| r2/at-0004 Exclude bool when validating integer fields | outside C1-C6 | yes | yes | – | 0 | no |
+| r2/at-0005 Normalize datetimes with ensure_utc | C3 | yes | yes | 43% | 2 | no |
+| r2/at-0006 Money operations take keyword-only idempotency_key | C4, C5 | yes | yes | 100% | 7 | no |
+| r2/at-0007 Refunds above 500.00 need approved_by | C2, C6 | yes | yes | 42% | 6 | no |
+| r2/at-0008 Record state changes via audit.record | C4 | yes | yes | 0% | 0 | no |
+| r3/at-0002 Normalize money inputs with round_money before storing | C1 | yes | yes | 14% | 6 | no |
+| r3/at-0003 Use BillingError with snake_case codes | C2 | yes | yes | 0% | 0 | no |
+| r3/at-0004 Reject bools when validating integer arguments | outside C1-C6 | yes | yes | – | 0 | no |
+| r3/at-0005 Normalize datetimes with ensure_utc | C3 | yes | yes | 0% | 0 | no |
+| r3/at-0006 Record audit entry for every money movement | C4 | yes | yes | 88% | 2 | no |
+| r3/at-0007 Accept idempotency_key and check it first | C4, C5 | no | no | – | – | no |
+| r3/at-0008 Refunds above 500.00 need approved_by | C2, C6 | yes | yes | 33% | 1 | no |
+| r3/at-0009 Money is Decimal end-to-end, never float | C1 | yes | yes | 29% | 0 | no |
+
+| Convention | Notes | Checkable | Usable | Useful |
+|---|---|---|---|---|
+| C1 | 6 | 6 | 6 | 1 |
+| C2 | 7 | 6 | 6 | 0 |
+| C3 | 4 | 4 | 4 | 0 |
+| C4 | 6 | 5 | 5 | 0 |
+| C5 | 3 | 2 | 2 | 0 |
+| C6 | 3 | 2 | 2 | 0 |
+| outside C1-C6 | 4 | 4 | 4 | 0 |
+
+Useful checks: **1 of 25**. Usable: 23. Declared not checkable: 2.
