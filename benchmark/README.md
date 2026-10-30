@@ -61,7 +61,7 @@ E05 (`pricing`), H01 (`promotions`), H02 (`importers`), H03 (`reporting`), H04, 
 | Group / 组 | Tasks | Repo | Purpose / 用途 |
 |---|---|---|---|
 | experience / 经验生成 | E01–E06 | ledgerly_v1 | The only tasks memory may be written from / 只有这组可以写入记忆 |
-| heldout / 留出 | H01–H11 | ledgerly_v1 | Same conventions, different functions; never used to write memory. H06, H07 and H11 mirror an experience task (near transfer), the rest are far transfer. H11 is the end-to-end support refund request (C1–C6) / 同样的规范，不同的函数；从不用来写记忆。H06、H07、H11 与某个经验任务结构相近（近迁移）；H11 是端到端客服退款请求 |
+| heldout / 留出 | H01–H11 | ledgerly_v1 | Same conventions, different functions; never used to write memory. H06, H07, H08 and H11 mirror an experience task (near transfer; H08 tagged after the audit, before the freeze), the rest are far transfer. H11 is the end-to-end support refund request (C1–C6) / 同样的规范，不同的函数；从不用来写记忆。H06、H07、H08、H11 与某个经验任务结构相近（近迁移）；H11 是端到端客服退款请求 |
 | stale / 过期 | S01–S05 | ledgerly_v2 | Approval threshold 500 → 1000 (S04, S05): a remembered 500.00 rule now blocks legitimate operations. Rounding policy (S01–S03): v2's `round_money` already rounds half-even, so following the v1 lesson passes; these are no-false-recall checks, failed only by hard-coding half-up (audit M3). S04 is a credit and in C5's scope but not tested for C5, to keep it about the threshold / 审批阈值变化（S04、S05）会让记住的 500 规则误拦合法操作；舍入任务（S01–S03）只检查「不误用旧经验」 |
 | control / 对照 | B01–B03 | simkit | ledgerly memories must **not** transfer here / ledgerly 的经验不应迁移到这里 |
 

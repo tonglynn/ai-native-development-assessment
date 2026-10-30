@@ -293,3 +293,7 @@ rejected) is kept and tested.
    - `attest/benchmark.py`: `load_task` also finds extension tasks in `benchmark/extension/`; `load_tasks()`, which the experiment uses, is unchanged.
    - New modules for the exploratory extensions (`attest/context/`, `attest/memory/forgetting.py`, `admission.py`, `verify.py`). The evaluated Attest and the MCP server do not use them.
    主实验运行后的代码改动（审计后列出）：都不改变冻结实验的行为；任务目录与冻结时相同。
+3. Two statements above were overtaken by the results; the frozen text is left as it was and corrected here (independent audit, 10/31):
+   - Section 5 says the poison check ("a rule nobody applied is rejected") "is kept and tested". The poison stress test did not exercise it: the poisoned tasks failed verification in every run, so the simpler rule, that nothing is learned from an unverified task, kept the poison out (`RESULTS.md`, stress tests).
+   - Section 7 lists three near-transfer tasks (H06, H07, H11). H08 was tagged near before the freeze (audit r4), so the near/far split in `RESULTS.md` uses four.
+   上文两处说法已被结果修正：投毒测试实际没有检验到"没人落实的规则被拒"这一条；近迁移任务实为四个（含冻结前已标记的 H08）。

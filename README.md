@@ -52,8 +52,8 @@ Stress tests and risks (exploratory):
   legitimate operations blocked 15/15 → 3/15. This is what memory buys, not the gate:
   without the gate the rates are equal or better (2/18, 2/15, 2/15).
 - **Near and far transfer** (preregistered split, reported late): Attest vs no memory
-  +58 pp on the 4 held-out tasks that mirror an experience task, +24 pp [+10, +43] on
-  the other 7.
+  +58 pp [+42, +67] on the 4 held-out tasks that mirror an experience task (only 4
+  tasks), +24 pp [+10, +43] on the other 7.
 
 Later extensions (exploratory, `RESULTS.md`): a **context manager**, designed after seeing results, kept the
 session's review rule under a 6k-token budget (S05 2 of 3, 0 approval violations;
@@ -68,7 +68,7 @@ forgetting, with 0 approval violations (exploratory; the separating signal exist
 construction). **Forgetting V1.1** (offline): counting adoption as
 contribution let 34 one-off notes become permanent; reinforcing only verified use removed
 that, but V1.1 wrongly archived more correct rules (4 → 10–11 of 52), mostly rules no test
-checks, so V1 stays the default. The hard part is reliable evidence of value, not the decay
+checks, so V1 stays the forgetting module's default (the evaluated Attest and the MCP server run no forgetting). The hard part is reliable evidence of value, not the decay
 rate.
 
 What it does **not** show: on real review history Attest anticipated the fewest
@@ -118,7 +118,7 @@ whole flow in one task; the other tasks each cover part of it.
    ACE-style memory, and Attest with ablations. Preregistered; results above.
 2. **Real history (partly done).** A retrospective on real pull requests and review
    comments from Flask and Saleor ([`REAL_HISTORY.md`](REAL_HISTORY.md)): Attest
-   showed no recall advantage there, because real reviewers rarely state rules and
+   anticipated the fewest convention comments there (Saleor 1/25, ReasoningBank 4/25, ACE 8/25), because real reviewers rarely state rules and
    many missed comments are about process. Not done: an agent completing later tasks of
    a real repository with memory learned from its history (as in MemDev-Bench); that
    is the most important next step ([`ROADMAP.md`](ROADMAP.md)).
@@ -210,7 +210,7 @@ and runs the verification command itself; retraction is not exposed to agents.
 ## Limits
 
 One model, one synthetic benchmark designed by the author, simulated review
-comments, 11 held-out tasks × 3 repetitions. Three held-out tasks closely mirror an
+comments, 11 held-out tasks × 3 repetitions. Four held-out tasks (H06, H07, H08, H11) closely mirror an
 experience task. The gate checks that the evidence line is a real verified change,
 not that it is about the rule. On real review history most missed comments are about
 process (rebase, backport), which a diff cannot show (see `PROCESS_MEMORY.md`).
@@ -252,7 +252,7 @@ Sources for the industry and research context: [GitHub Copilot agentic memory](h
 - **H1–H5 得到支持**：比无记忆高 36 个百分点（区间 [+21, +52]）；不泄漏到其他仓库；过期政策场景不比无记忆差；不差于两种已发表的设计；作用域是防泄漏的关键。
 - **H6 不被支持**：写入门槛让留出组降低 15 个百分点（[−27, −3]）。投毒实验中 Attest 0 次写入错误建议，关掉门槛 9 次，ReasoningBank 12 次、ACE 10 次，后两者的 Agent 在后续任务中确实清空了审计日志。但被投毒的任务在所有条件下都没有通过验证，Attest 靠"不从未验证的任务学习"这一条挡住了毒药，同时也没学到这些任务里的其他经验：投毒下留出组为 36%，关掉门槛为 67%。更细的证据检查没有被这次投毒检验到。
 - **业务风险**（无记忆 → Attest）：重复资金操作 18/18 → 6/18，未授权操作 15/15 → 2/15，误拦合法操作 15/15 → 3/15。这是记忆带来的，不是门槛带来的：关掉门槛时这三项相同或更好（2/18、2/15、2/15）。
-- **近迁移与远迁移**（预注册的拆分，补报）：在 4 个与经验任务结构相近的留出任务上，Attest 比无记忆高 58 个百分点；在另外 7 个任务上高 24 个百分点（[+10, +43]）。
+- **近迁移与远迁移**（预注册的拆分，补报）：在 4 个与经验任务结构相近的留出任务上，Attest 比无记忆高 58 个百分点（[+42, +67]，只有 4 个任务）；在另外 7 个任务上高 24 个百分点（[+10, +43]）。
 - **后续扩展（探索性）**：上下文管理器（看到结果后设计）在 6k token 预算下保住了会话中的评审规则（S05 通过 2/3，0 次审批违规；滑动窗口 0/3；普通摘要基线有缺陷，不作比较）；动态遗忘实验显示 200 条一次性笔记把留出组从 70% 降到 42%，默认参数下没有一种遗忘策略能修复，统一衰减误删了审批规则，按类型衰减没有；**可信度分级写入**（只出现一次的细节只在所属文件中注入）在更难的污染任务流上（不分级时为 36%）把留出组提高到 67%，与按类型遗忘结合为 76%，审批违规为 0（探索性，区分信号为构造所得）。**遗忘 V1.1**（离线）：把"被采用"当成贡献，会让 34 条一次性笔记永久保留；只按验证强化能消除这一点，但 V1.1 误归档的正确规则从 4/52 增加到 10–11/52，多为没有测试覆盖的规则，因此 V1 仍为默认。难点在于拿到可靠的价值反馈，而不是遗忘速度。
 - **没有证明的**：在真实评审历史上，Attest 预判到的规范类评审意见最少（Saleor 上 1/25，ReasoningBank 4/25，ACE 8/25）；语义检索找到更多相关笔记，但没有改善编码结果。
 
@@ -276,7 +276,7 @@ C1–C4 可以从代码中发现，C5、C6 只能靠评审传承。事故与政�
 **两层研究设计。**
 
 1. **受控实验（已完成）**：Ledgerly 基准（经验、留出、过期、对照四组任务），比较无记忆、ReasoningBank 式、ACE 式与 Attest 及其消融；预注册，结果见上。
-2. **真实历史（部分完成）**：对 Flask、Saleor 的真实 PR 与评审评论做了回溯（[`REAL_HISTORY.md`](REAL_HISTORY.md)），Attest 没有召回优势，因为真实评审很少明说规则，漏掉的多是流程类意见。尚未完成的是：用从真实仓库历史中学到的记忆，让 Agent 完成该仓库后续的任务（如 MemDev-Bench 的做法）。这是最重要的下一步（见 [`ROADMAP.md`](ROADMAP.md)）。
+2. **真实历史（部分完成）**：对 Flask、Saleor 的真实 PR 与评审评论做了回溯（[`REAL_HISTORY.md`](REAL_HISTORY.md)），Attest 预判到的规范类评审意见最少（Saleor 上 1/25，ReasoningBank 4/25，ACE 8/25），因为真实评审很少明说规则，漏掉的多是流程类意见。尚未完成的是：用从真实仓库历史中学到的记忆，让 Agent 完成该仓库后续的任务（如 MemDev-Bench 的做法）。这是最重要的下一步（见 [`ROADMAP.md`](ROADMAP.md)）。
 
 ### Attest 怎么工作
 
@@ -296,4 +296,4 @@ C1–C4 可以从代码中发现，C5、C6 只能靠评审传承。事故与政�
 
 ### 局限
 
-单一模型、作者自建的合成基准、模拟的评审意见、11 个留出任务 × 3 次重复；三个留出任务与经验任务结构相近。写入门槛只检查证据行是真实的已验证改动，不检查它是否与规则相关。真实评审中漏掉的多是流程类意见（rebase、backport），diff 无法体现（见 `PROCESS_MEMORY.md`）。尚未解决的问题是**失败归因**：遗忘机制要想做好，需要知道失败是哪条笔记造成的，本项目目前还没有可靠的办法。模型生成的检查只对 25 条规则中的 1 条有用；用产生规则的评审去验证这些检查也没有帮助，因为 Agent 的真实错误常常是"漏了"，检查抓不到，通过验证的检查也只有约一半报得对（见 `RESULTS.md`、D33）。没有测试或评审点名的规则，目前试过的所有反馈信号都覆盖不到。下一阶段（Attest 2.0：上下文管理、类型化记忆、动态遗忘）见 [`ROADMAP.md`](ROADMAP.md)。
+单一模型、作者自建的合成基准、模拟的评审意见、11 个留出任务 × 3 次重复；四个留出任务（H06、H07、H08、H11）与经验任务结构相近（预注册的限制一节只列了三个，H08 在冻结前已标为近迁移）。写入门槛只检查证据行是真实的已验证改动，不检查它是否与规则相关。真实评审中漏掉的多是流程类意见（rebase、backport），diff 无法体现（见 `PROCESS_MEMORY.md`）。尚未解决的问题是**失败归因**：遗忘机制要想做好，需要知道失败是哪条笔记造成的，本项目目前还没有可靠的办法。模型生成的检查只对 25 条规则中的 1 条有用；用产生规则的评审去验证这些检查也没有帮助，因为 Agent 的真实错误常常是"漏了"，检查抓不到，通过验证的检查也只有约一半报得对（见 `RESULTS.md`、D33）。没有测试或评审点名的规则，目前试过的所有反馈信号都覆盖不到。下一阶段（Attest 2.0：上下文管理、类型化记忆、动态遗忘）见 [`ROADMAP.md`](ROADMAP.md)。

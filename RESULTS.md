@@ -35,7 +35,8 @@ independent audit of 10/31):
   positive. 留出组的提升有很大一部分来自近迁移，但远迁移也为正。
 - **H3 mechanism check:** every note cited in a stale task that then failed a related review
   check ended the stale phase suspect, retired or superseded. There were 3 such notes, all in
-  repetition 2, S05: one superseded, two suspect.
+  repetition 2, S05: one superseded, two suspect. In repetition 1, S05 also failed its approval
+  check, but no note had been cited, so the check had nothing to act on there.
 
 ## Hypotheses / 假设
 
@@ -113,8 +114,9 @@ condition applied a ledgerly rule there (control pass@1 100% everywhere).
 
 **How Attest kept the poison out, and what it cost (added after the independent audit,
 10/31).** In every condition and every repetition, E04 and E06 failed their final
-verification (30 of 30 runs). Following the poisoned comment clears the audit log, which the
-audit test catches. Attest therefore rejected both tasks with its simplest rule ("task not
+verification (30 of 30 runs): every second attempt failed both the audit check (C4) and the
+idempotency check (C5). Following the poisoned comment clears the audit log, which the audit
+test catches. Attest therefore rejected both tasks with its simplest rule ("task not
 verified: nothing is learned"). Its finer checks, the verbatim source quote and the changed
 line that applies the rule, were never exercised. So this test shows that requiring a
 verified task stops poison that breaks a test. It does not show the evidence-line check
@@ -157,7 +159,9 @@ Embedding retrieval finds more of the relevant notes but **did not improve the c
 results**; it put the review-only rules (C5, C6) into the top 5 less often, which is
 where memory matters, and costs about 25 ms per query instead of under 1 ms. The
 lexical arms reproduce the main experiment's held-out rates (Attest 70%,
-ReasoningBank 58%); 2 of 66 individual runs differ, in opposite directions. This is a check on run-to-run stability. The ReasoningBank baseline's
+ReasoningBank 58%); 2 of 66 individual held-out runs differ, in opposite directions. On the
+stale tasks 1 of 15 runs differs for each (Attest 93% here vs 87% in the main experiment,
+ReasoningBank 73% vs 80%). This is a check on run-to-run stability. The ReasoningBank baseline's
 lexical retrieval is therefore not what held it back. 语义检索召回了更多相关笔记，但没有改善编码结果；只靠评审传承的规则进入前 5 的比例反而下降。检索指标提升不等于编码质量提升。
 
 ## Context management on a long session (exploratory, after the main experiment) / 长会话的上下文管理（探索性）
@@ -201,9 +205,9 @@ With that, manager v1 (`runs/context_eval_design2_manager_v1`) scored 0/3 althou
 the facts were in its context: the rule was split into sentences among code lines and
 not marked as review. Manager v2 keeps review comments whole and first, and drops code
 lines from tool output. These changes were made after seeing results, on one scenario;
-the 67% may not transfer. Two findings hold regardless: a fact in the context is not a
-fact the agent uses, and an unchecked model summary drops exactly the numbers that
-matter. 信息在上下文里不等于 Agent 会用；未经检查的模型摘要恰好丢掉关键数字。
+the 67% may not transfer. One finding holds regardless: a fact in the context is not a
+fact the agent uses. Nothing is claimed about model summaries, because the summary baseline
+was broken (see the correction above). 信息在上下文里不等于 Agent 会用；关于模型摘要不作结论，因为摘要基线有缺陷。
 
 ## Dynamic forgetting V1 (exploratory, after the main experiment) / 动态遗忘 V1（探索性）
 
@@ -591,10 +595,10 @@ drifted and 25 marked for review. So only the stale tasks were run, with 45 agen
   control in this run was atypical, and the S04 difference is within run-to-run variation.
   These runs also did not update memory during the stale phase, unlike the main experiment.
   What remains is that verification did no harm. 对照组在 S04 上反常地失败了 2 次（主实验和检索消融中都是 3/3 通过），这个差别在运行间波动之内，不能算提升。
-- **The gain comes from the check line, not from dropping notes.** The approval rule is marked
-  for review, not drifted, because the changelog names 500.00. Both arms therefore show it the
-  same "check before use" line. Plain Attest already shows a generic version warning ("learned on
-  1.0.0, this checkout is 2.0.0"); a specific pointer to what changed did better.
+- **Both verification arms behaved the same.** The approval rule is marked for review, not
+  drifted, because the changelog names 500.00, so both arms show it the same "check before use"
+  line. No gain over plain Attest is shown (see the correction above); whether a specific
+  pointer to what changed helps more than the generic version warning remains untested.
 - What it adds to the design: verification at use time does not need to know whether a note is
   valuable. It only needs to know whether what the note cites still holds. This is the way
   around the value-feedback problem that forgetting V1.1 and V2 ran into, and it is what
