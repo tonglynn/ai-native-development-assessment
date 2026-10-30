@@ -16,8 +16,8 @@ from pathlib import Path
 from .. import llm
 from ..benchmark import Task
 from .base import MemorySystem, Retrieved, experience_packet
+from .retrieval import check_retriever, timed_rank
 from .sqlite_store import open_store
-from .text import rank
 
 MAX_SHOWN = 6
 
@@ -28,22 +28,27 @@ with at most 3 items."""
 
 
 class ReasoningBankMemory(MemorySystem):
-    name = "reasoningbank"
-
-    def __init__(self, store_dir: Path | None):
+    def __init__(self, store_dir: Path | None, retriever: str = "lexical"):
         self.store = open_store(store_dir)
+        self.retriever = check_retriever(retriever)
+        self.name = "reasoningbank" + ("_emb" if retriever == "embedding" else "")
+
+    def candidates(self, task: Task) -> dict[str, str]:
+        return {i: f"{it['title']} {it['description']} {it['content']}" for i, it in self.store.items().items()}
+
+    def ranking(self, task: Task, k: int | None = MAX_SHOWN) -> tuple[list[tuple[str, float]], float]:
+        return timed_rank(self.retriever, f"{task.title} {task.issue}", self.candidates(task), k)
 
     def retrieve(self, task: Task, repo_version: str) -> Retrieved:
         items = self.store.items()
-        docs = {i: f"{it['title']} {it['description']} {it['content']}" for i, it in items.items()}
-        ranked = rank(f"{task.title} {task.issue}", docs, MAX_SHOWN)
+        ranked, ms = self.ranking(task)
         if not ranked:
-            return Retrieved()
+            return Retrieved(debug={"retriever": self.retriever, "retrieval_ms": ms})
         lines = ["Memory items from past tasks:"]
         for i, _ in ranked:
             it = items[i]
             lines.append(f"- [{i}] {it['title']}: {it['description']}\n  {it['content']}")
-        return Retrieved(ids=[i for i, _ in ranked], context="\n".join(lines), debug={"scores": dict(ranked)})
+        return Retrieved(ids=[i for i, _ in ranked], context="\n".join(lines), debug={"scores": dict(ranked), "retriever": self.retriever, "retrieval_ms": ms})
 
     def learn(self, task: Task, repo_version: str, run: dict, transcript: str, diff: str) -> list[dict]:
         data = llm.complete_json(EXTRACT_SYSTEM, experience_packet(task, repo_version, run, transcript, diff))

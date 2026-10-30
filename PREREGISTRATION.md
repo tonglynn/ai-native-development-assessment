@@ -87,6 +87,65 @@ memory before learning; (3) a case study on review comments from a real
 open-source repository, used by a real agent through an MCP server. No
 decision rule is fixed for these.
 
+## 4c. Retrieval ablation (exploratory, reported separately) / 检索机制消融（探索性，单独报告）
+
+**Question / 问题.** How much of each system's result is due to *what* it
+remembers and how much to *how* it retrieves? The ReasoningBank-style baseline
+ranks lexically, while the original method uses embeddings; this ablation also
+closes that gap. 记忆内容与检索方式各贡献多少；同时补上 ReasoningBank 简化实现与原方法在检索方式上的差异。
+
+**Arms / 条件.** Attest + lexical, Attest + embedding, ReasoningBank-style +
+lexical, ReasoningBank-style + embedding (`attest`, `attest_emb`,
+`reasoningbank`, `reasoningbank_emb`).
+
+**Held constant / 控制变量.** Memory content: no arm learns its own experience;
+every arm starts from the main experiment's memory snapshot after the learning
+phase (`runs/main/<system>/r<rep>/memory/after_learn.json`, built with lexical
+retrieval), so lexical and embedding arms of a system see identical notes.
+Candidate set (status; repository scope for Attest), number of notes shown (6),
+prompt, agent, model and settings, tasks, phase order (held-out → control →
+stale), repetitions (3). Only the ranking function differs. The write path
+(distillation, gate, de-duplication) is unchanged in both arms.
+
+**Embedding model / 嵌入模型.** `BAAI/bge-small-en-v1.5` (fastembed 0.9.1,
+onnxruntime 1.31.1, ONNX on CPU, revision `aa8f8b06…`), cosine similarity, ties
+broken by id as in the lexical ranker. Local, so no API cost and no network at
+query time.
+
+**No leakage / 防泄漏.** The retrieval query is the task title and issue text
+only, never review comments or fixes of the task being solved. Memory comes
+only from experience tasks (checked automatically: a note learned from a query
+task aborts the evaluation).
+
+**Measures / 指标.**
+
+1. *Retrieval quality (offline, same memory, no agent).* For every held-out,
+   control and stale task as a query: Recall@5, Precision@5 (over the notes
+   returned, at most 5) and MRR over the full ranking. A note is *relevant* to
+   a task if it states a convention the task's hidden tests check
+   (`task.json → conventions`). Each note is labelled once, by
+   `deepseek-v4-pro`, without seeing the queries, the system or the retriever;
+   the labels are committed (`labels.json`). Relevance is topical: an outdated
+   note about the right rule still counts as relevant (whether it is correct is
+   what the stale tasks measure). Queries with no relevant note are left out of
+   recall and MRR; for control tasks we report irrelevant notes in the top 5.
+   Also: ranking latency (median, p95, warm model).
+2. *Effect on the work (end to end).* First-attempt pass rate on held-out,
+   control and stale tasks; business-risk check failure rates (section 5);
+   tokens per task; retrieval latency in the agent loop.
+
+**Analysis / 分析.** Within each system, embedding vs lexical: paired per query
+(retrieval metrics) or per task averaged over repetitions (pass@1), mean
+difference with a bootstrap 95% interval (10,000 resamples, seed 0) and
+better/worse/same counts. Two-sided: we do not assume embedding retrieval is
+better. A gain in retrieval metrics is not taken as a gain in coding quality;
+both are reported side by side, and an improvement is attributed to retrieval
+only if it shows in the end-to-end measures. 不预设语义检索更好，也不把检索指标的提升等同于编码质量的提升。
+
+**Run / 运行.** After the main experiment:
+`python -m attest ablation --source main --name retrieval_ablation`
+(`--part quality` for the offline part only).
+
 ## 5. Measures and analysis / 指标与分析
 
 All numbers are computed by `attest/analysis.py` from `runs/<experiment>/**/result.json`.

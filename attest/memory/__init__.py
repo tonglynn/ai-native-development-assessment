@@ -15,8 +15,10 @@ from .earned import EarnedMemory
 from .reasoningbank import ReasoningBankMemory
 
 CONDITIONS = ("no_memory", "reasoningbank", "ace", "attest", "attest_no_gate", "attest_no_scope")
+# Retrieval ablation (exploratory, reported separately): same systems, embedding instead of lexical ranking.
+ABLATION_CONDITIONS = ("attest", "attest_emb", "reasoningbank", "reasoningbank_emb")
 
-__all__ = ["CONDITIONS", "MemorySystem", "NoMemory", "Retrieved", "make_memory"]
+__all__ = ["ABLATION_CONDITIONS", "CONDITIONS", "MemorySystem", "NoMemory", "Retrieved", "make_memory"]
 
 
 def make_memory(condition: str, store_dir: Path | None) -> MemorySystem:
@@ -32,4 +34,8 @@ def make_memory(condition: str, store_dir: Path | None) -> MemorySystem:
         return EarnedMemory(store_dir, gate=False)
     if condition == "attest_no_scope":
         return EarnedMemory(store_dir, scope=False)
+    if condition == "attest_emb":
+        return EarnedMemory(store_dir, retriever="embedding")
+    if condition == "reasoningbank_emb":
+        return ReasoningBankMemory(store_dir, retriever="embedding")
     raise ValueError(f"unknown memory condition {condition!r}; choose from {CONDITIONS}")

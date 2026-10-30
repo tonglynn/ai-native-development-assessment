@@ -13,9 +13,9 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: smoke | pilot | experiment | distill_check | poison | scale | case_study | retro
+        description: smoke | pilot | experiment | distill_check | poison | scale | case_study | retro | retrieval_ablation
         type: choice
-        options: [smoke, pilot, experiment, distill_check, poison, scale, case_study, retro]
+        options: [smoke, pilot, experiment, distill_check, poison, scale, case_study, retro, retrieval_ablation]
         default: pilot
       name:
         description: results go to runs/<name>
@@ -68,7 +68,7 @@ jobs:
           else:
               req = json.load(open(".github/run-request.json"))
           command = req.get("command", "pilot")
-          assert command in {"smoke", "pilot", "experiment", "distill_check", "poison", "scale", "case_study", "retro"}, command
+          assert command in {"smoke", "pilot", "experiment", "distill_check", "poison", "scale", "case_study", "retro", "retrieval_ablation"}, command
           name = str(req.get("name", "pilot_nomem"))
           assert re.fullmatch(r"[A-Za-z0-9_-]+", name), name
           print(f"command={command}")
@@ -82,6 +82,12 @@ jobs:
           assert re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo), repo
           print(f"repo={repo}")
           print(f"prs={int(req.get('prs', 40))}")
+          source = str(req.get("source", "main"))
+          assert re.fullmatch(r"[A-Za-z0-9_-]+", source), source
+          print(f"source={source}")
+          part = str(req.get("part", "both"))
+          assert part in {"quality", "e2e", "both"}, part
+          print(f"part={part}")
           EOF
 
       - name: Offline tests
@@ -98,6 +104,9 @@ jobs:
           GROUPS: ${{ steps.req.outputs.groups }}
           REPO: ${{ steps.req.outputs.repo }}
           PRS: ${{ steps.req.outputs.prs }}
+          SOURCE: ${{ steps.req.outputs.source }}
+          PART: ${{ steps.req.outputs.part }}
+          ATTEST_EMBED_CACHE: ${{ runner.temp }}/fastembed
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           test -n "$DEEPSEEK_API_KEY" || { echo "Actions secret DEEPSEEK_API_KEY is missing"; exit 1; }
@@ -111,6 +120,7 @@ jobs:
             poison|scale) python -m attest stress --kind "$COMMAND" --name "$NAME" --reps "$REPS" --parallel "$PARALLEL" ;;
             case_study) python scripts/ingest_github_reviews.py --repo "$REPO" --prs "$PRS" --out "runs/$NAME" ;;
             retro) python scripts/retro_eval.py --repo "$REPO" --prs "$PRS" --out "runs/$NAME" ;;
+            retrieval_ablation) python -m attest ablation --name "$NAME" --source "$SOURCE" --part "$PART" --reps "$REPS" --parallel "$PARALLEL" ;;
           esac 2>&1 | tee -a "runs/$NAME/console.log"
 
       - name: Commit results

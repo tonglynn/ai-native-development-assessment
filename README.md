@@ -51,6 +51,7 @@ Results and a console log are committed back to `runs/<name>/`.
 |---|---|
 | `benchmark/` | Simulated team repositories and 23 tasks — see `benchmark/README.md` |
 | `attest/` | Runner, verifier and memory systems |
+| `attest/ablation.py`, `attest/memory/retrieval.py`, `embedding.py` | Retrieval ablation (exploratory): lexical vs embedding ranking on the same memory, offline retrieval metrics and end-to-end runs (PREREGISTRATION 4c). / 检索机制消融：同一份记忆上比较词法与语义排序 |
 | `attest/memory/store.py`, `sqlite_store.py` | Memory storage: append-only JSONL event log (experiments; committed with results) or SQLite (shared team memory, used by the MCP server; several writers at once). Same interface; `python -m attest migrate` converts. / 记忆存储：JSONL 事件日志（实验用，随结果提交）或 SQLite（团队共享、MCP 默认、支持多进程并发写），接口一致，可互相迁移 |
 | `attest/config/agent.yaml` | mini-swe-agent prompt, adapted from its `mini.yaml` |
 | `scripts/` | Benchmark validation and model check |

@@ -35,8 +35,9 @@ from pathlib import Path
 from .. import llm
 from ..benchmark import Task
 from .base import MemorySystem, Retrieved, experience_packet
+from .retrieval import check_retriever, timed_rank
 from .sqlite_store import open_store
-from .text import jaccard, normalise, rank, related
+from .text import jaccard, normalise, related
 
 MAX_SHOWN = 6
 VISIBLE = ("active", "suspect")
@@ -75,21 +76,34 @@ def _version_tuple(version: str) -> tuple:
 
 
 class EarnedMemory(MemorySystem):
-    def __init__(self, store_dir: Path | None, *, gate: bool = True, scope: bool = True, backend: str | None = None):
+    def __init__(self, store_dir: Path | None, *, gate: bool = True, scope: bool = True, backend: str | None = None,
+                 retriever: str = "lexical"):
         self.store = open_store(store_dir, backend)
         self.gate, self.scope = gate, scope
-        self.name = "attest" + ("" if gate else "_no_gate") + ("" if scope else "_no_scope")
+        self.retriever = check_retriever(retriever)
+        self.name = ("attest" + ("" if gate else "_no_gate") + ("" if scope else "_no_scope")
+                     + ("_emb" if retriever == "embedding" else ""))
 
     def _same_scope(self, item: dict, task: Task) -> bool:
         return not self.scope or item["scope"]["repo"] == task.repo_name
 
     # ------------------------------------------------------------------ read path
 
+    def candidates(self, task: Task) -> dict[str, str]:
+        """The notes retrieval may choose from (visible and in scope), as id -> text to rank."""
+        items = self.store.items()
+        return {i: f"{it['title']} {it['content']}" for i, it in items.items()
+                if it["status"] in VISIBLE and self._same_scope(it, task)}
+
+    def ranking(self, task: Task, k: int | None = MAX_SHOWN) -> tuple[list[tuple[str, float]], float]:
+        """(ranked candidates, milliseconds). Only this step differs between the retrieval arms."""
+        return timed_rank(self.retriever, f"{task.title} {task.issue}", self.candidates(task), k)
+
     def retrieve(self, task: Task, repo_version: str) -> Retrieved:
         items = self.store.items()
         visible = {i: it for i, it in items.items() if it["status"] in VISIBLE}
         in_scope = {i: it for i, it in visible.items() if self._same_scope(it, task)}
-        ranked = rank(f"{task.title} {task.issue}", {i: f"{it['title']} {it['content']}" for i, it in in_scope.items()}, MAX_SHOWN)
+        ranked, ms = self.ranking(task)
         chosen = [items[i] for i, _ in ranked]
         version_warnings = [it["id"] for it in chosen
                             if self.scope and _major(it["scope"]["observed_version"]) != _major(repo_version)]
@@ -98,6 +112,8 @@ class EarnedMemory(MemorySystem):
             "out_of_scope": sorted(set(visible) - set(in_scope)),
             "not_visible": sorted(i for i, it in items.items() if it["status"] not in VISIBLE),
             "scores": dict(ranked),
+            "retriever": self.retriever,
+            "retrieval_ms": ms,
             "version_warnings": version_warnings,
         }
         if not chosen:

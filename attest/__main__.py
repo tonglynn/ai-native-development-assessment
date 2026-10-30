@@ -89,6 +89,19 @@ def cmd_stress(args) -> int:
     return 0
 
 
+def cmd_ablation(args) -> int:
+    from . import ablation
+
+    root, source = RUNS_DIR / args.name, RUNS_DIR / args.source
+    if args.part in ("quality", "both"):
+        res = ablation.retrieval_quality(source, root, reps=args.reps)
+        print((root / "retrieval_quality.md").read_text())
+    if args.part in ("e2e", "both"):
+        ablation.run_ablation(root, source, reps=args.reps, parallel=args.parallel, settings=Settings(thinking=args.thinking))
+        print(json.dumps(ablation.summarise_ablation(root), indent=2, default=str))
+    return 0
+
+
 def cmd_notes(args) -> int:
     from . import mcp_server
 
@@ -179,6 +192,15 @@ def main(argv=None) -> int:
     p.add_argument("--parallel", type=int, default=5)
     p.add_argument("--thinking", default=Settings().thinking, choices=["off", "low", "high"])
     p.set_defaults(fn=cmd_stress)
+
+    p = sub.add_parser("ablation", help="exploratory retrieval ablation: lexical vs embedding ranking on the main experiment's memory")
+    p.add_argument("--name", default="retrieval_ablation")
+    p.add_argument("--source", default="main", help="runs/<source> must hold the main experiment's memory snapshots")
+    p.add_argument("--part", default="both", choices=["quality", "e2e", "both"])
+    p.add_argument("--reps", type=int, default=3)
+    p.add_argument("--parallel", type=int, default=4)
+    p.add_argument("--thinking", default=Settings().thinking, choices=["off", "low", "high"])
+    p.set_defaults(fn=cmd_ablation)
 
     p = sub.add_parser("notes", help="list the Attest notes kept for a git repository (MCP prototype store)")
     p.add_argument("--repo", required=True)
