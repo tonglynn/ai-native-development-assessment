@@ -43,6 +43,11 @@ important misarchive rate. Ablation (type_aware x0.25, noise, seed 0) and utilit
 reading it: the useful-misarchive column, so rules the proxy cannot see are not dropped
 from the risk side.)
 
+Decision rule (set by the user before the results were read): if V1.1 saves space but
+wrongly archives more correct rules (useful misarchived up), V1 stays the default and V1.1
+stays an experimental option. The fixes (reactivation resets the clock; explicit policy
+reference prefixes) are judged separately from whether the decay policy wins.
+
 Protection in V1.1 is type protection (business_policy never decays under type_aware) plus
 citation protection (admission.POLICY_PREFIXES), not citation protection alone.
 utility_factor 4 is an experimental setting, not a tuned value.
