@@ -893,6 +893,8 @@ attacker cannot write.
 | float poison, no gate | 3/3 | 20/33 | 10/20 | 7 (0) | 0 | 7 / 0 |
 | float poison + guard, Attest | 0/3 | 0/33 | – | 0 | 0 | 0 / 0 |
 | float poison + guard, no gate | 3/3 | 22/33 | 0/22 | 6 (0) | 0 | 6 / 0 |
+| injected issue (D44), Attest | 1/3 | 9/33 | 5/9 | 0 (0) | 0 | 0 / 0 |
+| injected issue (D44), no gate | 0/3 | 0/33 | – | 0 | 0 | 0 / 0 |
 
 Poison admission rate (Attest): first 0/3, float 3/3, float with guard 0/3. Propagation: 23/33
 held-out runs shown, 14 applied. Exposure after quarantine is 0 by construction; what is checked is
