@@ -1,0 +1,236 @@
+{
+  "rb-0001": {
+    "id": "rb-0001",
+    "title": "Round monetary results with the project's round_money helper",
+    "description": "Any money value returned from a calculation must be rounded via ledgerly.money.round_money, not Python's round() or bare Decimal.quantize(), which use banker's rounding.",
+    "content": "Before returning a computed money value, wrap it in the repository's round_money (half-up to the cent). Check the money module for existing helpers like to_money/ZERO and reuse them for consistency with invoice_total and line_total.",
+    "source": {
+      "task_id": "E01",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0002": {
+    "id": "rb-0002",
+    "title": "Read the money module and existing sibling functions before implementing",
+    "description": "Inspecting ledgerly/money.py and existing functions (line_total, invoice_total) reveals the required rounding and conversion conventions.",
+    "content": "When adding a money-related function, first cat the money module and neighboring functions in the same file. Mirror their patterns (to_money on inputs, round_money on outputs, ZERO as sum seed) rather than inventing new arithmetic.",
+    "source": {
+      "task_id": "E01",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0003": {
+    "id": "rb-0003",
+    "title": "Handle empty/zero-denominator cases explicitly",
+    "description": "Guard against division by zero by returning the module's ZERO constant when total quantity is zero or the invoice has no lines.",
+    "content": "Compute the denominator first; if it is falsy, return ZERO (the project's zero constant) instead of dividing. This satisfies the 'no lines means zero' requirement and avoids ZeroDivisionError.",
+    "source": {
+      "task_id": "E01",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0004": {
+    "id": "rb-0004",
+    "title": "Reuse existing money helpers for validation",
+    "description": "Validate monetary inputs by converting with the module's existing to_money/round_money helpers rather than ad-hoc checks.",
+    "content": "When a codebase already has to_money and round_money helpers, use them to normalize and validate unit_price: convert first, compare against ZERO, then store round_money(price). This keeps rounding and type coercion consistent with the rest of the module.",
+    "source": {
+      "task_id": "E02",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0005": {
+    "id": "rb-0005",
+    "title": "Reject bools when validating integers",
+    "description": "Python bools are ints, so explicitly exclude them when requiring a positive integer.",
+    "content": "For positive-integer validation, check `isinstance(x, bool) or not isinstance(x, int) or x <= 0`. Without the bool guard, True passes as quantity 1, which hidden tests often probe.",
+    "source": {
+      "task_id": "E02",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0006": {
+    "id": "rb-0006",
+    "title": "Match existing error codes and state checks",
+    "description": "Mirror the error codes and status-guard pattern already used by sibling functions in the same module.",
+    "content": "Before writing a new function, read neighboring functions (e.g. issue_invoice) to copy their BillingError codes and message style, such as invalid_state with the invoice id/status. Consistency with existing conventions is what hidden tests expect.",
+    "source": {
+      "task_id": "E02",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0007": {
+    "id": "rb-0007",
+    "title": "Validate period_days defensively before arithmetic",
+    "description": "Guard against bool/int/negative period values before using them in timedelta math.",
+    "content": "Check `isinstance(period_days, bool)` first (bool is an int subclass), then require int and > 0, raising the project's BillingError with a clear code. This prevents silent wrong results or TypeError from timedelta.",
+    "source": {
+      "task_id": "E03",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0008": {
+    "id": "rb-0008",
+    "title": "Use floor division for periodic schedules",
+    "description": "Compute the renewal index with `(after - start) // length` then bump if not strictly after.",
+    "content": "For 'every N days from start, strictly after after', compute n = (after - start) // length, renewal = start + n*length, and add one length if renewal <= after. Handle after < start by returning start + length since start itself is not a renewal.",
+    "source": {
+      "task_id": "E03",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0009": {
+    "id": "rb-0009",
+    "title": "Normalize datetimes via the project's ensure_utc helper",
+    "description": "Reuse existing clock/validation helpers instead of ad-hoc tz handling.",
+    "content": "Before comparing datetimes, pass both inputs through the repo's `ensure_utc` (or equivalent) so naive datetimes raise the standard error and comparisons are consistent. Read clock.py/errors.py early to discover such helpers.",
+    "source": {
+      "task_id": "E03",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0010": {
+    "id": "rb-0010",
+    "title": "Check idempotency against the audit log before it is cleared",
+    "description": "The first attempt stored idempotency results in a module-level dict because audit.clear() wipes the audit log, which the reviewer rejected.",
+    "content": "Team convention requires idempotency to be resolved by scanning ledgerly.audit.events() for a matching idempotency_key and returning the original record. Do not invent a side cache; instead record the key in the audit entry and look it up there, and only call audit.clear() after the lookup path is satisfied.",
+    "source": {
+      "task_id": "E04",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": false
+    },
+    "status": "active"
+  },
+  "rb-0011": {
+    "id": "rb-0011",
+    "title": "Apply approval threshold to the refund amount, not the cumulative total",
+    "description": "The final diff gated approval on the single refund amount > 500.00, which may not match the policy intent for support-initiated refunds.",
+    "content": "When implementing FIN-2026-03, accept keyword-only approved_by=None and raise BillingError(\"approval_required\") when the amount needing approval exceeds 500.00 and no approver is supplied; keep the check before mutating payment state so rejected calls leave the payment untouched.",
+    "source": {
+      "task_id": "E04",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": false
+    },
+    "status": "active"
+  },
+  "rb-0012": {
+    "id": "rb-0012",
+    "title": "Validate state before mutating, and keep idempotency first",
+    "description": "The implementation ordered idempotency lookup, then state/amount validation, then mutation and audit write, which is the correct sequence to preserve.",
+    "content": "For money-moving operations: (1) resolve idempotency_key from audit events and return the original record, (2) validate status/amount/approval and raise BillingError, (3) mutate payment.refunded_amount and status, (4) write the audit entry including idempotency_key, (5) call audit.clear(). Never write audit or mutate before validation passes.",
+    "source": {
+      "task_id": "E04",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": false
+    },
+    "status": "active"
+  },
+  "rb-0013": {
+    "id": "rb-0013",
+    "title": "Reuse existing money helpers instead of raw float math",
+    "description": "When implementing monetary functions, discover and reuse the repo's existing Decimal conversion and rounding utilities.",
+    "content": "Before writing arithmetic, grep for helpers like to_money/round_money in the money module. Converting inputs via to_money and rounding via round_money ensures consistent cent rounding and accepts both Decimal and string/float inputs.",
+    "source": {
+      "task_id": "E05",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0014": {
+    "id": "rb-0014",
+    "title": "Match the repo's error type and code conventions",
+    "description": "Inspect errors.py and sibling modules to pick the right exception class and machine-readable code.",
+    "content": "The repo defines BillingError(code, message) with short codes like 'negative_amount'. Raise that with a descriptive code (e.g. 'invalid_tax_rate') rather than bare ValueError when the module's domain errors use BillingError.",
+    "source": {
+      "task_id": "E05",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0015": {
+    "id": "rb-0015",
+    "title": "Verify boundary and rounding edge cases before finishing",
+    "description": "Run a quick script exercising inclusive bounds, half-up rounding, and invalid inputs after tests pass.",
+    "content": "After the test suite passes, manually check rate=0, rate=100, a half-cent rounding case, and out-of-range/non-numeric inputs to confirm inclusive validation and correct rounding behavior.",
+    "source": {
+      "task_id": "E05",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0016": {
+    "id": "rb-0016",
+    "title": "Check idempotency against the audit log before state validation",
+    "description": "The team convention requires idempotency keys to be checked first, before validating payment state, so retries return the original result even after state has changed.",
+    "content": "Look up the idempotency_key in ledgerly.audit.events() at the very top of the function, before any status checks. If a matching audit entry exists, return its stored result (the same record for record-returning functions) without re-applying the operation. Do not invent a separate module-level registry to work around audit.clear().",
+    "source": {
+      "task_id": "E06",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": false
+    },
+    "status": "active"
+  },
+  "rb-0017": {
+    "id": "rb-0017",
+    "title": "Don't clear the audit log when it's the idempotency source of truth",
+    "description": "Calling audit.clear() after recording destroys the entries needed for idempotency lookups, so the two conventions conflict and must be reconciled rather than patched with a side registry.",
+    "content": "If a convention says to clear the audit log after writing, but idempotency depends on reading audit.events(), do not silently add a parallel in-memory dict to compensate. Flag the conflict or follow the idempotency convention as primary, since clearing would break retry safety.",
+    "source": {
+      "task_id": "E06",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": false
+    },
+    "status": "active"
+  },
+  "rb-0018": {
+    "id": "rb-0018",
+    "title": "Match existing audit.record call signatures",
+    "description": "The final diff passed a `payment` object into audit.record, which likely doesn't match how the audit module serializes entries; verify the audit API before storing non-scalar values.",
+    "content": "Read ledgerly/audit.py fully to confirm what audit.record accepts and what audit.events() returns. Store only serializable fields (ids, amounts, keys) and reconstruct or look up the record separately rather than embedding the Payment object in the audit entry.",
+    "source": {
+      "task_id": "E06",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": false
+    },
+    "status": "active"
+  }
+}

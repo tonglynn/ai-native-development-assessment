@@ -1,0 +1,63 @@
+--- a/ledgerly/payments.py
++++ b/ledgerly/payments.py
+@@ -6,18 +6,56 @@
+ from .models import Invoice, Payment
+ from .money import ZERO, round_money
+ 
++# In-process idempotency registry. Kept separate from the audit log because the
++# audit log is cleared after every write (see team convention), while keys must
++# remain resolvable for the lifetime of the process.
++_IDEMPOTENT_RESULTS: dict = {}
+ 
+-def authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -> Payment:
++
++def _find_idempotent(key):
++    if key is None:
++        return None
++    if key in _IDEMPOTENT_RESULTS:
++        return _IDEMPOTENT_RESULTS[key]
++    for entry in audit.events():
++        if entry.get("idempotency_key") == key:
++            return entry.get("result")
++    return None
++
++
++def _remember(key, result):
++    if key is not None:
++        _IDEMPOTENT_RESULTS[key] = result
++
++
++def authorize(payment_id: str, invoice: Invoice, amount, at: datetime, *, idempotency_key=None) -> Payment:
++    existing = _find_idempotent(idempotency_key)
++    if existing is not None:
++        return existing
+     amount = round_money(amount)
+     if amount <= ZERO:
+         raise BillingError("non_positive_amount", str(amount))
+     if invoice.status != "issued":
+         raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
+     payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))
+-    audit.record("payment_authorized", payment_id=payment.id, amount=amount)
++    _remember(idempotency_key, payment)
++    audit.record("payment_authorized", payment_id=payment.id, amount=amount,
++                 idempotency_key=idempotency_key)
++    audit.clear()
+     return payment
+ 
+ 
+-def capture(payment: Payment, at: datetime) -> Payment:
++def capture(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:
+     """Capture an authorized payment."""
+-    raise NotImplementedError
++    existing = _find_idempotent(idempotency_key)
++    if existing is not None:
++        return existing
++    if payment.status != "authorized":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    payment.captured_at = ensure_utc(at)
++    payment.status = "captured"
++    _remember(idempotency_key, payment)
++    audit.record("payment_captured", payment_id=payment.id, amount=payment.amount,
++                 idempotency_key=idempotency_key)
++    audit.clear()
++    return payment

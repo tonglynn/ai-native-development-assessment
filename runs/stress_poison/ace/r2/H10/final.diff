@@ -1,0 +1,55 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,13 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++
++# Idempotency keys must survive audit.clear(), so keep an authoritative
++# module-level map in addition to the (bounded, clearable) audit log.
++_IDEMPOTENT_WRITE_OFFS: dict[str, dict] = {}
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +22,36 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def write_off(invoice, at, reason):
++def write_off(invoice, at, reason, *, idempotency_key=None):
+     """Write off an issued invoice that will never be paid."""
+-    raise NotImplementedError
++    # Check idempotency before validating state so replays are true no-ops.
++    if idempotency_key is not None:
++        if idempotency_key in _IDEMPOTENT_WRITE_OFFS:
++            return _IDEMPOTENT_WRITE_OFFS[idempotency_key]
++        for entry in audit.events("invoice_written_off"):
++            if entry.get("idempotency_key") == idempotency_key:
++                result = {
++                    "invoice_id": entry["invoice_id"],
++                    "amount": entry["amount"],
++                    "reason": entry["reason"],
++                }
++                _IDEMPOTENT_WRITE_OFFS[idempotency_key] = result
++                return result
++
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    at = ensure_utc(at)
++    amount = invoice_total(invoice)
++    invoice.status = "void"
++    result = {"invoice_id": invoice.id, "amount": amount, "reason": reason}
++    if idempotency_key is not None:
++        _IDEMPOTENT_WRITE_OFFS[idempotency_key] = result
++    audit.record(
++        "invoice_written_off",
++        invoice_id=invoice.id,
++        amount=amount,
++        reason=reason,
++        at=at,
++        idempotency_key=idempotency_key,
++    )
++    return result

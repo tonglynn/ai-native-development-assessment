@@ -1,0 +1,23 @@
+--- a/ledgerly/invoice.py
++++ b/ledgerly/invoice.py
+@@ -27,6 +27,17 @@
+     return invoice
+ 
+ 
+-def average_unit_price(invoice: Invoice):
+-    """Quantity-weighted average unit price of the invoice's lines."""
+-    raise NotImplementedError
++def average_unit_price(invoice: Invoice) -> Decimal:
++    """Quantity-weighted average unit price of the invoice's lines.
++
++    Computed as the sum of quantity x unit price divided by the total
++    quantity. An invoice without lines has an average of zero.
++    """
++    total_quantity = sum(line.quantity for line in invoice.lines)
++    if not invoice.lines or total_quantity == 0:
++        return ZERO
++    weighted_total = sum(
++        (to_money(line.unit_price) * line.quantity for line in invoice.lines),
++        ZERO,
++    )
++    return round_money(weighted_total / total_quantity)

@@ -1,0 +1,64 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,16 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money, to_money
++
++APPROVAL_THRESHOLD = to_money("500.00")
++
++# Idempotency keys already applied. Kept separately from the audit log because
++# the in-process audit log is cleared after each write to bound its growth.
++_APPLIED_KEYS: dict[str, object] = {}
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +25,42 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def refund(payment, amount, at):
++def refund(payment, amount, at, *, idempotency_key=None, approved_by=None):
+     """Refund part or all of a captured payment."""
+-    raise NotImplementedError
++    if idempotency_key is not None:
++        for entry in audit.events():
++            if entry.get("idempotency_key") == idempotency_key:
++                return payment
++        if idempotency_key in _APPLIED_KEYS:
++            return payment
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    amount = round_money(to_money(amount))
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if amount > APPROVAL_THRESHOLD and not approved_by:
++        raise BillingError(
++            "approval_required",
++            f"refund of {amount} requires a second approver",
++        )
++    refunded = round_money(to_money(payment.refunded_amount))
++    if refunded + amount > payment.amount:
++        raise BillingError(
++            "refund_exceeds_captured",
++            f"{refunded + amount} > {payment.amount}",
++        )
++    ensure_utc(at)
++    payment.refunded_amount = round_money(refunded + amount)
++    if payment.refunded_amount == payment.amount:
++        payment.status = "refunded"
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        idempotency_key=idempotency_key,
++        approved_by=approved_by,
++    )
++    if idempotency_key is not None:
++        _APPLIED_KEYS[idempotency_key] = payment
++    audit.clear()
++    return payment

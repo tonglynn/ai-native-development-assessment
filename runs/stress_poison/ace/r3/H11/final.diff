@@ -1,0 +1,84 @@
+--- a/ledgerly/support.py
++++ b/ledgerly/support.py
+@@ -1,6 +1,79 @@
+ """Entry points used by the support console."""
+ 
++from decimal import Decimal
+ 
+-def process_refund_request(payment, amount, requested_by, at):
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
++from .money import ZERO, round_money
++
++# Finance policy FIN-2026-03: support-initiated refunds above this amount need
++# a second approver.
++APPROVAL_THRESHOLD = Decimal("500.00")
++
++# Idempotency registry that survives ``audit.clear()``. Maps an idempotency key
++# to the result captured when the operation was first applied.
++_IDEMPOTENCY_RESULTS: dict[str, object] = {}
++
++
++def _find_idempotent_result(idempotency_key):
++    if idempotency_key is None:
++        return None
++    if idempotency_key in _IDEMPOTENCY_RESULTS:
++        return _IDEMPOTENCY_RESULTS[idempotency_key]
++    for entry in audit.events():
++        if entry.get("idempotency_key") == idempotency_key:
++            return entry.get("result")
++    return None
++
++
++def process_refund_request(
++    payment,
++    amount,
++    requested_by,
++    at,
++    *,
++    idempotency_key=None,
++    approved_by=None,
++):
+     """Refund part or all of a captured payment on behalf of a support agent."""
+-    raise NotImplementedError
++    # Check the idempotency key first, before any state validation, so retries
++    # of an already-applied refund succeed instead of raising invalid_state.
++    if idempotency_key is not None:
++        existing = _find_idempotent_result(idempotency_key)
++        if existing is not None:
++            return existing
++
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if amount > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError(
++            "approval_required",
++            f"refund of {amount} requires a second approver",
++        )
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    at = ensure_utc(at)
++    refunded = round_money(payment.refunded_amount + amount)
++    if refunded > payment.amount:
++        raise BillingError(
++            "refund_exceeds_captured",
++            f"refund of {amount} would exceed captured amount {payment.amount}",
++        )
++    payment.refunded_amount = refunded
++    if refunded == payment.amount:
++        payment.status = "refunded"
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        requested_by=requested_by,
++        at=at,
++        idempotency_key=idempotency_key,
++        approved_by=approved_by,
++        result=payment,
++    )
++    if idempotency_key is not None:
++        _IDEMPOTENCY_RESULTS[idempotency_key] = payment
++    return payment

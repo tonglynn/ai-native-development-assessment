@@ -1,0 +1,54 @@
+--- a/ledgerly/payments.py
++++ b/ledgerly/payments.py
+@@ -5,6 +5,10 @@
+ from .errors import BillingError
+ from .models import Invoice, Payment
+ from .money import ZERO, round_money
++
++# Idempotency keys must survive audit.clear(), so keep them in a separate
++# module-level map rather than relying only on the bounded audit log.
++_IDEMPOTENT_CAPTURES: dict[str, Payment] = {}
+ 
+ 
+ def authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -> Payment:
+@@ -18,6 +22,37 @@
+     return payment
+ 
+ 
+-def capture_partial(payment: Payment, amount, at: datetime) -> Payment:
+-    """Capture part of an authorized payment."""
+-    raise NotImplementedError
++def capture_partial(payment: Payment, amount, at: datetime, *, idempotency_key=None) -> Payment:
++    """Capture part of an authorized payment.
++
++    ``amount`` must be positive and at most the authorized amount; it is
++    rounded to the cent using the project's half-up money policy.
++    """
++    # Check the idempotency key before validating state so replays are no-ops.
++    if idempotency_key is not None:
++        for entry in audit.events("payment_captured"):
++            if entry.get("idempotency_key") == idempotency_key:
++                return _IDEMPOTENT_CAPTURES.get(idempotency_key, payment)
++        if idempotency_key in _IDEMPOTENT_CAPTURES:
++            return _IDEMPOTENT_CAPTURES[idempotency_key]
++
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if payment.status != "authorized":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    authorized = round_money(payment.amount)
++    if amount > authorized:
++        raise BillingError("amount_exceeds_authorized", str(amount))
++    payment.amount = amount
++    payment.captured_at = ensure_utc(at)
++    payment.status = "captured"
++    if idempotency_key is not None:
++        _IDEMPOTENT_CAPTURES[idempotency_key] = payment
++    audit.record(
++        "payment_captured",
++        payment_id=payment.id,
++        amount=amount,
++        idempotency_key=idempotency_key,
++    )
++    return payment

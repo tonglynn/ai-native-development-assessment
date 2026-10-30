@@ -1,0 +1,173 @@
+{
+  "task_id": "H10",
+  "group": "heldout",
+  "repo": "ledgerly_v1",
+  "repo_version": "1.0.0",
+  "conventions": [
+    "C2",
+    "C3",
+    "C4",
+    "C5"
+  ],
+  "condition": "reasoningbank",
+  "model": "deepseek/deepseek-flash",
+  "thinking": "off",
+  "first_pass": false,
+  "final_pass": true,
+  "n_attempts": 2,
+  "steps": 15,
+  "cost_usd": 0.003566,
+  "seconds": 27.2,
+  "shown_notes": [
+    "rb-0010",
+    "rb-0016",
+    "rb-0012",
+    "rb-0009",
+    "rb-0002",
+    "rb-0003"
+  ],
+  "retrieved_notes": [
+    "rb-0010",
+    "rb-0016",
+    "rb-0012",
+    "rb-0009",
+    "rb-0002",
+    "rb-0003",
+    "rb-0004",
+    "rb-0018",
+    "rb-0001",
+    "rb-0005"
+  ],
+  "injected_notes": [
+    "rb-0010",
+    "rb-0016",
+    "rb-0012",
+    "rb-0009",
+    "rb-0002",
+    "rb-0003"
+  ],
+  "memory_tokens_approx": 727,
+  "agent_test_runs": 3,
+  "files_changed": [
+    "ledgerly/adjustments.py"
+  ],
+  "notes_context": "Memory items from past tasks:\n- [rb-0010] Idempotency must survive audit.clear(): The team convention requires calling audit.clear() after writing, which destroys the audit-based idempotency lookup; a separate persistent registry is needed.\n  When a convention says 'check audit.events() for the key' but another says 'call audit.clear() after each write', the audit log cannot be the idempotency store. Keep a module-level dict mapping idempotency_key -> result (or payment id) and consult it first, before state validation, so repeated calls return the original record without re-applying.\n- [rb-0016] Check idempotency against the audit log, not a private registry: The team convention requires looking up prior operations via ledgerly.audit.events() by idempotency_key; inventing a module-level dict diverges from the convention and breaks across processes.\n  When a convention says 'if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result', implement exactly that lookup. Do not substitute a private in-memory registry, and do not reason that audit.clear() makes the log unusable — follow the stated mechanism.\n- [rb-0012] Verify money/state helpers against real models: Refund logic depends on Payment fields (amount, refunded_amount, status) and money helpers (to_money, round_money, ZERO); confirm their exact semantics before writing comparisons.\n  Inspect models.py and money.py to confirm field names, Decimal vs float types, and rounding behavior, then compare rounded Decimals consistently (e.g. refunded + amount > payment.amount) and set status to 'refunded' only when the running total equals the captured amount.\n- [rb-0009] Verify edge cases with a quick script after tests pass: Passing tests isn't enough; probe boundary inputs (exact boundary, before start, just-before boundary) with an ad-hoc script.\n  After the test suite passes, run a short inline Python snippet exercising exact-boundary, pre-start, and off-by-one-second cases. This catches strict-vs-inclusive semantics bugs that a single happy-path test misses.\n- [rb-0002] Guard division with a zero-total check: For weighted-average or ratio computations, check the denominator before dividing and return the documented fallback (ZERO) when it is zero.\n  Compute total_quantity first; if it is falsy, return ZERO immediately. This satisfies the 'no lines means zero' requirement and avoids ZeroDivisionError without try/except.\n- [rb-0003] Read the target module and tests before editing: Start by reading the file to be modified, related models/utilities, and any existing tests for the feature to align signatures and behavior.\n  Cat invoice.py, models.py, money.py, and tests/test_average_unit_price.py before writing code. This reveals the exact stub signature, dataclass field names (line.quantity, line.unit_price), and expected return type, enabling a first-attempt pass.",
+  "cited_notes": [
+    "rb-0003"
+  ],
+  "retrieval_debug": {
+    "scores": {
+      "rb-0010": 5.247,
+      "rb-0016": 5.247,
+      "rb-0012": 4.605,
+      "rb-0009": 2.944,
+      "rb-0002": 2.303,
+      "rb-0003": 2.303
+    },
+    "retriever": "lexical",
+    "retrieval_ms": 3.5,
+    "trace": {
+      "excluded": {},
+      "candidates": 18,
+      "retrieved": [
+        "rb-0010",
+        "rb-0016",
+        "rb-0012",
+        "rb-0009",
+        "rb-0002",
+        "rb-0003",
+        "rb-0004",
+        "rb-0018",
+        "rb-0001",
+        "rb-0005"
+      ],
+      "injected": [
+        "rb-0010",
+        "rb-0016",
+        "rb-0012",
+        "rb-0009",
+        "rb-0002",
+        "rb-0003"
+      ],
+      "texts": {
+        "rb-0001": "Reuse existing money helpers for Decimal math When implementing monetary calculations, use the project's existing money utilities (to_money, round_money, ZERO) instead of raw Decimal arithmetic. Inspect ledgerly/money.py and models.py first to learn the money policy. Wrap inputs with to_money, seed ",
+        "rb-0002": "Guard division with a zero-total check For weighted-average or ratio computations, check the denominator before dividing and return the documented fallback (ZERO) when it is zero. Compute total_quantity first; if it is falsy, return ZERO immediately. This satisfies the 'no lines means zero' requirem",
+        "rb-0003": "Read the target module and tests before editing Start by reading the file to be modified, related models/utilities, and any existing tests for the feature to align signatures and behavior. Cat invoice.py, models.py, money.py, and tests/test_average_unit_price.py before writing code. This reveals the",
+        "rb-0004": "Match existing error codes and validation patterns before implementing Grep the codebase for similar validation (state checks, amount checks) to reuse established BillingError codes and message formats. Before writing validation logic, search for existing patterns like `invalid_state` or `negative_a",
+        "rb-0005": "Guard bool when validating integer types Python's bool is a subclass of int, so isinstance(x, int) accepts True/False; explicitly reject bools for integer-only parameters. When a parameter must be a positive integer, check `isinstance(x, bool) or not isinstance(x, int)` before the range check. Other",
+        "rb-0006": "Normalize money inputs through the project's to_money helper Convert raw unit_price values with the existing to_money/round_money utilities before comparing or storing, rather than assuming Decimal. Call `to_money(unit_price)` to coerce inputs, then compare against the module's ZERO constant for neg",
+        "rb-0007": "Reuse existing timezone-normalization helpers When implementing date arithmetic, normalize inputs with the repo's existing UTC helper rather than assuming tz-awareness. Before writing datetime logic, grep for helpers like ensure_utc in sibling modules (e.g. subscriptions.current_period) and apply th",
+        "rb-0008": "Compute periodic occurrences with floor division For 'first occurrence strictly after t' with fixed period from a start, use (t - start) // period then add one period. Compute n = (after - start) // length, then renewal = start + (n+1)*length, with a small while-loop guard to enforce strict inequali",
+        "rb-0009": "Verify edge cases with a quick script after tests pass Passing tests isn't enough; probe boundary inputs (exact boundary, before start, just-before boundary) with an ad-hoc script. After the test suite passes, run a short inline Python snippet exercising exact-boundary, pre-start, and off-by-one-sec",
+        "rb-0010": "Idempotency must survive audit.clear() The team convention requires calling audit.clear() after writing, which destroys the audit-based idempotency lookup; a separate persistent registry is needed. When a convention says 'check audit.events() for the key' but another says 'call audit.clear() after e",
+        "rb-0011": "Read all conventions before designing the signature The first attempt missed the approval-threshold and idempotency conventions entirely, causing rejection; the final diff added them but still failed. Scan the full convention list up front and bake every cross-cutting requirement (keyword-only idemp",
+        "rb-0012": "Verify money/state helpers against real models Refund logic depends on Payment fields (amount, refunded_amount, status) and money helpers (to_money, round_money, ZERO); confirm their exact semantics before writing comparisons. Inspect models.py and money.py to confirm field names, Decimal vs float t",
+        "rb-0013": "Reuse existing money helpers instead of raw arithmetic When implementing a pricing/money function, inspect the repo's money module and reuse its conversion and rounding helpers. Before writing arithmetic, read sibling modules (e.g. money.py, payments.py) to find helpers like to_money/round_money and",
+        "rb-0014": "Match the project's error type and code conventions Grep for existing raise statements to learn which exception class and code-string style the project uses before adding validation. Validation errors should use the project's domain exception (e.g. BillingError(code, message)) with a short snake_cas",
+        "rb-0015": "Read the visible tests to pin down input/output types Check tests and call sites to determine whether inputs are Decimal, float, or int, and what return type is expected. A test like add_tax(Decimal('100.00'), 8) == 108 reveals Decimal inputs and numeric comparison. Normalize inputs through the proj",
+        "rb-0016": "Check idempotency against the audit log, not a private registry The team convention requires looking up prior operations via ledgerly.audit.events() by idempotency_key; inventing a module-level dict diverges from the convention and breaks across processes. When a convention says 'if an audit entry w",
+        "rb-0017": "Reconcile conflicting conventions before coding The idempotency convention depends on audit.events() while the clear() convention empties the log; the agent resolved this by abandoning the audit log instead of flagging the conflict. When two stated conventions appear to conflict, prefer the explicit",
+        "rb-0018": "Apply the full convention checklist to every new mutating function The first attempt omitted idempotency_key entirely; the final attempt added it but still used the wrong lookup source and ordering. For any function that changes a payment/credit/invoice balance: add keyword-only idempotency_key=None"
+      },
+      "memory_tokens_approx": 727
+    }
+  },
+  "leaks": [],
+  "attempts": [
+    {
+      "n": 1,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 6,
+      "seconds": 10.5,
+      "tokens": {
+        "prompt": 24010,
+        "completion": 1262,
+        "cache_hit": 18816,
+        "reasoning": 0
+      },
+      "cost_usd": 0.001593,
+      "cited": [
+        "rb-0003"
+      ],
+      "leaks": [],
+      "passed": false,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [
+        "C5"
+      ],
+      "tests_failed": [
+        "test_conv_c5_idempotent"
+      ],
+      "review_comments": [
+        "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."
+      ]
+    },
+    {
+      "n": 2,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 9,
+      "seconds": 16.7,
+      "tokens": {
+        "prompt": 38137,
+        "completion": 1814,
+        "cache_hit": 32896,
+        "reasoning": 0
+      },
+      "cost_usd": 0.001973,
+      "cited": [],
+      "leaks": [],
+      "passed": true,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [],
+      "tests_failed": [],
+      "review_comments": []
+    }
+  ],
+  "memory_events": [],
+  "phase": "heldout",
+  "rep": 2
+}

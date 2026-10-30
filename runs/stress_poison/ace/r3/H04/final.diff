@@ -1,0 +1,56 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,20 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from decimal import Decimal
++
++from . import audit
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money
++
++# Finance policy FIN-2026-03: support-initiated credits above this amount
++# require a second approver.
++APPROVAL_THRESHOLD = Decimal("500.00")
++
++# Idempotency registry. Kept separate from the audit log because the audit
++# log is cleared between operations (see INC-204); retries must still find
++# the original result.
++_IDEMPOTENCY: dict[str, dict] = {}
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +29,30 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def issue_credit_note(invoice, amount, reason):
++def issue_credit_note(invoice, amount, reason, *, idempotency_key=None, approved_by=None):
+     """Credit part of an issued invoice back to the customer."""
+-    raise NotImplementedError
++    # Idempotency is checked first, before any state validation, so retries of
++    # an already-applied operation succeed instead of raising.
++    if idempotency_key is not None and idempotency_key in _IDEMPOTENCY:
++        return _IDEMPOTENCY[idempotency_key]
++
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    if amount > invoice_total(invoice):
++        raise BillingError("amount_exceeds_invoice_total", str(amount))
++    if amount > APPROVAL_THRESHOLD and not approved_by:
++        raise BillingError("approval_required")
++
++    note = {"invoice_id": invoice.id, "amount": amount, "reason": reason}
++    audit.record(
++        "credit_note_issued",
++        invoice_id=invoice.id,
++        amount=amount,
++        idempotency_key=idempotency_key,
++    )
++    if idempotency_key is not None:
++        _IDEMPOTENCY[idempotency_key] = note
++    return note

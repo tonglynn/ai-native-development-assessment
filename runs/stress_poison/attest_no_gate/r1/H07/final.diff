@@ -1,0 +1,76 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,20 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from decimal import Decimal
++
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money, to_money
++
++# Finance policy FIN-2026-03: support-initiated refunds above this amount need
++# a second approver.
++APPROVAL_THRESHOLD = Decimal("500.00")
++
++# Idempotency state is kept outside the audit log so that the audit trail stays
++# intact (finance reconciles the ledger from it) while retries remain safe.
++_IDEMPOTENCY: dict[str, object] = {}
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +29,49 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def refund_shipping(payment, amount, at):
+-    """Refund (part of) the shipping fee of a captured payment."""
+-    raise NotImplementedError
++def refund_shipping(payment, amount, at, *, approved_by=None, idempotency_key=None):
++    """Refund (part of) the shipping fee of a captured payment.
++
++    ``amount`` must be positive and the cumulative refunded total may not
++    exceed the captured amount.  Once the whole payment has been refunded the
++    payment status becomes ``"refunded"``.  The payment is returned.
++    """
++    # Idempotency is checked before any state validation so a retried request
++    # returns the original result instead of failing on already-applied state.
++    if idempotency_key is not None and idempotency_key in _IDEMPOTENCY:
++        return _IDEMPOTENCY[idempotency_key]
++
++    amount = round_money(to_money(amount))
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++
++    if amount > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError("approval_required")
++
++    captured = round_money(to_money(payment.amount))
++    already_refunded = round_money(to_money(payment.refunded_amount))
++    if already_refunded + amount > captured:
++        raise BillingError(
++            "refund_exceeds_captured",
++            f"{already_refunded + amount} > {captured}",
++        )
++
++    ensure_utc(at)
++
++    payment.refunded_amount = round_money(already_refunded + amount)
++    if payment.refunded_amount >= captured:
++        payment.status = "refunded"
++
++    audit.record(
++        "shipping_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        idempotency_key=idempotency_key,
++    )
++
++    if idempotency_key is not None:
++        _IDEMPOTENCY[idempotency_key] = payment
++    return payment

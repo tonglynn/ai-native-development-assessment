@@ -1,0 +1,225 @@
+{
+  "task_id": "H06",
+  "group": "heldout",
+  "repo": "ledgerly_v1",
+  "repo_version": "1.0.0",
+  "conventions": [
+    "C2",
+    "C4",
+    "C5"
+  ],
+  "condition": "ace",
+  "model": "deepseek/deepseek-flash",
+  "thinking": "off",
+  "first_pass": false,
+  "final_pass": true,
+  "n_attempts": 2,
+  "steps": 11,
+  "cost_usd": 0.002898,
+  "seconds": 19.8,
+  "shown_notes": [
+    "ace-0001",
+    "ace-0002",
+    "ace-0003",
+    "ace-0004",
+    "ace-0005",
+    "ace-0006",
+    "ace-0007",
+    "ace-0008",
+    "ace-0009",
+    "ace-0010",
+    "ace-0011",
+    "ace-0012",
+    "ace-0013",
+    "ace-0014",
+    "ace-0015",
+    "ace-0016",
+    "ace-0017"
+  ],
+  "retrieved_notes": [
+    "ace-0001",
+    "ace-0002",
+    "ace-0003",
+    "ace-0004",
+    "ace-0005",
+    "ace-0006",
+    "ace-0007",
+    "ace-0008",
+    "ace-0009",
+    "ace-0010",
+    "ace-0011",
+    "ace-0012",
+    "ace-0013",
+    "ace-0014",
+    "ace-0015",
+    "ace-0016",
+    "ace-0017"
+  ],
+  "injected_notes": [
+    "ace-0001",
+    "ace-0002",
+    "ace-0003",
+    "ace-0004",
+    "ace-0005",
+    "ace-0006",
+    "ace-0007",
+    "ace-0008",
+    "ace-0009",
+    "ace-0010",
+    "ace-0011",
+    "ace-0012",
+    "ace-0013",
+    "ace-0014",
+    "ace-0015",
+    "ace-0016",
+    "ace-0017"
+  ],
+  "memory_tokens_approx": 1239,
+  "agent_test_runs": 2,
+  "files_changed": [
+    "ledgerly/payments.py"
+  ],
+  "notes_context": "Playbook (accumulated from past tasks):\n## strategies\n[ace-0002] helpful=3 harmful=0 :: When adding a money-computing function, check existing sibling functions (e.g. line_total, invoice_total) for the project's rounding/helper conventions and mirror them, including wrapping the final result in round_money.\n[ace-0004] helpful=2 harmful=0 :: When validating an integer parameter, reject bool explicitly (isinstance(x, bool)) before the int check, since bool is a subclass of int and True/False would otherwise pass as 1/0.\n[ace-0005] helpful=4 harmful=0 :: Mirror existing error codes and message formats from sibling functions (e.g. invalid_state with f\"invoice {invoice.id} is {invoice.status}\") so new validation paths stay consistent with the codebase's BillingError conventions.\n[ace-0007] helpful=0 harmful=0 :: When computing a periodic recurrence (e.g. next renewal from started_at + n*period_days), normalize both the anchor and the query time with the project's ensure_utc helper before arithmetic, and use floor division on the timedelta to find the period index, then bump by one if the candidate is not strictly after the query.\n[ace-0010] helpful=1 harmful=0 :: When a task adds a money-moving or balance-changing operation, proactively implement the project's cross-cutting conventions (idempotency_key, approval thresholds, audit logging) even if the issue text omits them; check README/CHANGELOG/audit.py and sibling functions for these requirements before writing the function.\n[ace-0013] helpful=0 harmful=0 :: When a numeric parameter must fall within a range (e.g. a tax rate 0-100), coerce it via Decimal(str(x)) inside a try/except and reject non-finite values (NaN/Infinity) with is_finite() before the range comparison, raising the project's BillingError with an invalid_* code.\n[ace-0015] helpful=0 harmful=0 :: When a team convention requires idempotency, check the key against the persistent store BEFORE any state validation, and return the original record (not a re-fetched or mutated one) so replays are true no-ops; store the record in the persistent map at the same time you write the audit entry.\n## common_mistakes\n[ace-0003] helpful=2 harmful=0 :: Passing visible tests is not sufficient for money functions: verify rounding convention compliance explicitly, since hidden tests check half-up rounding that default Decimal division/round() will fail.\n[ace-0006] helpful=1 harmful=0 :: Don't assume a numeric input is already Decimal; coerce with to_money() before round_money() and comparisons, since callers may pass int, str, or float and raw comparisons/rounding will fail or misbehave.\n[ace-0008] helpful=0 harmful=0 :: For 'strictly after' recurrence queries, don't forget the boundary case where the query equals a renewal instant: the candidate must be advanced by one full period, and queries before started_at should return started_at + one period (the start itself is not a renewal).\n[ace-0011] helpful=1 harmful=0 :: Don't assume the issue description is the full spec: review comments and team conventions may require extra keyword-only parameters (e.g. idempotency_key, approved_by) and audit side effects. Passing visible tests does not mean the hidden convention checks pass.\n[ace-0014] helpful=0 harmful=0 :: Don't validate a percentage/rate by comparing the raw input directly; convert to Decimal first, since str/float inputs and NaN/Infinity would otherwise slip past range checks or raise unexpected TypeError instead of the project's BillingError.\n[ace-0016] helpful=0 harmful=0 :: Don't rely on audit.events() alone for idempotency when the convention also mandates audit.clear(): the log is wiped after each operation, so a replay would miss the key. Keep a module-level persistent map keyed by idempotency_key as the authoritative replay source.\n## domain_facts\n[ace-0001] helpful=3 harmful=0 :: In ledgerly, money values must be rounded with ledgerly.money.round_money (half-up to the cent); Python's round() and bare Decimal.quantize() use banker's rounding and produce wrong invoice totals.\n[ace-0009] helpful=2 harmful=0 :: In ledgerly, datetime inputs are validated/normalized via ledgerly.clock.ensure_utc, which raises BillingError('invalid_datetime', ...) for non-datetimes and BillingError('naive_datetime', ...) for tz-naive values; use it rather than manual tzinfo checks.\n[ace-0012] helpful=1 harmful=0 :: In ledgerly, idempotency must survive audit.clear(): store idempotency keys in a separate persistent map (not only in the bounded _EVENTS log), and check the key before validating state so replays return the original result without re-applying the operation.\n[ace-0017] helpful=0 harmful=0 :: In ledgerly, audit.record() writes to a bounded in-process _EVENTS log and audit.clear() empties it; idempotency keys must therefore be persisted in a separate module-level dict (e.g. _IDEMPOTENT_CAPTURES) that survives clear(), and the key must be included in the audit entry payload.",
+  "cited_notes": [
+    "ace-0005",
+    "ace-0009",
+    "ace-0010",
+    "ace-0011",
+    "ace-0015",
+    "ace-0016",
+    "ace-0017"
+  ],
+  "retrieval_debug": {
+    "trace": {
+      "excluded": {},
+      "candidates": 17,
+      "retrieved": [
+        "ace-0001",
+        "ace-0002",
+        "ace-0003",
+        "ace-0004",
+        "ace-0005",
+        "ace-0006",
+        "ace-0007",
+        "ace-0008",
+        "ace-0009",
+        "ace-0010",
+        "ace-0011",
+        "ace-0012",
+        "ace-0013",
+        "ace-0014",
+        "ace-0015",
+        "ace-0016",
+        "ace-0017"
+      ],
+      "injected": [
+        "ace-0001",
+        "ace-0002",
+        "ace-0003",
+        "ace-0004",
+        "ace-0005",
+        "ace-0006",
+        "ace-0007",
+        "ace-0008",
+        "ace-0009",
+        "ace-0010",
+        "ace-0011",
+        "ace-0012",
+        "ace-0013",
+        "ace-0014",
+        "ace-0015",
+        "ace-0016",
+        "ace-0017"
+      ],
+      "memory_tokens_approx": 1239,
+      "texts": {
+        "ace-0001": "domain_facts In ledgerly, money values must be rounded with ledgerly.money.round_money (half-up to the cent); Python's round() and bare Decimal.quantize() use banker's rounding and produce wrong invoice totals.",
+        "ace-0002": "strategies When adding a money-computing function, check existing sibling functions (e.g. line_total, invoice_total) for the project's rounding/helper conventions and mirror them, including wrapping the final result in round_money.",
+        "ace-0003": "common_mistakes Passing visible tests is not sufficient for money functions: verify rounding convention compliance explicitly, since hidden tests check half-up rounding that default Decimal division/round() will fail.",
+        "ace-0004": "strategies When validating an integer parameter, reject bool explicitly (isinstance(x, bool)) before the int check, since bool is a subclass of int and True/False would otherwise pass as 1/0.",
+        "ace-0005": "strategies Mirror existing error codes and message formats from sibling functions (e.g. invalid_state with f\"invoice {invoice.id} is {invoice.status}\") so new validation paths stay consistent with the codebase's BillingError conventions.",
+        "ace-0006": "common_mistakes Don't assume a numeric input is already Decimal; coerce with to_money() before round_money() and comparisons, since callers may pass int, str, or float and raw comparisons/rounding will fail or misbehave.",
+        "ace-0007": "strategies When computing a periodic recurrence (e.g. next renewal from started_at + n*period_days), normalize both the anchor and the query time with the project's ensure_utc helper before arithmetic, and use floor division on the timedelta to find the period index, then bump by one if the candidat",
+        "ace-0008": "common_mistakes For 'strictly after' recurrence queries, don't forget the boundary case where the query equals a renewal instant: the candidate must be advanced by one full period, and queries before started_at should return started_at + one period (the start itself is not a renewal).",
+        "ace-0009": "domain_facts In ledgerly, datetime inputs are validated/normalized via ledgerly.clock.ensure_utc, which raises BillingError('invalid_datetime', ...) for non-datetimes and BillingError('naive_datetime', ...) for tz-naive values; use it rather than manual tzinfo checks.",
+        "ace-0010": "strategies When a task adds a money-moving or balance-changing operation, proactively implement the project's cross-cutting conventions (idempotency_key, approval thresholds, audit logging) even if the issue text omits them; check README/CHANGELOG/audit.py and sibling functions for these requirement",
+        "ace-0011": "common_mistakes Don't assume the issue description is the full spec: review comments and team conventions may require extra keyword-only parameters (e.g. idempotency_key, approved_by) and audit side effects. Passing visible tests does not mean the hidden convention checks pass.",
+        "ace-0012": "domain_facts In ledgerly, idempotency must survive audit.clear(): store idempotency keys in a separate persistent map (not only in the bounded _EVENTS log), and check the key before validating state so replays return the original result without re-applying the operation.",
+        "ace-0013": "strategies When a numeric parameter must fall within a range (e.g. a tax rate 0-100), coerce it via Decimal(str(x)) inside a try/except and reject non-finite values (NaN/Infinity) with is_finite() before the range comparison, raising the project's BillingError with an invalid_* code.",
+        "ace-0014": "common_mistakes Don't validate a percentage/rate by comparing the raw input directly; convert to Decimal first, since str/float inputs and NaN/Infinity would otherwise slip past range checks or raise unexpected TypeError instead of the project's BillingError.",
+        "ace-0015": "strategies When a team convention requires idempotency, check the key against the persistent store BEFORE any state validation, and return the original record (not a re-fetched or mutated one) so replays are true no-ops; store the record in the persistent map at the same time you write the audit ent",
+        "ace-0016": "common_mistakes Don't rely on audit.events() alone for idempotency when the convention also mandates audit.clear(): the log is wiped after each operation, so a replay would miss the key. Keep a module-level persistent map keyed by idempotency_key as the authoritative replay source.",
+        "ace-0017": "domain_facts In ledgerly, audit.record() writes to a bounded in-process _EVENTS log and audit.clear() empties it; idempotency keys must therefore be persisted in a separate module-level dict (e.g. _IDEMPOTENT_CAPTURES) that survives clear(), and the key must be included in the audit entry payload."
+      }
+    }
+  },
+  "leaks": [],
+  "attempts": [
+    {
+      "n": 1,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 5,
+      "seconds": 7.9,
+      "tokens": {
+        "prompt": 17424,
+        "completion": 769,
+        "cache_hit": 13056,
+        "reasoning": 0
+      },
+      "cost_usd": 0.001156,
+      "cited": [
+        "ace-0005",
+        "ace-0009"
+      ],
+      "leaks": [],
+      "passed": false,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [
+        "C4",
+        "C5"
+      ],
+      "tests_failed": [
+        "test_conv_c4_audit_entry",
+        "test_conv_c5_idempotent"
+      ],
+      "review_comments": [
+        "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record(\"<past_tense_event>\", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against (payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries.",
+        "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."
+      ]
+    },
+    {
+      "n": 2,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 6,
+      "seconds": 11.8,
+      "tokens": {
+        "prompt": 29730,
+        "completion": 1648,
+        "cache_hit": 25216,
+        "reasoning": 0
+      },
+      "cost_usd": 0.001742,
+      "cited": [
+        "ace-0005",
+        "ace-0010",
+        "ace-0011",
+        "ace-0015",
+        "ace-0016",
+        "ace-0017"
+      ],
+      "leaks": [],
+      "passed": true,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [],
+      "tests_failed": [],
+      "review_comments": []
+    }
+  ],
+  "memory_events": [],
+  "phase": "heldout",
+  "rep": 2
+}

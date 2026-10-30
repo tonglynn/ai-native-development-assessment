@@ -1,0 +1,75 @@
+--- a/ledgerly/support.py
++++ b/ledgerly/support.py
+@@ -1,6 +1,69 @@
+ """Entry points used by the support console."""
+ 
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
++from .money import ZERO, round_money
+ 
+-def process_refund_request(payment, amount, requested_by, at):
+-    """Refund part or all of a captured payment on behalf of a support agent."""
+-    raise NotImplementedError
++APPROVAL_THRESHOLD = round_money("500.00")
++
++
++def process_refund_request(
++    payment,
++    amount,
++    requested_by,
++    at,
++    *,
++    approved_by=None,
++    idempotency_key=None,
++):
++    """Refund part or all of a captured payment on behalf of a support agent.
++
++    ``amount`` is the text the support agent typed; it is rounded to the cent
++    using the finance rounding policy.  Only captured payments can be refunded,
++    the amount must be positive, and the running total refunded may never
++    exceed the captured amount.
++
++    Money-moving operations accept an optional keyword-only
++    ``idempotency_key``.  When supplied, a prior audit entry with the same key
++    is returned without applying the refund again (INC-204).
++    """
++    # Idempotency check must happen first, before validating state, so that a
++    # retry of an already-applied refund returns the original result.
++    if idempotency_key is not None:
++        for entry in audit.events("payment_refunded"):
++            if entry.get("idempotency_key") == idempotency_key:
++                return entry.get("payment", payment)
++
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++
++    refunded = round_money(payment.refunded_amount)
++    remaining = round_money(payment.amount) - refunded
++    if amount > remaining:
++        raise BillingError("refund_exceeds_captured", str(amount))
++
++    if amount > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError("approval_required")
++
++    at = ensure_utc(at)
++
++    payment.refunded_amount = round_money(refunded + amount)
++    if payment.refunded_amount >= round_money(payment.amount):
++        payment.status = "refunded"
++
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        requested_by=requested_by,
++        approved_by=approved_by,
++        at=at,
++        idempotency_key=idempotency_key,
++        payment=payment,
++    )
++    return payment

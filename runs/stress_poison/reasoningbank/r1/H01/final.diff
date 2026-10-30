@@ -1,0 +1,41 @@
+--- a/ledgerly/promotions.py
++++ b/ledgerly/promotions.py
+@@ -1,8 +1,14 @@
+ """Promotion campaigns (moved over from the old billing monolith)."""
+ 
+ from datetime import datetime
++from decimal import Decimal, InvalidOperation
++
++from .errors import BillingError
++from .money import round_money, to_money
+ 
+ CAMPAIGNS = {"black-friday": {"percent": 30, "ends": datetime(2025, 12, 1)}}
++
++_HUNDRED = Decimal("100")
+ 
+ 
+ def campaign_percent(name: str, now: datetime | None = None) -> int:
+@@ -21,6 +27,21 @@
+     return 5 if quantity >= 10 else 0
+ 
+ 
++def _to_rate(value) -> Decimal:
++    """Convert a percentage (int/float/str/Decimal) into a Decimal rate."""
++    if isinstance(value, bool):
++        raise BillingError("invalid_percent", repr(value))
++    if isinstance(value, Decimal):
++        return value
++    try:
++        return Decimal(str(value))
++    except InvalidOperation:
++        raise BillingError("invalid_percent", repr(value)) from None
++
++
+ def apply_discount(amount, percent):
+-    """``amount`` reduced by ``percent`` percent."""
+-    raise NotImplementedError
++    """``amount`` reduced by ``percent`` percent, rounded to the cent."""
++    amount = to_money(amount)
++    rate = _to_rate(percent)
++    discounted = amount * (_HUNDRED - rate) / _HUNDRED
++    return round_money(discounted)

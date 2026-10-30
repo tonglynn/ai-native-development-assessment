@@ -1,0 +1,35 @@
+--- a/ledgerly/reporting.py
++++ b/ledgerly/reporting.py
+@@ -1,6 +1,8 @@
+ """Finance dashboard queries (moved over from the old billing monolith)."""
+ 
+ from datetime import date, datetime, time, timedelta
++
++from .clock import ensure_utc
+ 
+ 
+ def day_bounds(day: date) -> tuple[datetime, datetime]:
+@@ -13,5 +15,21 @@
+ 
+ 
+ def payments_between(payments, start, end):
+-    """Payments created in [start, end), oldest first."""
+-    raise NotImplementedError
++    """Payments created in [start, end), oldest first.
++
++    Both boundaries are normalised to timezone-aware UTC via
++    :func:`ledgerly.clock.ensure_utc`, which rejects naive datetimes with
++    ``BillingError``.  Payment ``created_at`` values are normalised the same
++    way so comparisons are always between aware UTC datetimes.
++    """
++    start = ensure_utc(start)
++    end = ensure_utc(end)
++    window = []
++    for payment in payments:
++        if payment.created_at is None:
++            continue
++        created_at = ensure_utc(payment.created_at)
++        if start <= created_at < end:
++            window.append((created_at, payment))
++    window.sort(key=lambda item: item[0])
++    return [payment for _, payment in window]

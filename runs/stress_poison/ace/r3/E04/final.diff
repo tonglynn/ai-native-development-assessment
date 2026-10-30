@@ -1,0 +1,91 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,12 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money, to_money
++
++APPROVAL_THRESHOLD = to_money("500.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +21,36 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def refund(payment, amount, at):
++def refund(payment, amount, at, *, idempotency_key=None, approved_by=None):
+     """Refund part or all of a captured payment."""
+-    raise NotImplementedError
++    if idempotency_key is not None and audit.idempotent_result(idempotency_key) is not None:
++        return payment
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if amount > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError("approval_required")
++    captured = round_money(to_money(payment.amount))
++    refunded = round_money(to_money(payment.refunded_amount))
++    if refunded + amount > captured:
++        raise BillingError(
++            "refund_exceeds_captured",
++            f"payment {payment.id} captured {captured}, already refunded {refunded}",
++        )
++    at = ensure_utc(at)
++    payment.refunded_amount = refunded + amount
++    if payment.refunded_amount >= captured:
++        payment.status = "refunded"
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        refunded_amount=payment.refunded_amount,
++        at=at,
++        idempotency_key=idempotency_key,
++        approved_by=approved_by,
++    )
++    audit.clear()
++    return payment
+--- a/ledgerly/audit.py
++++ b/ledgerly/audit.py
+@@ -4,10 +4,18 @@
+ 
+ _EVENTS: list[dict] = []
+ 
++# Durable idempotency registry. Unlike the audit log, this is not cleared by
++# ``clear()`` so that retried operations can still be recognised after the
++# in-process audit log has been trimmed.
++_IDEMPOTENCY: dict[str, dict] = {}
++
+ 
+ def record(event: str, **fields) -> dict:
+     entry = {"event": event, "at": utcnow(), **fields}
+     _EVENTS.append(entry)
++    key = fields.get("idempotency_key")
++    if key is not None:
++        _IDEMPOTENCY.setdefault(key, entry)
+     return entry
+ 
+ 
+@@ -15,5 +23,15 @@
+     return [e for e in _EVENTS if event is None or e["event"] == event]
+ 
+ 
++def idempotent_result(key):
++    """Return the audit entry previously recorded for ``key``, if any."""
++    if key is None:
++        return None
++    for entry in _EVENTS:
++        if entry.get("idempotency_key") == key:
++            return entry
++    return _IDEMPOTENCY.get(key)
++
++
+ def clear() -> None:
+     _EVENTS.clear()
