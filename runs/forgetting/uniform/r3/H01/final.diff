@@ -1,0 +1,32 @@
+--- a/ledgerly/promotions.py
++++ b/ledgerly/promotions.py
+@@ -1,6 +1,9 @@
+ """Promotion campaigns (moved over from the old billing monolith)."""
+ 
+ from datetime import datetime
++from decimal import Decimal
++
++from .money import round_money, to_money
+ 
+ CAMPAIGNS = {"black-friday": {"percent": 30, "ends": datetime(2025, 12, 1)}}
+ 
+@@ -21,6 +24,17 @@
+     return 5 if quantity >= 10 else 0
+ 
+ 
++def _parse_percent(percent) -> Decimal:
++    if isinstance(percent, (bool, float)):
++        raise ValueError(f"invalid percent {percent!r}")
++    try:
++        return Decimal(str(percent))
++    except Exception:
++        raise ValueError(f"invalid percent {percent!r}") from None
++
++
+ def apply_discount(amount, percent):
+-    """``amount`` reduced by ``percent`` percent."""
+-    raise NotImplementedError
++    """``amount`` reduced by ``percent`` percent, rounded to the cent."""
++    amount = to_money(amount)
++    rate = _parse_percent(percent)
++    return round_money(amount * (Decimal("1") - rate / Decimal("100")))

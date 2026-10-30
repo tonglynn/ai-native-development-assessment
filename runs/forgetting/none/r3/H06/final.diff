@@ -1,0 +1,57 @@
+--- a/ledgerly/payments.py
++++ b/ledgerly/payments.py
+@@ -7,17 +7,50 @@
+ from .money import ZERO, round_money
+ 
+ 
+-def authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -> Payment:
++def _find_idempotent_result(idempotency_key):
++    """Return the audit entry recorded for ``idempotency_key``, if any."""
++    if idempotency_key is None:
++        return None
++    for entry in audit.events():
++        if entry.get("idempotency_key") == idempotency_key:
++            return entry
++    return None
++
++
++def authorize(payment_id: str, invoice: Invoice, amount, at: datetime, *, idempotency_key=None) -> Payment:
++    existing = _find_idempotent_result(idempotency_key)
++    if existing is not None:
++        return existing["result"]
+     amount = round_money(amount)
+     if amount <= ZERO:
+         raise BillingError("non_positive_amount", str(amount))
+     if invoice.status != "issued":
+         raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
+     payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))
+-    audit.record("payment_authorized", payment_id=payment.id, amount=amount)
++    audit.record(
++        "payment_authorized",
++        payment_id=payment.id,
++        amount=amount,
++        idempotency_key=idempotency_key,
++        result=payment,
++    )
+     return payment
+ 
+ 
+-def void(payment: Payment, at: datetime) -> Payment:
++def void(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:
+     """Void an authorization that has not been captured."""
+-    raise NotImplementedError
++    existing = _find_idempotent_result(idempotency_key)
++    if existing is not None:
++        return existing["result"]
++    if payment.status != "authorized":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    ensure_utc(at)
++    payment.status = "voided"
++    audit.record(
++        "payment_voided",
++        payment_id=payment.id,
++        amount=payment.amount,
++        idempotency_key=idempotency_key,
++        result=payment,
++    )
++    return payment

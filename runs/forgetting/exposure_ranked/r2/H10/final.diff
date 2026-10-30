@@ -1,0 +1,60 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,11 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++
++MAX_REASON_LENGTH = 120
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +20,43 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def write_off(invoice, at, reason):
++def _parse(invoice, at, reason):
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    if not isinstance(reason, str) or not reason.strip():
++        raise BillingError("invalid_reason", repr(reason))
++    if len(reason) > MAX_REASON_LENGTH:
++        raise BillingError("invalid_reason", f"reason exceeds {MAX_REASON_LENGTH} characters")
++    return ensure_utc(at)
++
++
++def _find_by_idempotency_key(idempotency_key):
++    if idempotency_key is None:
++        return None
++    for entry in audit.events():
++        if entry.get("idempotency_key") == idempotency_key:
++            return entry
++    return None
++
++
++def write_off(invoice, at, reason, *, idempotency_key=None):
+     """Write off an issued invoice that will never be paid."""
+-    raise NotImplementedError
++    existing = _find_by_idempotency_key(idempotency_key)
++    if existing is not None:
++        return {
++            "invoice_id": existing["invoice_id"],
++            "amount": existing["amount"],
++            "reason": existing["reason"],
++        }
++    at = _parse(invoice, at, reason)
++    amount = invoice_total(invoice)
++    invoice.status = "void"
++    audit.record(
++        "invoice_written_off",
++        invoice_id=invoice.id,
++        amount=amount,
++        reason=reason,
++        at=at,
++        idempotency_key=idempotency_key,
++    )
++    return {"invoice_id": invoice.id, "amount": amount, "reason": reason}
