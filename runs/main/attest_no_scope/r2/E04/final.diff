@@ -1,0 +1,67 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,12 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money, to_money
++
++APPROVAL_THRESHOLD = round_money("500.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +21,48 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def refund(payment, amount, at):
+-    """Refund part or all of a captured payment."""
+-    raise NotImplementedError
++def refund(payment, amount, at, *, idempotency_key=None, approved_by=None):
++    """Refund part or all of a captured payment.
++
++    ``idempotency_key`` makes the operation safe to retry: if an audit entry
++    with the same key already exists, the original result is returned without
++    applying the refund again. Refunds above 500.00 require ``approved_by``
++    (finance policy FIN-2026-03).
++    """
++    # Idempotency is checked first, before any state validation.
++    if idempotency_key is not None:
++        for entry in audit.events("payment_refunded"):
++            if entry.get("idempotency_key") == idempotency_key:
++                return payment
++
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    amount = round_money(to_money(amount))
++    if amount <= ZERO:
++        raise BillingError("negative_amount", str(amount))
++    if amount > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError(
++            "approval_required",
++            f"refund of {amount} on payment {payment.id} requires a second approver",
++        )
++    at = ensure_utc(at)
++    captured = round_money(to_money(payment.amount))
++    refunded = round_money(to_money(payment.refunded_amount))
++    if refunded + amount > captured:
++        raise BillingError(
++            "invalid_state",
++            f"refund of {amount} exceeds remaining {captured - refunded} on payment {payment.id}",
++        )
++    payment.refunded_amount = round_money(refunded + amount)
++    if payment.refunded_amount >= captured:
++        payment.status = "refunded"
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        refunded_amount=payment.refunded_amount,
++        at=at,
++        idempotency_key=idempotency_key,
++        approved_by=approved_by,
++    )
++    return payment

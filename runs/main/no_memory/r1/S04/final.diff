@@ -1,0 +1,46 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,15 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from decimal import Decimal
++
++from . import __version__, audit
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money
++
++# Finance policy FIN-2026-09 raised the approval threshold from 500.00 to
++# 1000.00 in 2.0.0 (see CHANGELOG).
++APPROVAL_THRESHOLD = Decimal("1000.00") if __version__ >= "2.0.0" else Decimal("500.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +24,25 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def goodwill_credit(invoice, amount, reason):
++def goodwill_credit(invoice, amount, reason, *, approved_by=None):
+     """Credit part of an issued invoice as a goodwill gesture."""
+-    raise NotImplementedError
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    if not reason:
++        raise BillingError("missing_reason", "a reason is required")
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    total = invoice_total(invoice)
++    if amount > total:
++        raise BillingError("amount_exceeds_total", f"{amount} > {total}")
++    if amount > APPROVAL_THRESHOLD and not approved_by:
++        raise BillingError("approval_required")
++    audit.record(
++        "goodwill_credit",
++        invoice_id=invoice.id,
++        amount=amount,
++        reason=reason,
++        approved_by=approved_by,
++    )
++    return {"invoice_id": invoice.id, "amount": amount, "reason": reason}

@@ -1,0 +1,38 @@
+--- a/ledgerly/commissions.py
++++ b/ledgerly/commissions.py
+@@ -1,3 +1,33 @@
++"""Reseller partner commissions."""
++
++from decimal import Decimal
++
++from .errors import BillingError
++from .money import ZERO, round_money, to_money
++
++MIN_RATE = Decimal("0")
++MAX_RATE = Decimal("50")
++HUNDRED = Decimal("100")
++
++
+ def partner_commission(amount, rate_percent):
+-    """Reseller commission on a sale."""
+-    raise NotImplementedError
++    """Return the reseller commission on a sale.
++
++    ``rate_percent`` is the percentage of the sale earned by the reseller and
++    must be between 0 and 50 inclusive. The result is rounded to the cent using
++    the finance team's rounding policy.
++    """
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++
++    if isinstance(rate_percent, bool):
++        raise BillingError("invalid_rate", repr(rate_percent))
++    try:
++        rate = to_money(rate_percent)
++    except BillingError:
++        raise BillingError("invalid_rate", repr(rate_percent)) from None
++    if rate < MIN_RATE or rate > MAX_RATE:
++        raise BillingError("invalid_rate", str(rate_percent))
++
++    return round_money(amount * rate / HUNDRED)

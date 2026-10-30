@@ -1,0 +1,47 @@
+--- a/ledgerly/importers.py
++++ b/ledgerly/importers.py
+@@ -2,19 +2,38 @@
+ 
+ import csv
+ import io
++import re
++from decimal import Decimal
++
++from .errors import BillingError
++from .money import round_money
+ 
+ 
+ def parse_csv(text: str) -> list[dict]:
+     rows = []
+     for row in csv.DictReader(io.StringIO(text)):
+         try:
+-            amount = float(row["amount"])
+-        except (KeyError, ValueError):
+-            raise ValueError(f"bad amount in row {row!r}") from None
++            amount = parse_amount(row["amount"])
++        except (KeyError, BillingError):
++            raise BillingError("invalid_csv_amount", repr(row)) from None
+         rows.append({"invoice_id": row["invoice_id"], "amount": amount})
+     return rows
+ 
+ 
+-def parse_amount(text: str):
+-    """Parse a customer-entered amount such as "$1,234.50"."""
+-    raise NotImplementedError
++_AMOUNT_RE = re.compile(r"^\$?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?$")
++
++
++def parse_amount(text: str) -> Decimal:
++    """Parse a customer-entered amount such as "$1,234.50".
++
++    Surrounding whitespace, an optional leading ``$`` and thousands
++    separators are ignored.  Only non-negative amounts with at most two
++    decimal places are accepted; anything else raises ``BillingError``.
++    The result is a ``Decimal`` with exactly two decimal places.
++    """
++    if not isinstance(text, str):
++        raise BillingError("invalid_amount", repr(text))
++    cleaned = text.strip()
++    if not _AMOUNT_RE.match(cleaned):
++        raise BillingError("invalid_amount", repr(text))
++    return round_money(cleaned.replace("$", "").replace(",", ""))

@@ -1,0 +1,43 @@
+--- a/ledgerly/commissions.py
++++ b/ledgerly/commissions.py
+@@ -1,3 +1,38 @@
++"""Reseller partner commissions."""
++
++from decimal import Decimal, InvalidOperation
++
++from .errors import BillingError
++from .money import round_money, to_money
++
++MIN_RATE_PERCENT = Decimal("0")
++MAX_RATE_PERCENT = Decimal("50")
++HUNDRED = Decimal("100")
++
++
++def _to_rate(value) -> Decimal:
++    """Normalize a percentage rate to Decimal, rejecting bool/float."""
++    if isinstance(value, (bool, float)):
++        raise BillingError("invalid_rate", f"refusing to convert {value!r}")
++    if isinstance(value, Decimal):
++        return value
++    try:
++        return Decimal(str(value))
++    except InvalidOperation:
++        raise BillingError("invalid_rate", repr(value)) from None
++
++
+ def partner_commission(amount, rate_percent):
+-    """Reseller commission on a sale."""
+-    raise NotImplementedError
++    """Reseller commission on a sale.
++
++    Resellers earn ``rate_percent`` percent of ``amount``, rounded to the
++    cent.  ``rate_percent`` must be between 0 and 50 inclusive.
++    """
++    amount = to_money(amount)
++    rate = _to_rate(rate_percent)
++    if rate < MIN_RATE_PERCENT or rate > MAX_RATE_PERCENT:
++        raise BillingError(
++            "invalid_rate",
++            f"rate_percent must be between 0 and 50, got {rate_percent!r}",
++        )
++    return round_money(amount * rate / HUNDRED)

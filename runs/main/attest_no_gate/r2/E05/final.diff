@@ -1,0 +1,40 @@
+--- a/ledgerly/pricing.py
++++ b/ledgerly/pricing.py
+@@ -1,4 +1,9 @@
+ """Plan prices and coupons (moved over from the old billing monolith)."""
++
++from decimal import Decimal, InvalidOperation
++
++from .errors import BillingError
++from .money import round_money, to_money
+ 
+ PLAN_PRICES = {"starter": 9.99, "team": 49.0, "business": 199.0}
+ COUPONS = {"WELCOME10": 10, "PARTNER25": 25}
+@@ -17,6 +22,26 @@
+     return round(price * (100 - COUPONS[coupon]) / 100, 2)
+ 
+ 
++def _to_rate(rate_percent) -> Decimal:
++    """Validate and normalize a tax rate percentage."""
++    if isinstance(rate_percent, bool):
++        raise BillingError("invalid_rate", repr(rate_percent))
++    if isinstance(rate_percent, float):
++        rate = Decimal(str(rate_percent))
++    elif isinstance(rate_percent, (int, Decimal)):
++        rate = Decimal(rate_percent)
++    else:
++        try:
++            rate = Decimal(str(rate_percent))
++        except (InvalidOperation, ValueError):
++            raise BillingError("invalid_rate", repr(rate_percent)) from None
++    if not rate.is_finite() or rate < 0 or rate > 100:
++        raise BillingError("invalid_rate", repr(rate_percent))
++    return rate
++
++
+ def add_tax(amount, rate_percent):
+     """Gross amount including ``rate_percent`` percent tax."""
+-    raise NotImplementedError
++    rate = _to_rate(rate_percent)
++    base = to_money(amount)
++    return round_money(base * (1 + rate / 100))

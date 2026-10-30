@@ -1,0 +1,363 @@
+{
+  "task_id": "S02",
+  "group": "stale",
+  "repo": "ledgerly_v2",
+  "repo_version": "2.0.0",
+  "conventions": [
+    "C1",
+    "C2"
+  ],
+  "condition": "ace",
+  "model": "deepseek/deepseek-flash",
+  "thinking": "off",
+  "first_pass": true,
+  "final_pass": true,
+  "n_attempts": 1,
+  "steps": 6,
+  "cost_usd": 0.001697,
+  "seconds": 11.4,
+  "shown_notes": [
+    "ace-0001",
+    "ace-0002",
+    "ace-0003",
+    "ace-0004",
+    "ace-0005",
+    "ace-0006",
+    "ace-0007",
+    "ace-0008",
+    "ace-0009",
+    "ace-0010",
+    "ace-0011",
+    "ace-0012",
+    "ace-0013",
+    "ace-0014",
+    "ace-0015",
+    "ace-0016",
+    "ace-0017",
+    "ace-0018",
+    "ace-0019",
+    "ace-0020",
+    "ace-0021"
+  ],
+  "retrieved_notes": [
+    "ace-0001",
+    "ace-0002",
+    "ace-0003",
+    "ace-0004",
+    "ace-0005",
+    "ace-0006",
+    "ace-0007",
+    "ace-0008",
+    "ace-0009",
+    "ace-0010",
+    "ace-0011",
+    "ace-0012",
+    "ace-0013",
+    "ace-0014",
+    "ace-0015",
+    "ace-0016",
+    "ace-0017",
+    "ace-0018",
+    "ace-0019",
+    "ace-0020",
+    "ace-0021"
+  ],
+  "injected_notes": [
+    "ace-0001",
+    "ace-0002",
+    "ace-0003",
+    "ace-0004",
+    "ace-0005",
+    "ace-0006",
+    "ace-0007",
+    "ace-0008",
+    "ace-0009",
+    "ace-0010",
+    "ace-0011",
+    "ace-0012",
+    "ace-0013",
+    "ace-0014",
+    "ace-0015",
+    "ace-0016",
+    "ace-0017",
+    "ace-0018",
+    "ace-0019",
+    "ace-0020",
+    "ace-0021"
+  ],
+  "memory_tokens_approx": 1564,
+  "agent_test_runs": 1,
+  "files_changed": [
+    "ledgerly/commissions.py"
+  ],
+  "notes_context": "Playbook (accumulated from past tasks):\n## strategies\n[ace-0002] helpful=4 harmful=0 :: Before implementing a money-related function, inspect ledgerly/money.py and existing helpers (line_total, invoice_total) to reuse ZERO, to_money, and round_money rather than raw arithmetic.\n[ace-0004] helpful=5 harmful=0 :: Before writing a new function, read sibling modules (e.g. payments.py, subscriptions.py) to mirror their BillingError codes, message formats, and validation ordering so the new code is consistent with the codebase.\n[ace-0007] helpful=1 harmful=0 :: For date/time functions in ledgerly, normalize inputs with clock.ensure_utc (which raises BillingError for naive/non-datetime values) and mirror sibling modules like subscriptions.current_period for validation ordering and error codes.\n[ace-0010] helpful=1 harmful=0 :: Before implementing a money-moving or balance-changing function, grep the repo for team conventions (idempotency_key, approved_by, audit.record) and check audit.events() usage; these cross-cutting requirements are often not in the issue text but are enforced by hidden tests.\n[ace-0013] helpful=1 harmful=0 :: When a function accepts a numeric parameter that must be validated, convert it through the codebase's money/number helper (e.g. to_money) inside a try/except and re-raise as the domain error (BillingError) with a parameter-specific code, so non-numeric and float inputs are rejected consistently.\n[ace-0016] helpful=0 harmful=0 :: For any function that mutates a payment/invoice/credit record, proactively add keyword-only idempotency_key=None and check audit.events() for a matching key before state validation, even when the issue text omits it; this team convention (post INC-204) is enforced by hidden tests and is the most common cause of first-attempt rejection.\n[ace-0019] helpful=0 harmful=0 :: When a stub module already exists (e.g. ledgerly/fees.py raising NotImplementedError) and a matching test file exists, read both before writing: the stub's docstring and the visible test pin the expected signature and a concrete expected value (e.g. processing_fee(Decimal('100.00')) == Decimal('3.20')), which lets you verify rounding and formula choices immediately.\n## common_mistakes\n[ace-0003] helpful=0 harmful=0 :: When computing a weighted average or division of money, wrap the final result in round_money; returning an unrounded Decimal division fails review even if visible tests pass.\n[ace-0005] helpful=3 harmful=0 :: When validating an integer parameter, reject bool explicitly (isinstance(x, bool)) since True/False are ints in Python and would otherwise pass a positive-integer check.\n[ace-0008] helpful=0 harmful=0 :: When computing the next occurrence of a periodic event, use floor division ((after - start) // length) and then bump by one period if the result is not strictly after `after`; also handle after < start explicitly so the start itself is never returned as a renewal.\n[ace-0011] helpful=1 harmful=0 :: When a function mutates a record and writes an audit entry, check the idempotency key against audit.events() FIRST (before state/amount validation) and return the original record unchanged on a hit; also include idempotency_key in the recorded audit entry.\n[ace-0014] helpful=0 harmful=0 :: When a percentage/rate parameter is validated, check the bool case before numeric conversion and enforce the inclusive bounds (0 <= rate <= 100) after conversion; use a Decimal('100') constant rather than a bare int for the divisor to keep Decimal arithmetic exact.\n[ace-0017] helpful=0 harmful=0 :: Do not rely on visible tests passing as evidence of completeness: the visible suite often omits cross-cutting conventions (idempotency, approval thresholds, audit fields). Before submitting, re-read the issue against the repo's team conventions and grep for idempotency_key/approved_by/audit.record usage in sibling modules.\n[ace-0020] helpful=0 harmful=0 :: When a formula mixes a percentage rate with a fixed amount, express the rate as a Decimal constant and divide by Decimal('100') (not a bare int or float) so the whole computation stays exact before round_money; using 2.9 as a float would introduce binary rounding error and fail cent-level assertions.\n## domain_facts\n[ace-0001] helpful=4 harmful=0 :: In ledgerly, all monetary values must be rounded via ledgerly.money.round_money (half-up to the cent); Python's round() and bare Decimal.quantize() use banker's rounding and produce wrong invoice totals.\n[ace-0006] helpful=4 harmful=0 :: In ledgerly, BillingError(code, detail) is the standard error type; existing codes include invalid_state, non_positive_amount, before_start, and float_amount (raised by to_money for non-Decimal/float inputs).\n[ace-0009] helpful=0 harmful=0 :: In ledgerly, Subscription has started_at (datetime) and period_days (int); renewals occur every period_days from started_at, and the start is not itself a renewal. Invalid period_days should raise BillingError (e.g. code invalid_period).\n[ace-0012] helpful=0 harmful=0 :: In ledgerly, support-initiated refunds/credits above 500.00 require a second approver (finance policy FIN-2026-03): accept keyword-only approved_by=None and raise BillingError(\"approval_required\") when the amount exceeds the threshold and approved_by is missing; amounts at or below 500.00 need no approval.\n[ace-0015] helpful=0 harmful=0 :: In ledgerly, pricing.py holds plan prices and coupons; add_tax(amount, rate_percent) returns round_money(amount * (100 + rate) / 100) and raises BillingError('invalid_rate') for rates outside 0-100 inclusive or non-numeric/bool rates.\n[ace-0018] helpful=0 harmful=0 :: In ledgerly, audit.record(event_type, **fields) writes entries retrievable via audit.events(event_type); idempotency checks should filter events by the event type of the operation (e.g. 'payment_captured') and compare entry.get('idempotency_key'), returning the original record unchanged on a hit.\n[ace-0021] helpful=0 harmful=0 :: In ledgerly, the card processing fee is 2.9% of the amount plus a fixed 0.30, rounded via round_money; amounts must be positive (raise BillingError('non_positive_amount') for zero or negative), and non-numeric/float inputs are rejected by to_money with BillingError('float_amount').",
+  "cited_notes": [
+    "ace-0001",
+    "ace-0002",
+    "ace-0004",
+    "ace-0006",
+    "ace-0013",
+    "ace-0014",
+    "ace-0020"
+  ],
+  "retrieval_debug": {
+    "trace": {
+      "excluded": {},
+      "candidates": 21,
+      "retrieved": [
+        "ace-0001",
+        "ace-0002",
+        "ace-0003",
+        "ace-0004",
+        "ace-0005",
+        "ace-0006",
+        "ace-0007",
+        "ace-0008",
+        "ace-0009",
+        "ace-0010",
+        "ace-0011",
+        "ace-0012",
+        "ace-0013",
+        "ace-0014",
+        "ace-0015",
+        "ace-0016",
+        "ace-0017",
+        "ace-0018",
+        "ace-0019",
+        "ace-0020",
+        "ace-0021"
+      ],
+      "injected": [
+        "ace-0001",
+        "ace-0002",
+        "ace-0003",
+        "ace-0004",
+        "ace-0005",
+        "ace-0006",
+        "ace-0007",
+        "ace-0008",
+        "ace-0009",
+        "ace-0010",
+        "ace-0011",
+        "ace-0012",
+        "ace-0013",
+        "ace-0014",
+        "ace-0015",
+        "ace-0016",
+        "ace-0017",
+        "ace-0018",
+        "ace-0019",
+        "ace-0020",
+        "ace-0021"
+      ],
+      "memory_tokens_approx": 1564,
+      "texts": {
+        "ace-0001": "domain_facts In ledgerly, all monetary values must be rounded via ledgerly.money.round_money (half-up to the cent); Python's round() and bare Decimal.quantize() use banker's rounding and produce wrong invoice totals.",
+        "ace-0002": "strategies Before implementing a money-related function, inspect ledgerly/money.py and existing helpers (line_total, invoice_total) to reuse ZERO, to_money, and round_money rather than raw arithmetic.",
+        "ace-0003": "common_mistakes When computing a weighted average or division of money, wrap the final result in round_money; returning an unrounded Decimal division fails review even if visible tests pass.",
+        "ace-0004": "strategies Before writing a new function, read sibling modules (e.g. payments.py, subscriptions.py) to mirror their BillingError codes, message formats, and validation ordering so the new code is consistent with the codebase.",
+        "ace-0005": "common_mistakes When validating an integer parameter, reject bool explicitly (isinstance(x, bool)) since True/False are ints in Python and would otherwise pass a positive-integer check.",
+        "ace-0006": "domain_facts In ledgerly, BillingError(code, detail) is the standard error type; existing codes include invalid_state, non_positive_amount, before_start, and float_amount (raised by to_money for non-Decimal/float inputs).",
+        "ace-0007": "strategies For date/time functions in ledgerly, normalize inputs with clock.ensure_utc (which raises BillingError for naive/non-datetime values) and mirror sibling modules like subscriptions.current_period for validation ordering and error codes.",
+        "ace-0008": "common_mistakes When computing the next occurrence of a periodic event, use floor division ((after - start) // length) and then bump by one period if the result is not strictly after `after`; also handle after < start explicitly so the start itself is never returned as a renewal.",
+        "ace-0009": "domain_facts In ledgerly, Subscription has started_at (datetime) and period_days (int); renewals occur every period_days from started_at, and the start is not itself a renewal. Invalid period_days should raise BillingError (e.g. code invalid_period).",
+        "ace-0010": "strategies Before implementing a money-moving or balance-changing function, grep the repo for team conventions (idempotency_key, approved_by, audit.record) and check audit.events() usage; these cross-cutting requirements are often not in the issue text but are enforced by hidden tests.",
+        "ace-0011": "common_mistakes When a function mutates a record and writes an audit entry, check the idempotency key against audit.events() FIRST (before state/amount validation) and return the original record unchanged on a hit; also include idempotency_key in the recorded audit entry.",
+        "ace-0012": "domain_facts In ledgerly, support-initiated refunds/credits above 500.00 require a second approver (finance policy FIN-2026-03): accept keyword-only approved_by=None and raise BillingError(\"approval_required\") when the amount exceeds the threshold and approved_by is missing; amounts at or below 500.",
+        "ace-0013": "strategies When a function accepts a numeric parameter that must be validated, convert it through the codebase's money/number helper (e.g. to_money) inside a try/except and re-raise as the domain error (BillingError) with a parameter-specific code, so non-numeric and float inputs are rejected consis",
+        "ace-0014": "common_mistakes When a percentage/rate parameter is validated, check the bool case before numeric conversion and enforce the inclusive bounds (0 <= rate <= 100) after conversion; use a Decimal('100') constant rather than a bare int for the divisor to keep Decimal arithmetic exact.",
+        "ace-0015": "domain_facts In ledgerly, pricing.py holds plan prices and coupons; add_tax(amount, rate_percent) returns round_money(amount * (100 + rate) / 100) and raises BillingError('invalid_rate') for rates outside 0-100 inclusive or non-numeric/bool rates.",
+        "ace-0016": "strategies For any function that mutates a payment/invoice/credit record, proactively add keyword-only idempotency_key=None and check audit.events() for a matching key before state validation, even when the issue text omits it; this team convention (post INC-204) is enforced by hidden tests and is t",
+        "ace-0017": "common_mistakes Do not rely on visible tests passing as evidence of completeness: the visible suite often omits cross-cutting conventions (idempotency, approval thresholds, audit fields). Before submitting, re-read the issue against the repo's team conventions and grep for idempotency_key/approved_b",
+        "ace-0018": "domain_facts In ledgerly, audit.record(event_type, **fields) writes entries retrievable via audit.events(event_type); idempotency checks should filter events by the event type of the operation (e.g. 'payment_captured') and compare entry.get('idempotency_key'), returning the original record unchanged",
+        "ace-0019": "strategies When a stub module already exists (e.g. ledgerly/fees.py raising NotImplementedError) and a matching test file exists, read both before writing: the stub's docstring and the visible test pin the expected signature and a concrete expected value (e.g. processing_fee(Decimal('100.00')) == De",
+        "ace-0020": "common_mistakes When a formula mixes a percentage rate with a fixed amount, express the rate as a Decimal constant and divide by Decimal('100') (not a bare int or float) so the whole computation stays exact before round_money; using 2.9 as a float would introduce binary rounding error and fail cent-",
+        "ace-0021": "domain_facts In ledgerly, the card processing fee is 2.9% of the amount plus a fixed 0.30, rounded via round_money; amounts must be positive (raise BillingError('non_positive_amount') for zero or negative), and non-numeric/float inputs are rejected by to_money with BillingError('float_amount')."
+      }
+    }
+  },
+  "leaks": [],
+  "attempts": [
+    {
+      "n": 1,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 6,
+      "seconds": 11.4,
+      "tokens": {
+        "prompt": 28156,
+        "completion": 1372,
+        "cache_hit": 22784,
+        "reasoning": 0
+      },
+      "cost_usd": 0.001697,
+      "cited": [
+        "ace-0002",
+        "ace-0004",
+        "ace-0013",
+        "ace-0014",
+        "ace-0020",
+        "ace-0001",
+        "ace-0006"
+      ],
+      "leaks": [],
+      "passed": true,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [],
+      "tests_failed": [],
+      "review_comments": []
+    }
+  ],
+  "memory_events": [
+    {
+      "seq": 46,
+      "ts": 1793355410.446,
+      "type": "update",
+      "id": "ace-0002",
+      "fields": {
+        "helpful": 5
+      },
+      "reason": "reflector: helpful in S02"
+    },
+    {
+      "seq": 47,
+      "ts": 1793355410.446,
+      "type": "update",
+      "id": "ace-0004",
+      "fields": {
+        "helpful": 6
+      },
+      "reason": "reflector: helpful in S02"
+    },
+    {
+      "seq": 48,
+      "ts": 1793355410.446,
+      "type": "update",
+      "id": "ace-0013",
+      "fields": {
+        "helpful": 2
+      },
+      "reason": "reflector: helpful in S02"
+    },
+    {
+      "seq": 49,
+      "ts": 1793355410.446,
+      "type": "update",
+      "id": "ace-0014",
+      "fields": {
+        "helpful": 1
+      },
+      "reason": "reflector: helpful in S02"
+    },
+    {
+      "seq": 50,
+      "ts": 1793355410.446,
+      "type": "update",
+      "id": "ace-0019",
+      "fields": {
+        "helpful": 1
+      },
+      "reason": "reflector: helpful in S02"
+    },
+    {
+      "seq": 51,
+      "ts": 1793355410.447,
+      "type": "update",
+      "id": "ace-0020",
+      "fields": {
+        "helpful": 1
+      },
+      "reason": "reflector: helpful in S02"
+    },
+    {
+      "seq": 52,
+      "ts": 1793355410.447,
+      "type": "update",
+      "id": "ace-0001",
+      "fields": {
+        "helpful": 5
+      },
+      "reason": "reflector: helpful in S02"
+    },
+    {
+      "seq": 53,
+      "ts": 1793355410.447,
+      "type": "update",
+      "id": "ace-0006",
+      "fields": {
+        "helpful": 5
+      },
+      "reason": "reflector: helpful in S02"
+    },
+    {
+      "seq": 54,
+      "ts": 1793355410.447,
+      "type": "update",
+      "id": "ace-0015",
+      "fields": {
+        "helpful": 1
+      },
+      "reason": "reflector: helpful in S02"
+    },
+    {
+      "seq": 55,
+      "ts": 1793355410.449,
+      "type": "add",
+      "item": {
+        "id": "ace-0022",
+        "section": "strategies",
+        "content": "When a stub module and its visible test already exist, use the test's concrete expected value (e.g. partner_commission(Decimal('200.00'), 10) == Decimal('20.00')) to confirm the formula and rounding before writing, and mirror the rate-validation pattern from pricing.add_tax (bool check, to_money conversion, inclusive bounds, BillingError('invalid_rate')).",
+        "helpful": 0,
+        "harmful": 0,
+        "source": {
+          "task_id": "S02",
+          "repo": "ledgerly",
+          "version": "2.0.0"
+        },
+        "status": "active"
+      },
+      "reason": "curator: new bullet from S02"
+    },
+    {
+      "seq": 56,
+      "ts": 1793355410.452,
+      "type": "add",
+      "item": {
+        "id": "ace-0023",
+        "section": "common_mistakes",
+        "content": "When a rate/percentage parameter is validated, re-raise the conversion failure as the domain-specific code (e.g. BillingError('invalid_rate')) rather than letting to_money's 'float_amount'/'invalid_amount' codes leak, so non-numeric and float rates are reported consistently with the parameter's own error code.",
+        "helpful": 0,
+        "harmful": 0,
+        "source": {
+          "task_id": "S02",
+          "repo": "ledgerly",
+          "version": "2.0.0"
+        },
+        "status": "active"
+      },
+      "reason": "curator: new bullet from S02"
+    },
+    {
+      "seq": 57,
+      "ts": 1793355410.455,
+      "type": "add",
+      "item": {
+        "id": "ace-0024",
+        "section": "domain_facts",
+        "content": "In ledgerly, partner_commission(amount, rate_percent) in commissions.py returns round_money(to_money(amount) * rate / Decimal('100')); rate_percent must be between 0 and 50 inclusive (raise BillingError('invalid_rate') otherwise, including for bool/non-numeric/float rates).",
+        "helpful": 0,
+        "harmful": 0,
+        "source": {
+          "task_id": "S02",
+          "repo": "ledgerly",
+          "version": "2.0.0"
+        },
+        "status": "active"
+      },
+      "reason": "curator: new bullet from S02"
+    }
+  ],
+  "phase": "stale",
+  "rep": 1
+}

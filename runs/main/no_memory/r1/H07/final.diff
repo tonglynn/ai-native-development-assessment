@@ -1,0 +1,51 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,13 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from decimal import Decimal
++
++from . import audit
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money
++
++APPROVAL_THRESHOLD = Decimal("500.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +22,32 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def refund_shipping(payment, amount, at):
++def refund_shipping(payment, amount, at, *, idempotency_key=None, approved_by=None):
+     """Refund (part of) the shipping fee of a captured payment."""
+-    raise NotImplementedError
++    # Idempotency is checked first, before validating state.
++    if idempotency_key is not None:
++        for entry in audit.events():
++            if entry.get("idempotency_key") == idempotency_key:
++                return payment
++
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    if payment.refunded_amount + amount > payment.amount:
++        raise BillingError("refund_exceeds_captured", str(amount))
++    if amount > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError("approval_required", str(amount))
++
++    payment.refunded_amount += amount
++    if payment.refunded_amount == payment.amount:
++        payment.status = "refunded"
++
++    audit.record(
++        "shipping_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        idempotency_key=idempotency_key,
++    )
++    return payment
