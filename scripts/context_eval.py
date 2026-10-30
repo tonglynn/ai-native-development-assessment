@@ -37,7 +37,7 @@ sys.path.insert(0, str(ROOT))
 
 from attest import llm  # noqa: E402
 from attest.benchmark import load_task  # noqa: E402
-from attest.context.manager import ContextManager, ManagedModel, extract_state, fidelity, tokens_of  # noqa: E402
+from attest.context.manager import ContextManager, ManagedModel, extract_state, fidelity, sanitize, tokens_of  # noqa: E402
 from attest.memory.base import NoMemory  # noqa: E402
 from attest.runner import Settings, run_task  # noqa: E402
 
@@ -57,7 +57,7 @@ def session_prefix() -> list[dict]:
             path = SOURCE / task / "r1" / f"attempt{attempt}.traj.json"
             if path.exists():
                 msgs += [m for m in json.loads(path.read_text())["messages"] if m["role"] in ("user", "assistant", "tool")]
-    return msgs
+    return sanitize(msgs)
 
 
 def summarizer(transcript: str) -> str:
@@ -94,7 +94,7 @@ def one(arm: str, rep: int, prefix: list[dict], out: Path, budget: int) -> dict:
         settings = Settings(wrap_model=lambda m, cm=cm: ManagedModel(m, cm, prefix))
     r = run_task(task, NoMemory(), out / arm / f"r{rep}", settings=settings, update_memory=False)
     first = r["attempts"][0]
-    row = {"arm": arm, "rep": rep, "first_pass": r["first_pass"], "tests_failed": first["tests_failed"],
+    row = {"arm": arm, "rep": rep, "first_pass": r["first_pass"], "crashed": first["crashed"], "tests_failed": first["tests_failed"],
            "prompt_tokens": first["tokens"]["prompt"], "steps": first["steps"]}
     if arm != "no_session":
         row["context_log"] = cm.log[-3:]
@@ -119,7 +119,8 @@ def main() -> None:
     summary = []
     for arm in ARMS:
         rs = [r for r in runs if r["arm"] == arm]
-        summary.append({"arm": arm, "runs": len(rs), "pass@1": sum(r["first_pass"] for r in rs) / len(rs),
+        summary.append({"arm": arm, "runs": len(rs), "crashed": sum(r["crashed"] for r in rs),
+                        "pass@1": sum(r["first_pass"] for r in rs) / len(rs),
                         "c6_blocks_failed": sum(any("c6_blocks" in t for t in r["tests_failed"]) for r in rs),
                         "c6_allows_failed": sum(any("c6_allows" in t for t in r["tests_failed"]) for r in rs),
                         "prompt_tokens_mean": sum(r["prompt_tokens"] for r in rs) / len(rs)})
@@ -128,8 +129,8 @@ def main() -> None:
     lines = ["# Context management on a long session (exploratory)", "",
              f"Earlier session: {len(prefix)} messages (~{tokens_of(prefix)} tokens) from S04, S01, S02, S03; then task S05. "
              f"Budget {args.budget} tokens for window / summary / manager. No long-term memory.", "",
-             "| Arm | Runs | pass@1 | C6 blocks failed | C6 allows failed | Prompt tokens / run |", "|---|---|---|---|---|---|"]
-    lines += [f"| {s['arm']} | {s['runs']} | {s['pass@1']:.0%} | {s['c6_blocks_failed']} | {s['c6_allows_failed']} | "
+             "| Arm | Runs | Crashed | pass@1 | C6 blocks failed | C6 allows failed | Prompt tokens / run |", "|---|---|---|---|---|---|---|"]
+    lines += [f"| {s['arm']} | {s['runs']} | {s['crashed']} | {s['pass@1']:.0%} | {s['c6_blocks_failed']} | {s['c6_allows_failed']} | "
               f"{s['prompt_tokens_mean']:,.0f} |" for s in summary]
     lines += ["", "Facts S05 needs, present in the context the model receives (offline):", "",
               "| Budget | Strategy | Tokens | 1000.00 | approved_by | approval_required | Summary kept pinned tokens |",

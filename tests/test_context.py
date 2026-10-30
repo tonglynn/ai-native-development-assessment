@@ -80,3 +80,17 @@ def test_managed_model_prepends_session_and_assembles():
     assert inner.seen[0]["content"] == "system prompt" and tokens_of(inner.seen) <= 3000
     assert "approved_by" in "\n".join(str(m.get("content")) for m in inner.seen)
     assert model.config == "cfg"  # attributes pass through to the wrapped model
+
+
+def test_sanitize_removes_unanswered_tool_calls():
+    """INC-2: a saved trajectory ends with the submit call, whose result is not a tool message."""
+    from attest.context.manager import sanitize
+
+    submit = {"role": "assistant", "content": "", "tool_calls": [{"id": "z", "type": "function",
+                                                                   "function": {"name": "bash", "arguments": "{}"}}]}
+    msgs = step(1) + [submit, {"role": "user", "content": "next task"}, {"role": "tool", "tool_call_id": "q", "content": "{}"}]
+    clean = sanitize(msgs)
+    assert clean == step(1) + [{"role": "user", "content": "next task"}]
+    for i, m in enumerate(clean):  # every remaining call is answered right after it
+        for c in m.get("tool_calls") or []:
+            assert any(n.get("tool_call_id") == c["id"] for n in clean[i + 1:])

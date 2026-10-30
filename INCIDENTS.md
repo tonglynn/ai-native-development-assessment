@@ -16,3 +16,22 @@ evidence in the repository.
 | **Fix / 修复** | Pinned `litellm==1.106.6` and added `mcp==2.3.0` to `requirements.txt`; verified locally that the call with tools now reaches the API. Commit `fdfbc05`. |
 | **Prevention / 预防** | `ImportError` is now an abort exception for the model, so environment errors fail at once instead of retrying for minutes. Crashed attempts are marked `crashed: true` and are counted as failures but not as convention misses in the analysis. |
 | **Result / 结果** | Second smoke run (`runs/smoke`) completed: attempt 1 missed C1, attempt 2 passed after the simulated review; 7 steps, about $0.001. |
+
+## INC-2: every context-experiment run with an earlier session crashed (10/30)
+
+**What happened.** In the first context-management run (`runs/context_eval_inc2`),
+all 12 runs that carried the earlier session crashed on the first model call with
+`BadRequestError: An assistant message with 'tool_calls' must be followed by tool
+messages`. The summary table showed them as failures with 0 prompt tokens, the same
+as a real failure would look. The offline part of the run was not affected.
+
+**Cause.** The earlier session is built from saved trajectories. Each trajectory ends
+with the submit command; its result is stored as an `exit` message, not a `tool`
+message, so the last tool call of every task was unanswered.
+
+**Fix.** `attest.context.manager.sanitize` drops unanswered tool calls and orphaned
+tool results; it is applied to the session and to every assembled context; a test
+covers it. The experiment script now counts crashed runs separately.
+
+**Prevention.** Crashes are reported as their own column, so a run in which the model
+was never reached can no longer look like an ordinary failure.

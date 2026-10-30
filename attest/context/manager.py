@@ -208,16 +208,44 @@ class ContextManager:
         return self._summary_cache[key]
 
 
+def sanitize(messages: list[dict]) -> list[dict]:
+    """Drop assistant tool calls that have no tool result, and tool results without their call.
+
+    Saved trajectories end with the submit command, whose result is not a tool message;
+    APIs reject a request in which a tool call is not answered (INCIDENTS INC-2)."""
+    out, i = [], 0
+    while i < len(messages):
+        m = messages[i]
+        if m.get("role") == "assistant" and m.get("tool_calls"):
+            ids = {c.get("id") for c in m["tool_calls"]}
+            j, answered = i + 1, set()
+            while j < len(messages) and messages[j].get("role") == "tool":
+                answered.add(messages[j].get("tool_call_id"))
+                j += 1
+            if ids <= answered:
+                out.extend(messages[i:j])
+            elif m.get("content"):
+                out.append({"role": "assistant", "content": m["content"]})
+            i = j
+            continue
+        if m.get("role") == "tool":
+            i += 1  # a result whose call is not directly before it
+            continue
+        out.append(m)
+        i += 1
+    return out
+
+
 class ManagedModel:
     """Wraps a mini-swe-agent model: optionally prepends an earlier session, then lets the manager assemble."""
 
     def __init__(self, inner, manager: ContextManager, prefix: list[dict] | None = None):
-        self.inner, self.manager, self.prefix = inner, manager, list(prefix or [])
+        self.inner, self.manager, self.prefix = inner, manager, sanitize(list(prefix or []))
 
     def query(self, messages: list[dict], **kwargs) -> dict:
         full = [messages[0]] + self.prefix + list(messages[1:])
         ctx = self.manager.assemble(full, task_index=1 + len(self.prefix))
-        return self.inner.query(ctx, **kwargs)
+        return self.inner.query(sanitize(ctx), **kwargs)
 
     def __getattr__(self, name):
         return getattr(self.inner, name)
