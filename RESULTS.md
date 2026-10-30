@@ -99,12 +99,44 @@ Attest 73% pass@1, 31k prompt tokens per run, 0 foreign notes shown; ReasoningBa
 42%, 46k, 0.8 foreign repositories mentioned per run; ACE 55%, 157k, all 300 notes
 in every prompt.
 
+## Retrieval ablation (exploratory, PREREGISTRATION 4c) / 检索机制消融（探索性）
+
+Both arms start from the main experiment's memory after learning; only the ranking
+differs (lexical vs `bge-small-en-v1.5`). `runs/retrieval_ablation`, 228 runs.
+
+**Retrieval quality** (offline, 57 queries, relevance labelled blind by `deepseek-v4-pro`):
+
+| System | Retriever | Recall@5 | Precision@5 | MRR | Review-only rule in top 5 | ms median |
+|---|---|---|---|---|---|---|
+| Attest | lexical | 76% | 55% | 0.83 | 88% | 0.3 |
+| Attest | embedding | 88% | 63% | 0.85 | 76% | 22 |
+| ReasoningBank | lexical | 39% | 44% | 0.79 | 73% | 1.0 |
+| ReasoningBank | embedding | 49% | 53% | 0.86 | 67% | 26 |
+
+Embedding − lexical, paired per query: recall +11 pp [+6, +17] (Attest), +10 pp
+[+4, +15] (ReasoningBank); precision +7 pp and +9 pp, both intervals above 0.
+
+**Effect on the work** (first-attempt pass rate, paired per task):
+
+| System | Held-out lexical → embedding | Stale lexical → embedding |
+|---|---|---|
+| Attest | 70% → 70%, 0 pp [−18, +15] | 93% → 80%, −13 pp [−40, 0] |
+| ReasoningBank | 58% → 45%, −12 pp [−27, +3] | 73% → 73% |
+
+Embedding retrieval finds more of the relevant notes but **did not improve the coding
+results**; it put the review-only rules (C5, C6) into the top 5 less often, which is
+where memory matters, and costs about 25 ms per query instead of under 1 ms. The
+lexical arms reproduce the main experiment's held-out rates exactly (Attest 70%,
+ReasoningBank 58%), a check on run-to-run stability. The ReasoningBank baseline's
+lexical retrieval is therefore not what held it back. 语义检索召回了更多相关笔记，但没有改善编码结果；只靠评审传承的规则进入前 5 的比例反而下降。检索指标提升不等于编码质量提升。
+
 ## What this supports / 结论边界
 
 - Supported: memory of review-only knowledge helps a lot (+36 pp over no memory,
   review-only tasks 0% → 56%); scope prevents leakage; outdated thresholds are
   handled at least as well as without memory; Attest is not worse than the two
   published designs, with a smaller and cheaper prompt and immunity to the poison.
+- Retrieval: better recall from embeddings did not translate into better coding results; lexical retrieval is kept.
 - Not supported: that the write gate is free. Here it cost held-out passes; its value
   is protection (poison) and provenance, which the held-out pass rate does not reward.
 - Limits: one model, one synthetic benchmark designed by the author, simulated
