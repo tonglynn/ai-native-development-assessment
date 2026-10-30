@@ -517,6 +517,51 @@ Ground truth comes from the benchmark design.
   the reviewer rejected and pass the accepted diff. That is not tested here. Also not tested:
   whether a rule enforced by a check can leave the prompt.
 
+### Failure attribution, step 1: validate a check against its own evidence / 失败归因第一步
+
+Three evidence states only pay off if a failure can be pinned on the note that caused it.
+The cheapest safeguard for a generated check: before its verdicts count, it must reproduce
+the review that created its rule. It must flag the attempt the reviewer rejected, and pass
+the accepted change.
+
+`scripts/failure_attribution.py`, `runs/failure_attribution`, no model calls. Only the
+accepted diff had been stored, so I rebuilt the rejected first attempt by replaying the
+agent's recorded commands in a fresh workspace. All **14 of 14** replays reproduced
+`final.diff` exactly. 13 of the 25 notes come from a task whose first attempt was rejected,
+so they can be fully validated; 12 come from first-pass tasks and can only be validated
+against the accepted version. Each check was scored on the 16 tasks other than its source
+task.
+
+| Validation | Result | Checks | Mean false-alarm rate on references | Useful | Share of flags on a really broken convention |
+|---|---|---|---|---|---|
+| full (rejected and accepted) | pass | 4 | 19% | 1 | 52% |
+| full | fail | 7 | 20% | 1 | 35% |
+| accepted version only | pass | 10 | 1% | 0 | 29% |
+| accepted version only | fail | 2 | 16% | 0 | 17% |
+
+- **By the rule fixed before the run, validation is not a useful filter.** Checks that pass have
+  the same false-alarm rate as checks that fail (19% vs 20%). And validation **rejected the one
+  check that had been useful** (rounding, r1).
+- **Why it rejected that check, and why it matters:** the agent's real mistake in E01 was not
+  rounding at all (`return weighted_total / total_quantity`). The check looks for the wrong
+  rounding call (`round()`, bare `quantize()`), which is what the benchmark's hand-written naive
+  solutions do. A generated check catches a wrong call much more easily than a missing one, and
+  real agent mistakes are often omissions. The benchmark's naive solutions overstate what
+  generated checks can catch. 真实的错误常常是"漏了"，生成的检查擅长抓"用错了"；作者写的朴素解高估了检查的能力。
+- **Validation against the accepted version alone selects narrow checks.** They pass everything
+  (1% false alarms) and detect almost nothing (0 useful). That gives false confidence.
+- **Even the checks that pass full validation attribute only about half of their flags to a
+  solution that really breaks the convention (52%).** Used as negative evidence under three
+  evidence states, roughly every other flag would blame a correct rule.
+- Conclusion: generated checks are not yet a reliable source of failure attribution, even when
+  validated against the rule's own evidence. In this project, the reliable attribution signal is
+  the reviewer's or the test's own statement of which convention failed. Simulated reviews here
+  name it explicitly; real reviews often do not (`REAL_HISTORY.md`). The next step would be to
+  attribute a failure to the note whose evidence quote matches the review comment that names it.
+  That is not tested here.
+- Limits: 25 checks, 11 of them fully validated; one prompt; replay reproduces the recorded
+  commands, not the agent's reasoning.
+
 ## What this supports / 结论边界
 
 - Supported: memory of review-only knowledge helps a lot (+36 pp over no memory,
@@ -527,7 +572,7 @@ Ground truth comes from the benchmark design.
 - Context: under a 6k-token budget the context manager kept the session's review rule (2 of 3 S05 runs passed, 0 C6 failures) where a sliding window (0/3) and a plain summary (1/3) lost it; full history passes 3/3 at four times the tokens. Exploratory, one scenario, tuned after seeing results.
 - Forgetting: 200 one-off notes cut held-out pass@1 from 70% to 42%; no forgetting policy repaired it; uniform decay wrongly archived the approval rule (9 of 9 later C6 runs violated it), type-aware decay did not. Exploratory.
 - Pollution: trust-tiered admission brought held-out pass@1 under pollution from 36% back to 67% (76% with type-aware forgetting; clean memory 70%), with 0 approval violations in the combined arm. Exploratory; the separating signal exists by construction.
-- Forgetting V2 (exploratory): treating "no evidence" as dormant rather than archived, and archiving only on negative evidence, removed every wrongly archived useful rule and made aggressive decay safe (71% needed rules injected, 44 injectable notes) in a simulation whose failure attribution is perfect by construction. Liveness against code caught every stale and renamed rule; one-prompt generated checks were useful for 1 of 25 rules. Rules no test or review names stay out of reach of every signal.
+- Forgetting V2 (exploratory): treating "no evidence" as dormant rather than archived, and archiving only on negative evidence, removed every wrongly archived useful rule and made aggressive decay safe (71% needed rules injected, 44 injectable notes) in a simulation whose failure attribution is perfect by construction. Liveness against code caught every stale and renamed rule; one-prompt generated checks were useful for 1 of 25 rules, and validating them against the review that created each rule did not filter out bad checks (it rejected the useful one: the agent's real mistake was an omission the check did not look for). Rules no test or review names stay out of reach of every signal.
 - Value feedback (offline): when adoption counts as contribution, one-off notes become permanent (34 under 30% adoption noise). Reinforcing only verified use removes that, but V1.1 also wrongly archived more correct rules (4 → 10–11 of 52), mostly rules no test checks. V1 stays the default and V1.1 is an option. The hard part is reliable evidence of value, not the decay rate.
 - Not supported: that the write gate is free. Here it cost held-out passes; its value
   is protection (poison) and provenance, which the held-out pass rate does not reward.
