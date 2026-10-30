@@ -1,0 +1,69 @@
+--- a/ledgerly/provider_refunds.py
++++ b/ledgerly/provider_refunds.py
+@@ -1,6 +1,63 @@
+ """Refunds of card payments through the payment provider."""
+ 
++from . import audit
++from .errors import BillingError
++from .gateway import GatewayTimeout
++from .money import ZERO, round_money, to_money
+ 
+-def refund_via_provider(payment, amount, gateway):
+-    """Refund ``amount`` of a captured payment through the payment provider."""
+-    raise NotImplementedError
++_MAX_ATTEMPTS = 3
++
++
++def refund_via_provider(payment, amount, gateway, *, idempotency_key=None):
++    """Refund ``amount`` of a captured payment through the payment provider.
++
++    The provider is asked to refund the amount, then the refund is applied to
++    the payment. Only captured payments can be refunded, the amount must be
++    positive and the total refunded must never exceed the captured amount.
++    """
++    if idempotency_key is not None:
++        for entry in audit.events():
++            if entry.get("idempotency_key") == idempotency_key:
++                return payment
++
++    amount = round_money(to_money(amount))
++
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++
++    refunded = round_money(to_money(payment.refunded_amount))
++    if refunded + amount > round_money(to_money(payment.amount)):
++        raise BillingError("refund_exceeds_captured", str(amount))
++
++    # Use a stable key across retries so the provider deduplicates a refund
++    # whose answer was lost.
++    provider_key = idempotency_key or f"refund:{payment.id}:{refunded + amount}"
++
++    refund_id = None
++    for _ in range(_MAX_ATTEMPTS):
++        try:
++            refund_id = gateway.refund(payment.id, amount, provider_key)
++            break
++        except GatewayTimeout:
++            continue
++
++    if refund_id is None:
++        raise BillingError("provider_unavailable")
++
++    payment.refunded_amount = refunded + amount
++    if payment.refunded_amount >= round_money(to_money(payment.amount)):
++        payment.status = "refunded"
++
++    if getattr(payment, "provider_refund_ids", None) is None:
++        payment.provider_refund_ids = []
++    payment.provider_refund_ids.append(refund_id)
++
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        idempotency_key=idempotency_key,
++    )
++    return payment

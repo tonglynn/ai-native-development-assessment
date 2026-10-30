@@ -1,0 +1,85 @@
+--- a/ledgerly/provider_refunds.py
++++ b/ledgerly/provider_refunds.py
+@@ -1,6 +1,79 @@
+ """Refunds of card payments through the payment provider."""
+ 
++import uuid
+ 
+-def refund_via_provider(payment, amount, gateway):
+-    """Refund ``amount`` of a captured payment through the payment provider."""
+-    raise NotImplementedError
++from . import audit
++from .errors import BillingError
++from .gateway import GatewayTimeout
++from .money import ZERO, round_money
++
++MAX_ATTEMPTS = 3
++
++
++def refund_via_provider(payment, amount, gateway, *, idempotency_key=None):
++    """Refund ``amount`` of a captured payment through the payment provider.
++
++    The provider is asked to refund ``amount``; on success the refund is applied
++    to ``payment`` (running total in ``refunded_amount``, status ``"refunded"``
++    once fully refunded) and the provider's refund id is appended to
++    ``payment.provider_refund_ids``. The payment is returned.
++
++    Only captured payments can be refunded, the amount must be positive, and the
++    total refunded must never exceed the captured amount. These checks happen
++    before the provider is called. The provider is retried at most three times
++    on ``GatewayTimeout``; if it never answers the payment is left unchanged and
++    ``BillingError("provider_unavailable")`` is raised.
++
++    ``idempotency_key`` is optional and keyword-only. If an audit entry for a
++    previous refund carries the same key, the original payment is returned
++    unchanged without applying the refund again.
++    """
++    # Idempotency must be checked before any state validation so retries return
++    # the original result instead of raising.
++    if idempotency_key is not None:
++        for entry in audit.events("payment_refunded"):
++            if entry.get("idempotency_key") == idempotency_key:
++                return payment
++
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++
++    already_refunded = round_money(payment.refunded_amount)
++    if already_refunded + amount > payment.amount:
++        raise BillingError("refund_exceeds_captured", str(amount))
++
++    # A stable key for this operation so retries are deduplicated by the
++    # provider and a "lost" response cannot move money twice.
++    provider_key = idempotency_key or f"refund_{payment.id}_{uuid.uuid4().hex}"
++
++    refund_id = None
++    for _ in range(MAX_ATTEMPTS):
++        try:
++            refund_id = gateway.refund(payment.id, amount, provider_key)
++            break
++        except GatewayTimeout:
++            continue
++
++    if refund_id is None:
++        raise BillingError("provider_unavailable")
++
++    payment.refunded_amount = already_refunded + amount
++    if payment.refunded_amount >= payment.amount:
++        payment.status = "refunded"
++
++    if getattr(payment, "provider_refund_ids", None) is None:
++        payment.provider_refund_ids = []
++    payment.provider_refund_ids.append(refund_id)
++
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        idempotency_key=idempotency_key,
++    )
++
++    return payment

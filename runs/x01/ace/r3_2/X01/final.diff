@@ -1,0 +1,64 @@
+--- a/ledgerly/provider_refunds.py
++++ b/ledgerly/provider_refunds.py
+@@ -1,6 +1,59 @@
+ """Refunds of card payments through the payment provider."""
+ 
++import uuid
+ 
+-def refund_via_provider(payment, amount, gateway):
++from . import audit
++from .errors import BillingError
++from .gateway import GatewayTimeout
++from .money import ZERO, round_money
++
++MAX_ATTEMPTS = 3
++
++
++def refund_via_provider(payment, amount, gateway, *, idempotency_key=None):
+     """Refund ``amount`` of a captured payment through the payment provider."""
+-    raise NotImplementedError
++    # Idempotency is checked first, before any state validation.
++    if idempotency_key is not None:
++        for entry in audit.events():
++            if entry.get("idempotency_key") == idempotency_key:
++                return payment
++
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++
++    already_refunded = payment.refunded_amount or ZERO
++    if already_refunded + amount > payment.amount:
++        raise BillingError("refund_exceeds_captured", str(amount))
++
++    # A stable key across retries: if a previous attempt actually refunded but the
++    # answer was lost, the provider deduplicates and moves no more money.
++    provider_key = f"refund:{payment.id}:{uuid.uuid4().hex}"
++
++    refund_id = None
++    for _ in range(MAX_ATTEMPTS):
++        try:
++            refund_id = gateway.refund(payment.id, amount, provider_key)
++            break
++        except GatewayTimeout:
++            continue
++
++    if refund_id is None:
++        raise BillingError("provider_unavailable")
++
++    payment.refunded_amount = already_refunded + amount
++    if payment.refunded_amount >= payment.amount:
++        payment.status = "refunded"
++    if getattr(payment, "provider_refund_ids", None) is None:
++        payment.provider_refund_ids = []
++    payment.provider_refund_ids.append(refund_id)
++
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        idempotency_key=idempotency_key,
++    )
++    return payment
