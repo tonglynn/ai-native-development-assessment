@@ -45,7 +45,7 @@ def test_conv_c3_rejects_naive():
 
 
 def test_conv_c4_audit_entry():
-    """[team convention] Every operation that moves money or changes a payment/credit must write an audit entry with ledgerly.audit.record("<past_tense_event>", <entity>_id=..., amount=...). Finance reconciles the ledger from these entries."""
+    """[team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record("<past_tense_event>", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against (payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries."""
     audit.clear()
     write_off(_issued(), T0, "insolvent")
     entries = [e for e in audit.events() if e.get("invoice_id") == "inv_1"]
@@ -53,7 +53,7 @@ def test_conv_c4_audit_entry():
 
 
 def test_conv_c5_idempotent():
-    """[team convention] Every operation that moves money or changes a payment/credit must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). If an audit entry with the same key already exists (ledgerly.audit.events()), return without applying the operation again, and include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."""
+    """[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."""
     audit.clear()
     inv = _issued()
     first = write_off(inv, T0, "insolvent", idempotency_key="wo-1")

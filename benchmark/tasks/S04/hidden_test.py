@@ -21,6 +21,13 @@ def test_func_returns_credit():
     assert goodwill_credit(_issued(), Decimal("5.00"), "late") == {"invoice_id": "inv_1", "amount": Decimal("5.00"), "reason": "late"}
 
 
+def test_func_rejects_invalid():
+    """Non-positive amounts, amounts above the invoice total and credits on non-issued invoices are rejected."""
+    for inv, amount in [(_issued(), "0"), (_issued("50.00"), "50.01"), (_issued(status="draft"), "1.00")]:
+        with raises(Exception):
+            goodwill_credit(inv, Decimal(amount), "x")
+
+
 def test_conv_c2_billing_error():
     """[team convention] Invalid billing input must raise ledgerly.errors.BillingError with a short snake_case code, e.g. BillingError("invalid_quantity"). Never raise ValueError/TypeError: the API layer only maps BillingError to 4xx responses."""
     for inv, amount in [(_issued(), "0"), (_issued("50.00"), "50.01"), (_issued(status="draft"), "1.00")]:
@@ -29,16 +36,21 @@ def test_conv_c2_billing_error():
 
 
 def test_conv_c4_audit_entry():
-    """[team convention] Every operation that moves money or changes a payment/credit must write an audit entry with ledgerly.audit.record("<past_tense_event>", <entity>_id=..., amount=...). Finance reconciles the ledger from these entries."""
+    """[team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record("<past_tense_event>", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against (payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries."""
     audit.clear()
     goodwill_credit(_issued(), Decimal("5.00"), "late")
-    entries = [e for e in audit.events() if "credit" in e["event"] or "goodwill" in e["event"]]
-    assert len(entries) == 1 and entries[0].get("invoice_id") == "inv_1", audit.events()
+    entries = [e for e in audit.events() if e.get("invoice_id") == "inv_1"]
+    assert len(entries) == 1 and entries[0].get("amount") == Decimal("5.00"), audit.events()
 
 
-def test_conv_c6_approval_threshold():
-    """[team convention] Support-initiated refunds and credits above the approval threshold need a second approver: accept a keyword-only `approved_by` and raise BillingError("approval_required") when it is missing. The threshold is set by finance policy: 500.00 before 2.0.0, 1000.00 since 2.0.0 (see CHANGELOG)."""
-    goodwill_credit(_issued(), Decimal("700.00"), "x")  # below the 2.0.0 threshold: no approval needed
+def test_conv_c6_blocks_unapproved():
+    """[team convention] Support-initiated refunds and credits above the approval threshold need a second approver: accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below the threshold need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing. The threshold is set by finance policy: 500.00 before 2.0.0, 1000.00 since 2.0.0 (see CHANGELOG)."""
     with raises(BillingError):
         goodwill_credit(_issued(), Decimal("1200.00"), "x")
+
+
+def test_conv_c6_allows_below_threshold_or_approved():
+    """[team convention] Support-initiated refunds and credits above the approval threshold need a second approver: accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below the threshold need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing. The threshold is set by finance policy: 500.00 before 2.0.0, 1000.00 since 2.0.0 (see CHANGELOG)."""
+    # 700.00 is below the 2.0.0 threshold (1000.00): applying the old 500.00 rule wrongly blocks it
+    assert goodwill_credit(_issued(), Decimal("700.00"), "x")["amount"] == Decimal("700.00")
     assert goodwill_credit(_issued(), Decimal("1200.00"), "x", approved_by="usr_finance_lead")["amount"] == Decimal("1200.00")

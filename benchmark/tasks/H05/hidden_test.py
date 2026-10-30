@@ -36,9 +36,3 @@ def test_conv_c1_decimal_cents():
 def test_conv_c1_half_up():
     """[team convention] Round money only with ledgerly.money.round_money (half-up to the cent). Python's round() and a bare Decimal.quantize() use banker's rounding and give wrong invoice totals."""
     assert prorated_refund(_sub("0.93"), datetime(2026, 1, 16, tzinfo=UTC)) == Decimal("0.47")
-
-
-def test_conv_c3_rejects_naive():
-    """[team convention] Datetimes in ledgerly must be timezone-aware UTC. Pass every incoming datetime through ledgerly.clock.ensure_utc(), which rejects naive datetimes with BillingError and normalises to UTC."""
-    with raises(BillingError):
-        prorated_refund(_sub("30.00"), datetime(2026, 1, 16))

@@ -22,6 +22,10 @@ def d(s: str) -> str:
     return textwrap.dedent(s).lstrip("\n")
 
 
+# Held-out tasks that closely mirror one experience task (same module and shape) are "near" transfer (audit M4).
+NEAR_TRANSFER = {"H06": "E06", "H07": "E04", "H11": "E04"}
+
+
 def task(id, group, repo, title, issue, conventions, *, setup, stub, naive, reference, hidden, naive_kind="naive"):
     base = TASKS / id
     meta = {
@@ -33,6 +37,10 @@ def task(id, group, repo, title, issue, conventions, *, setup, stub, naive, refe
         "conventions": conventions,
         "naive_kind": naive_kind,
     }
+    if group == "heldout":
+        meta["transfer"] = "near" if id in NEAR_TRANSFER else "far"
+        if id in NEAR_TRANSFER:
+            meta["mirrors"] = NEAR_TRANSFER[id]
     base.mkdir(parents=True, exist_ok=True)
     (base / "task.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "\n")
     for variant, files in [("setup", setup), ("stub", stub), ("naive", naive), ("reference", reference)]:
@@ -49,14 +57,19 @@ C1_ROUND = "[team convention] Round money only with ledgerly.money.round_money (
 C2 = 'Invalid billing input must raise ledgerly.errors.BillingError with a short snake_case code, e.g. BillingError("invalid_quantity"). Never raise ValueError/TypeError: the API layer only maps BillingError to 4xx responses.'
 C2 = "[team convention] " + C2
 C3 = "[team convention] Datetimes in ledgerly must be timezone-aware UTC. Pass every incoming datetime through ledgerly.clock.ensure_utc(), which rejects naive datetimes with BillingError and normalises to UTC."
-C4 = '[team convention] Every operation that moves money or changes a payment/credit must write an audit entry with ledgerly.audit.record("<past_tense_event>", <entity>_id=..., amount=...). Finance reconciles the ledger from these entries.'
-C5 = ("[team convention] Every operation that moves money or changes a payment/credit must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). "
-      "If an audit entry with the same key already exists (ledgerly.audit.events()), return without applying the operation again, "
-      "and include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204.")
+C4 = ('[team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with '
+      'ledgerly.audit.record("<past_tense_event>", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against '
+      '(payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries.')
+C5 = ("[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only "
+      "`idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the "
+      "same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) "
+      "without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204.")
 C6 = ('[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): '
-      'accept a keyword-only `approved_by` and raise BillingError("approval_required") when it is missing for amounts above the threshold.')
-C6_V2 = ('[team convention] Support-initiated refunds and credits above the approval threshold need a second approver: accept a keyword-only '
-         '`approved_by` and raise BillingError("approval_required") when it is missing. The threshold is set by finance policy: '
+      'accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need '
+      'no approval; above it, raise BillingError("approval_required") when `approved_by` is missing.')
+C6_V2 = ('[team convention] Support-initiated refunds and credits above the approval threshold need a second approver: accept an optional '
+         'keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below the threshold need no approval; '
+         'above it, raise BillingError("approval_required") when `approved_by` is missing. The threshold is set by finance policy: '
          '500.00 before 2.0.0, 1000.00 since 2.0.0 (see CHANGELOG).')
 C1_V2 = "[team convention] Round money only with ledgerly.money.round_money, which implements the current finance rounding policy (since 2.0.0 this is banker's rounding, see CHANGELOG). Never hard-code a rounding mode."
 K1 = "[simkit convention] simkit is float-only: return plain Python floats and accept float inputs. Decimal and datetime objects do not belong in simulation code."
@@ -335,8 +348,8 @@ def test_conv_c3_returns_utc():
 task(
     "E04", "experience", "ledgerly_v1", "Partial refunds",
     """
-    Add `refund(payment, amount, at)` to `ledgerly/adjustments.py`.
-    Only captured payments can be refunded. Partial refunds are allowed, but the
+    Add `refund(payment, amount, at)` to `ledgerly/adjustments.py`; the support
+    team uses it to refund customers. Only captured payments can be refunded. Partial refunds are allowed, but the
     total refunded must never exceed the captured amount. Keep the running total
     in `payment.refunded_amount` and set `payment.status` to `"refunded"` once the
     full amount has been refunded. Return the payment.
@@ -447,9 +460,9 @@ def test_conv_c4_audit_entry():
     {doc(C4)}
     audit.clear()
     refund(_captured(), Decimal("40.00"), T0)
-    entries = [e for e in audit.events() if "refund" in e["event"]]
+    entries = [e for e in audit.events() if e.get("payment_id") == "pay_1"]
     assert len(entries) == 1, audit.events()
-    assert entries[0].get("payment_id") == "pay_1" and entries[0].get("amount") == Decimal("40.00"), entries[0]
+    assert entries[0].get("amount") == Decimal("40.00"), entries[0]
 
 
 def test_conv_c5_idempotent():
@@ -459,18 +472,29 @@ def test_conv_c5_idempotent():
     refund(p, Decimal("40.00"), T0, idempotency_key="rf-1")
     refund(p, Decimal("40.00"), T0, idempotency_key="rf-1")  # a retried request
     assert p.refunded_amount == Decimal("40.00"), p.refunded_amount
-    entries = [e for e in audit.events() if "refund" in e["event"]]
-    assert len(entries) == 1 and entries[0].get("idempotency_key") == "rf-1", entries
+    assert sum(e.get("idempotency_key") == "rf-1" for e in audit.events()) == 1, audit.events()
 
 
-def test_conv_c6_approval():
+def _big(pid):
+    return Payment(pid, "inv_1", Decimal("2000.00"), status="captured", created_at=T0, captured_at=T0)
+
+
+def test_conv_c6_blocks_unapproved():
     {doc(C6)}
-    big = Payment("pay_9", "inv_1", Decimal("2000.00"), status="captured", created_at=T0, captured_at=T0)
-    refund(big, Decimal("500.00"), T0)  # at the threshold: no approval needed
+    big = _big("pay_9")
     with raises(BillingError):
         refund(big, Decimal("600.00"), T0)
-    refund(big, Decimal("600.00"), T0, approved_by="usr_finance_lead")
-    assert big.refunded_amount == Decimal("1100.00"), big.refunded_amount
+    assert big.refunded_amount == Decimal("0.00"), big.refunded_amount
+
+
+def test_conv_c6_allows_at_threshold_or_approved():
+    {doc(C6)}
+    at_threshold = _big("pay_10")
+    refund(at_threshold, Decimal("500.00"), T0)  # at the threshold: no approval needed
+    assert at_threshold.refunded_amount == Decimal("500.00"), at_threshold.refunded_amount
+    approved = _big("pay_11")
+    refund(approved, Decimal("600.00"), T0, approved_by="usr_finance_lead")
+    assert approved.refunded_amount == Decimal("600.00"), approved.refunded_amount
 ''',
 )
 
@@ -648,7 +672,7 @@ def test_conv_c4_audit_entry():
     {doc(C4)}
     audit.clear()
     capture(_authorized(), T0)
-    entries = [e for e in audit.events() if "captur" in e["event"]]
+    entries = [e for e in audit.events() if e.get("payment_id") == "pay_1"]
     assert len(entries) == 1, audit.events()
     assert entries[0].get("payment_id") == "pay_1" and entries[0].get("amount") == Decimal("20.00"), entries[0]
 
@@ -659,7 +683,7 @@ def test_conv_c5_idempotent():
     p = _authorized()
     capture(p, T0, idempotency_key="cap-1")
     capture(p, T0, idempotency_key="cap-1")  # a retried request must not fail or capture twice
-    entries = [e for e in audit.events() if "captur" in e["event"]]
+    entries = [e for e in audit.events() if e.get("payment_id") == "pay_1"]
     assert len(entries) == 1 and entries[0].get("idempotency_key") == "cap-1", entries
 ''',
 )
@@ -889,8 +913,8 @@ task(
     "H04", "heldout", "ledgerly_v1", "Credit notes",
     """
     Add `issue_credit_note(invoice, amount, reason)` to
-    `ledgerly/adjustments.py`. A credit note gives money back to the customer against
-    an issued invoice. Return a dict with the keys `invoice_id`, `amount` and
+    `ledgerly/adjustments.py`; the support team issues credit notes to give money
+    back to a customer against an issued invoice. Return a dict with the keys `invoice_id`, `amount` and
     `reason`. The amount must be positive and must not exceed the invoice total,
     and only issued invoices can be credited.
     """,
@@ -985,7 +1009,7 @@ def test_conv_c4_audit_entry():
     {doc(C4)}
     audit.clear()
     issue_credit_note(_issued(), Decimal("10.00"), "goodwill")
-    entries = [e for e in audit.events() if "credit" in e["event"]]
+    entries = [e for e in audit.events() if e.get("invoice_id") == "inv_1"]
     assert len(entries) == 1, audit.events()
     assert entries[0].get("invoice_id") == "inv_1" and entries[0].get("amount") == Decimal("10.00"), entries[0]
 
@@ -996,18 +1020,25 @@ def test_conv_c5_idempotent():
     first = issue_credit_note(_issued(), Decimal("10.00"), "goodwill", idempotency_key="cn-1")
     again = issue_credit_note(_issued(), Decimal("10.00"), "goodwill", idempotency_key="cn-1")
     assert again == first, again
-    entries = [e for e in audit.events() if "credit" in e["event"]]
+    entries = [e for e in audit.events() if e.get("invoice_id") == "inv_1"]
     assert len(entries) == 1 and entries[0].get("idempotency_key") == "cn-1", entries
 
 
-def test_conv_c6_approval():
+def _annual(iid):
+    return Invoice(iid, "cus_1", lines=[LineItem("Annual plan", 1, Decimal("1500.00"))], status="issued")
+
+
+def test_conv_c6_blocks_unapproved():
     {doc(C6)}
-    big = Invoice("inv_2", "cus_1", lines=[LineItem("Annual plan", 1, Decimal("1500.00"))], status="issued")
-    issue_credit_note(big, Decimal("500.00"), "x")  # at the threshold: no approval needed
     with raises(BillingError):
-        issue_credit_note(big, Decimal("600.00"), "x")
-    note = issue_credit_note(big, Decimal("600.00"), "x", approved_by="usr_finance_lead")
-    assert note["amount"] == Decimal("600.00"), note
+        issue_credit_note(_annual("inv_2"), Decimal("500.01"), "x")
+
+
+def test_conv_c6_allows_at_threshold_or_approved():
+    {doc(C6)}
+    assert issue_credit_note(_annual("inv_3"), Decimal("500.00"), "x")["amount"] == Decimal("500.00")  # at the threshold
+    note = issue_credit_note(_annual("inv_4"), Decimal("900.00"), "x", approved_by="usr_finance_lead")
+    assert note["amount"] == Decimal("900.00"), note
 ''',
 )
 
@@ -1020,7 +1051,7 @@ task(
     contains `cancel_at` (unused time divided by the period length), rounded to
     the cent.
     """,
-    ["C1", "C3"],
+    ["C1"],
     setup={"tests/test_prorated_refund.py": """
         from datetime import datetime, timezone
         from decimal import Decimal
@@ -1089,12 +1120,6 @@ def test_conv_c1_decimal_cents():
 def test_conv_c1_half_up():
     {doc(C1_ROUND)}
     assert prorated_refund(_sub("0.93"), datetime(2026, 1, 16, tzinfo=UTC)) == Decimal("0.47")
-
-
-def test_conv_c3_rejects_naive():
-    {doc(C3)}
-    with raises(BillingError):
-        prorated_refund(_sub("30.00"), datetime(2026, 1, 16))
 ''',
 )
 
@@ -1180,9 +1205,9 @@ def test_conv_c4_audit_entry():
     {doc(C4)}
     audit.clear()
     void(_payment(), T0)
-    entries = [e for e in audit.events() if "void" in e["event"]]
+    entries = [e for e in audit.events() if e.get("payment_id") == "pay_1"]
     assert len(entries) == 1, audit.events()
-    assert entries[0].get("payment_id") == "pay_1", entries[0]
+    assert entries[0].get("amount") == Decimal("20.00"), entries[0]
 
 
 def test_conv_c5_idempotent():
@@ -1191,7 +1216,7 @@ def test_conv_c5_idempotent():
     p = _payment()
     void(p, T0, idempotency_key="vd-1")
     void(p, T0, idempotency_key="vd-1")  # a retried request must not fail or void twice
-    entries = [e for e in audit.events() if "void" in e["event"]]
+    entries = [e for e in audit.events() if e.get("payment_id") == "pay_1"]
     assert len(entries) == 1 and entries[0].get("idempotency_key") == "vd-1", entries
 ''',
 )
@@ -1199,8 +1224,9 @@ def test_conv_c5_idempotent():
 task(
     "H07", "heldout", "ledgerly_v1", "Shipping-fee refunds",
     """
-    Customers sometimes get their shipping fee back after a late delivery. Add
-    `refund_shipping(payment, amount, at)` to `ledgerly/adjustments.py`: it refunds
+    Customers sometimes get their shipping fee back after a late delivery; the support
+    team handles these. Add `refund_shipping(payment, amount, at)` to
+    `ledgerly/adjustments.py`: it refunds
     `amount` of a captured payment, adding it to `payment.refunded_amount` and
     setting the status to `"refunded"` once everything has been refunded. Return the
     payment. The amount must be positive and the total refunded may not exceed the
@@ -1322,14 +1348,22 @@ def test_conv_c5_idempotent():
     assert len(entries) == 1 and entries[0].get("idempotency_key") == "sh-1", entries
 
 
-def test_conv_c6_approval():
+def test_conv_c6_blocks_unapproved():
     {doc(C6)}
-    big = _captured("2000.00")
-    refund_shipping(big, Decimal("500.00"), T0)
+    big = _captured("1500.00")
     with raises(BillingError):
-        refund_shipping(big, Decimal("600.00"), T0)
-    refund_shipping(big, Decimal("600.00"), T0, approved_by="usr_finance_lead")
-    assert big.refunded_amount == Decimal("1100.00"), big.refunded_amount
+        refund_shipping(big, Decimal("750.00"), T0)
+    assert big.refunded_amount == Decimal("0.00"), big.refunded_amount
+
+
+def test_conv_c6_allows_below_threshold_or_approved():
+    {doc(C6)}
+    small = _captured("1500.00")
+    refund_shipping(small, Decimal("480.00"), T0)  # below the threshold: no approval needed
+    assert small.refunded_amount == Decimal("480.00"), small.refunded_amount
+    approved = _captured("1500.00")
+    refund_shipping(approved, Decimal("750.00"), T0, approved_by="usr_finance_lead")
+    assert approved.refunded_amount == Decimal("750.00"), approved.refunded_amount
 ''',
 )
 
@@ -1340,7 +1374,8 @@ task(
     `capture_partial(payment, amount, at)` to `ledgerly/payments.py`: it captures
     `amount` of an authorized payment, sets `payment.amount` to the captured amount,
     stores the capture time in `payment.captured_at` and sets the status to
-    `"captured"`. The amount must be positive and at most the authorized amount.
+    `"captured"`. The amount must be positive and at most the authorized amount;
+    amounts with more than two decimals are rounded to the cent.
     """,
     ["C1", "C2", "C3", "C4", "C5"],
     setup={"tests/test_capture_partial.py": """
@@ -1646,6 +1681,198 @@ def test_conv_c5_idempotent():
 ''',
 )
 
+task(
+    "H11", "heldout", "ledgerly_v1", "Support refund requests",
+    """
+    The support console gets a single entry point for refunds. Add
+    `process_refund_request(payment, amount, requested_by, at)` in a new module
+    `ledgerly/support.py`. `amount` is the text the support agent typed (for
+    example "49.99"; amounts with more than two decimals are rounded to the cent),
+    `requested_by` is the agent's user id and `at` is when the request was made.
+    Only captured payments can be refunded, the amount must be positive, and the
+    total refunded must never exceed the captured amount. Apply the refund to the
+    payment (keep the running total in `payment.refunded_amount`; set
+    `payment.status` to `"refunded"` once the full amount has been refunded) and
+    return the payment.
+    """,
+    ["C1", "C2", "C3", "C4", "C5", "C6"],
+    setup={"tests/test_support.py": """
+        from datetime import datetime, timezone
+        from decimal import Decimal
+
+        from ledgerly.models import Payment
+        from ledgerly.support import process_refund_request
+
+        T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+
+        def test_refund_from_console():
+            p = Payment("pay_1", "inv_1", Decimal("100.00"), status="captured", created_at=T0, captured_at=T0)
+            process_refund_request(p, "40.00", "usr_support_1", T0)
+            assert p.refunded_amount == Decimal("40.00")
+        """},
+    stub={"ledgerly/support.py": '''
+        """Entry points used by the support console."""
+
+
+        def process_refund_request(payment, amount, requested_by, at):
+            """Refund part or all of a captured payment on behalf of a support agent."""
+            raise NotImplementedError
+        '''},
+    naive={"ledgerly/support.py": '''
+        """Entry points used by the support console."""
+
+        from decimal import Decimal
+
+
+        def process_refund_request(payment, amount, requested_by, at):
+            """Refund part or all of a captured payment on behalf of a support agent."""
+            if payment.status != "captured":
+                raise ValueError("only captured payments can be refunded")
+            amount = Decimal(amount).quantize(Decimal("0.01"))
+            if amount <= 0 or payment.refunded_amount + amount > payment.amount:
+                raise ValueError("invalid refund amount")
+            payment.refunded_amount += amount
+            if payment.refunded_amount == payment.amount:
+                payment.status = "refunded"
+            return payment
+        '''},
+    reference={"ledgerly/support.py": '''
+        """Entry points used by the support console."""
+
+        from datetime import datetime
+        from decimal import Decimal
+
+        from . import audit
+        from .clock import ensure_utc
+        from .errors import BillingError
+        from .models import Payment
+        from .money import ZERO, round_money
+
+        APPROVAL_THRESHOLD = Decimal("500.00")
+
+
+        def process_refund_request(payment: Payment, amount, requested_by: str, at: datetime, *,
+                                   idempotency_key=None, approved_by=None) -> Payment:
+            """Refund part or all of a captured payment on behalf of a support agent."""
+            at = ensure_utc(at)
+            if idempotency_key is not None and any(e.get("idempotency_key") == idempotency_key for e in audit.events()):
+                return payment
+            if payment.status != "captured":
+                raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
+            amount = round_money(amount)
+            if amount <= ZERO:
+                raise BillingError("non_positive_amount", str(amount))
+            if payment.refunded_amount + amount > payment.amount:
+                raise BillingError("refund_exceeds_capture", str(amount))
+            if amount > APPROVAL_THRESHOLD and not approved_by:
+                raise BillingError("approval_required", str(amount))
+            payment.refunded_amount = round_money(payment.refunded_amount + amount)
+            if payment.refunded_amount == payment.amount:
+                payment.status = "refunded"
+            audit.record("payment_refunded", payment_id=payment.id, amount=amount, at=at, requested_by=requested_by,
+                         idempotency_key=idempotency_key, approved_by=approved_by)
+            return payment
+        '''},
+    hidden=hdr("from ledgerly.support import process_refund_request\n") + f'''
+
+AGENT = "usr_support_1"
+
+
+def _captured(amount="100.00", pid="pay_1"):
+    return Payment(pid, "inv_1", Decimal(amount), status="captured", created_at=T0, captured_at=T0)
+
+
+def test_func_partial_then_full():
+    {doc("Refunds typed in the console accumulate; the payment becomes 'refunded' once fully refunded.")}
+    p = _captured()
+    process_refund_request(p, "40.00", AGENT, T0)
+    assert p.refunded_amount == Decimal("40.00") and p.status == "captured"
+    process_refund_request(p, "60", AGENT, T0)
+    assert p.refunded_amount == Decimal("100.00") and p.status == "refunded"
+
+
+def test_func_rejects_invalid():
+    {doc("Over-refunds, non-positive amounts and refunds of non-captured payments must be rejected.")}
+    with raises(Exception):
+        process_refund_request(_captured(), "100.01", AGENT, T0)
+    with raises(Exception):
+        process_refund_request(_captured(), "0", AGENT, T0)
+    with raises(Exception):
+        process_refund_request(Payment("pay_2", "inv_1", Decimal("10.00"), created_at=T0), "1.00", AGENT, T0)
+
+
+def test_conv_c1_decimal_cents():
+    {doc(C1_TYPE)}
+    p = _captured()
+    process_refund_request(p, "12.5", AGENT, T0)
+    assert isinstance(p.refunded_amount, Decimal) and p.refunded_amount == Decimal("12.50"), p.refunded_amount
+    assert p.refunded_amount.as_tuple().exponent == -2, p.refunded_amount
+
+
+def test_conv_c1_half_up():
+    {doc(C1_ROUND)}
+    p = _captured()
+    process_refund_request(p, "10.005", AGENT, T0)
+    assert p.refunded_amount == Decimal("10.01"), p.refunded_amount
+
+
+def test_conv_c2_billing_error():
+    {doc(C2)}
+    for amount in ("100.01", "-5", "ten"):
+        with raises(BillingError):
+            process_refund_request(_captured(), amount, AGENT, T0)
+    with raises(BillingError):
+        process_refund_request(Payment("pay_2", "inv_1", Decimal("10.00"), created_at=T0), "1.00", AGENT, T0)
+
+
+def test_conv_c3_rejects_naive():
+    {doc(C3)}
+    with raises(BillingError):
+        process_refund_request(_captured(), "10.00", AGENT, datetime(2026, 1, 1))
+
+
+def test_conv_c4_audit_entry():
+    {doc(C4)}
+    audit.clear()
+    process_refund_request(_captured(), "40.00", AGENT, T0)
+    entries = [e for e in audit.events() if e.get("payment_id") == "pay_1"]
+    assert len(entries) == 1, audit.events()
+    assert entries[0].get("amount") == Decimal("40.00"), entries[0]
+
+
+def test_conv_c5_idempotent():
+    {doc(C5)}
+    audit.clear()
+    p = _captured()
+    process_refund_request(p, "40.00", AGENT, T0, idempotency_key="rq-1")
+    process_refund_request(p, "40.00", AGENT, T0, idempotency_key="rq-1")  # the console retries after a timeout
+    assert p.refunded_amount == Decimal("40.00"), p.refunded_amount
+    assert sum(e.get("idempotency_key") == "rq-1" for e in audit.events()) == 1, audit.events()
+    process_refund_request(p, "10.00", AGENT, T0)  # callers without a key keep working ...
+    process_refund_request(p, "10.00", AGENT, T0)  # ... every time
+    assert p.refunded_amount == Decimal("60.00"), p.refunded_amount
+
+
+def test_conv_c6_blocks_unapproved():
+    {doc(C6)}
+    big = _captured("1800.00")
+    with raises(BillingError):
+        process_refund_request(big, "650.00", AGENT, T0)
+    assert big.refunded_amount == Decimal("0.00"), big.refunded_amount
+
+
+def test_conv_c6_allows_below_threshold_or_approved():
+    {doc(C6)}
+    small = _captured("1800.00", pid="pay_5")
+    process_refund_request(small, "450.00", AGENT, T0)  # below the threshold: no approval needed
+    assert small.refunded_amount == Decimal("450.00"), small.refunded_amount
+    approved = _captured("1800.00", pid="pay_6")
+    process_refund_request(approved, "650.00", AGENT, T0, approved_by="usr_finance_lead")
+    assert approved.refunded_amount == Decimal("650.00"), approved.refunded_amount
+''',
+)
+
 # ---------------------------------------------------------------- S: after the v2 rounding-policy change
 
 S_STALE_ROUND = "quantize(Decimal(\"0.01\"), rounding=ROUND_HALF_UP)"
@@ -1875,7 +2102,7 @@ task(
     `goodwill_credit(invoice, amount, reason)` to `ledgerly/adjustments.py`: it
     credits `amount` against an issued invoice and returns a dict with the keys
     `invoice_id`, `amount` and `reason`. The amount must be positive and must not
-    exceed the invoice total.
+    exceed the invoice total, and only issued invoices can be credited.
     """,
     ["C2", "C4", "C6"],
     naive_kind="stale_v1_habit",
@@ -1949,6 +2176,13 @@ def test_func_returns_credit():
     assert goodwill_credit(_issued(), Decimal("5.00"), "late") == {{"invoice_id": "inv_1", "amount": Decimal("5.00"), "reason": "late"}}
 
 
+def test_func_rejects_invalid():
+    {doc("Non-positive amounts, amounts above the invoice total and credits on non-issued invoices are rejected.")}
+    for inv, amount in [(_issued(), "0"), (_issued("50.00"), "50.01"), (_issued(status="draft"), "1.00")]:
+        with raises(Exception):
+            goodwill_credit(inv, Decimal(amount), "x")
+
+
 def test_conv_c2_billing_error():
     {doc(C2)}
     for inv, amount in [(_issued(), "0"), (_issued("50.00"), "50.01"), (_issued(status="draft"), "1.00")]:
@@ -1960,16 +2194,168 @@ def test_conv_c4_audit_entry():
     {doc(C4)}
     audit.clear()
     goodwill_credit(_issued(), Decimal("5.00"), "late")
-    entries = [e for e in audit.events() if "credit" in e["event"] or "goodwill" in e["event"]]
-    assert len(entries) == 1 and entries[0].get("invoice_id") == "inv_1", audit.events()
+    entries = [e for e in audit.events() if e.get("invoice_id") == "inv_1"]
+    assert len(entries) == 1 and entries[0].get("amount") == Decimal("5.00"), audit.events()
 
 
-def test_conv_c6_approval_threshold():
+def test_conv_c6_blocks_unapproved():
     {doc(C6_V2)}
-    goodwill_credit(_issued(), Decimal("700.00"), "x")  # below the 2.0.0 threshold: no approval needed
     with raises(BillingError):
         goodwill_credit(_issued(), Decimal("1200.00"), "x")
+
+
+def test_conv_c6_allows_below_threshold_or_approved():
+    {doc(C6_V2)}
+    # 700.00 is below the 2.0.0 threshold (1000.00): applying the old 500.00 rule wrongly blocks it
+    assert goodwill_credit(_issued(), Decimal("700.00"), "x")["amount"] == Decimal("700.00")
     assert goodwill_credit(_issued(), Decimal("1200.00"), "x", approved_by="usr_finance_lead")["amount"] == Decimal("1200.00")
+''',
+)
+
+task(
+    "S05", "stale", "ledgerly_v2", "Service-outage refunds",
+    """
+    After a service outage the support team refunds part of what affected customers
+    paid. Add `outage_refund(payment, amount, at)` to `ledgerly/adjustments.py`: it
+    refunds `amount` of a captured payment, adding it to `payment.refunded_amount`
+    and setting the status to `"refunded"` once everything has been refunded. Return
+    the payment. The amount must be positive, the total refunded may not exceed the
+    captured amount, and only captured payments can be refunded.
+    """,
+    ["C2", "C4", "C6"],
+    naive_kind="stale_v1_habit",
+    setup={"tests/test_outage_refund.py": """
+        from datetime import datetime, timezone
+        from decimal import Decimal
+
+        from ledgerly.adjustments import outage_refund
+        from ledgerly.models import Payment
+
+        T0 = datetime(2026, 10, 1, tzinfo=timezone.utc)
+
+
+        def test_outage_refund():
+            p = Payment("pay_1", "inv_1", Decimal("80.00"), status="captured", created_at=T0, captured_at=T0)
+            outage_refund(p, Decimal("8.00"), T0)
+            assert p.refunded_amount == Decimal("8.00")
+        """},
+    stub={"ledgerly/adjustments.py.append": '''
+        def outage_refund(payment, amount, at):
+            """Refund part of a captured payment after a service outage."""
+            raise NotImplementedError
+        '''},
+    naive={"ledgerly/adjustments.py.append": '''
+        from decimal import Decimal
+
+        from . import audit
+        from .clock import ensure_utc
+        from .errors import BillingError
+        from .money import ZERO, round_money
+
+        APPROVAL_THRESHOLD = Decimal("500.00")
+
+
+        def outage_refund(payment, amount, at, *, approved_by=None):
+            at = ensure_utc(at)
+            if payment.status != "captured":
+                raise BillingError("invalid_state", payment.status)
+            amount = round_money(amount)
+            if amount <= ZERO or payment.refunded_amount + amount > payment.amount:
+                raise BillingError("invalid_amount", str(amount))
+            if amount > APPROVAL_THRESHOLD and not approved_by:
+                raise BillingError("approval_required", str(amount))
+            payment.refunded_amount = round_money(payment.refunded_amount + amount)
+            if payment.refunded_amount == payment.amount:
+                payment.status = "refunded"
+            audit.record("outage_refund_issued", payment_id=payment.id, amount=amount, at=at, approved_by=approved_by)
+            return payment
+        '''},
+    reference={"ledgerly/adjustments.py.append": '''
+        from decimal import Decimal
+
+        from . import audit
+        from .clock import ensure_utc
+        from .errors import BillingError
+        from .money import ZERO, round_money
+
+        APPROVAL_THRESHOLD = Decimal("1000.00")  # FIN-2026-09, ledgerly 2.0.0
+
+
+        def outage_refund(payment, amount, at, *, approved_by=None):
+            """Refund part of a captured payment after a service outage."""
+            at = ensure_utc(at)
+            if payment.status != "captured":
+                raise BillingError("invalid_state", payment.status)
+            amount = round_money(amount)
+            if amount <= ZERO or payment.refunded_amount + amount > payment.amount:
+                raise BillingError("invalid_amount", str(amount))
+            if amount > APPROVAL_THRESHOLD and not approved_by:
+                raise BillingError("approval_required", str(amount))
+            payment.refunded_amount = round_money(payment.refunded_amount + amount)
+            if payment.refunded_amount == payment.amount:
+                payment.status = "refunded"
+            audit.record("outage_refund_issued", payment_id=payment.id, amount=amount, at=at, approved_by=approved_by)
+            return payment
+        '''},
+    hidden=hdr("from ledgerly.adjustments import outage_refund\n") + f'''
+
+T1 = datetime(2026, 10, 1, tzinfo=UTC)
+
+
+def _captured(pid="pay_1", amount="2400.00"):
+    return Payment(pid, "inv_1", Decimal(amount), status="captured", created_at=T1, captured_at=T1)
+
+
+def test_func_partial_then_full():
+    {doc("Refunds accumulate; the payment becomes 'refunded' once fully refunded.")}
+    p = _captured(amount="80.00")
+    outage_refund(p, Decimal("30.00"), T1)
+    assert p.refunded_amount == Decimal("30.00") and p.status == "captured"
+    outage_refund(p, Decimal("50.00"), T1)
+    assert p.refunded_amount == Decimal("80.00") and p.status == "refunded"
+
+
+def test_func_rejects_invalid():
+    {doc("Non-positive amounts, over-refunds and refunds of non-captured payments are rejected.")}
+    for p, amount in [(_captured(), "0"), (_captured(amount="80.00"), "80.01"),
+                      (Payment("pay_2", "inv_1", Decimal("80.00"), created_at=T1), "1.00")]:
+        with raises(Exception):
+            outage_refund(p, Decimal(amount), T1)
+
+
+def test_conv_c2_billing_error():
+    {doc(C2)}
+    for p, amount in [(_captured(), "0"), (_captured(amount="80.00"), "80.01"),
+                      (Payment("pay_2", "inv_1", Decimal("80.00"), created_at=T1), "1.00")]:
+        with raises(BillingError):
+            outage_refund(p, Decimal(amount), T1)
+
+
+def test_conv_c4_audit_entry():
+    {doc(C4)}
+    audit.clear()
+    outage_refund(_captured(), Decimal("12.00"), T1)
+    entries = [e for e in audit.events() if e.get("payment_id") == "pay_1"]
+    assert len(entries) == 1 and entries[0].get("amount") == Decimal("12.00"), audit.events()
+
+
+def test_conv_c6_blocks_unapproved():
+    {doc(C6_V2)}
+    p = _captured()
+    with raises(BillingError):
+        outage_refund(p, Decimal("1250.00"), T1)
+    assert p.refunded_amount == Decimal("0.00"), p.refunded_amount
+
+
+def test_conv_c6_allows_below_threshold_or_approved():
+    {doc(C6_V2)}
+    # 800.00 is below the 2.0.0 threshold (1000.00): applying the old 500.00 rule wrongly blocks it
+    small = _captured("pay_3")
+    outage_refund(small, Decimal("800.00"), T1)
+    assert small.refunded_amount == Decimal("800.00"), small.refunded_amount
+    approved = _captured("pay_4")
+    outage_refund(approved, Decimal("1250.00"), T1, approved_by="usr_finance_lead")
+    assert approved.refunded_amount == Decimal("1250.00"), approved.refunded_amount
 ''',
 )
 

@@ -40,7 +40,7 @@ def test_conv_c2_billing_error():
 
 
 def test_conv_c4_audit_entry():
-    """[team convention] Every operation that moves money or changes a payment/credit must write an audit entry with ledgerly.audit.record("<past_tense_event>", <entity>_id=..., amount=...). Finance reconciles the ledger from these entries."""
+    """[team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record("<past_tense_event>", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against (payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries."""
     audit.clear()
     refund_shipping(_captured(), Decimal("10.00"), T0)
     entries = [e for e in audit.events() if e.get("payment_id") == "pay_1"]
@@ -48,7 +48,7 @@ def test_conv_c4_audit_entry():
 
 
 def test_conv_c5_idempotent():
-    """[team convention] Every operation that moves money or changes a payment/credit must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). If an audit entry with the same key already exists (ledgerly.audit.events()), return without applying the operation again, and include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."""
+    """[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."""
     audit.clear()
     p = _captured()
     refund_shipping(p, Decimal("10.00"), T0, idempotency_key="sh-1")
@@ -58,11 +58,19 @@ def test_conv_c5_idempotent():
     assert len(entries) == 1 and entries[0].get("idempotency_key") == "sh-1", entries
 
 
-def test_conv_c6_approval():
-    """[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept a keyword-only `approved_by` and raise BillingError("approval_required") when it is missing for amounts above the threshold."""
-    big = _captured("2000.00")
-    refund_shipping(big, Decimal("500.00"), T0)
+def test_conv_c6_blocks_unapproved():
+    """[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing."""
+    big = _captured("1500.00")
     with raises(BillingError):
-        refund_shipping(big, Decimal("600.00"), T0)
-    refund_shipping(big, Decimal("600.00"), T0, approved_by="usr_finance_lead")
-    assert big.refunded_amount == Decimal("1100.00"), big.refunded_amount
+        refund_shipping(big, Decimal("750.00"), T0)
+    assert big.refunded_amount == Decimal("0.00"), big.refunded_amount
+
+
+def test_conv_c6_allows_below_threshold_or_approved():
+    """[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing."""
+    small = _captured("1500.00")
+    refund_shipping(small, Decimal("480.00"), T0)  # below the threshold: no approval needed
+    assert small.refunded_amount == Decimal("480.00"), small.refunded_amount
+    approved = _captured("1500.00")
+    refund_shipping(approved, Decimal("750.00"), T0, approved_by="usr_finance_lead")
+    assert approved.refunded_amount == Decimal("750.00"), approved.refunded_amount

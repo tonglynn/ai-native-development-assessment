@@ -30,6 +30,7 @@ class Task:
     conventions: tuple[str, ...]
     naive_kind: str
     dir: Path
+    transfer: str = ""  # held-out only: "near" (mirrors one experience task) or "far" (audit M4)
 
     @property
     def repo_name(self) -> str:
@@ -53,6 +54,7 @@ def load_task(task_id: str) -> Task:
         conventions=tuple(meta["conventions"]),
         naive_kind=meta.get("naive_kind", "naive"),
         dir=tdir,
+        transfer=meta.get("transfer", ""),
     )
 
 

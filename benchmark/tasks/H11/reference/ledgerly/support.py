@@ -1,0 +1,35 @@
+"""Entry points used by the support console."""
+
+from datetime import datetime
+from decimal import Decimal
+
+from . import audit
+from .clock import ensure_utc
+from .errors import BillingError
+from .models import Payment
+from .money import ZERO, round_money
+
+APPROVAL_THRESHOLD = Decimal("500.00")
+
+
+def process_refund_request(payment: Payment, amount, requested_by: str, at: datetime, *,
+                           idempotency_key=None, approved_by=None) -> Payment:
+    """Refund part or all of a captured payment on behalf of a support agent."""
+    at = ensure_utc(at)
+    if idempotency_key is not None and any(e.get("idempotency_key") == idempotency_key for e in audit.events()):
+        return payment
+    if payment.status != "captured":
+        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
+    amount = round_money(amount)
+    if amount <= ZERO:
+        raise BillingError("non_positive_amount", str(amount))
+    if payment.refunded_amount + amount > payment.amount:
+        raise BillingError("refund_exceeds_capture", str(amount))
+    if amount > APPROVAL_THRESHOLD and not approved_by:
+        raise BillingError("approval_required", str(amount))
+    payment.refunded_amount = round_money(payment.refunded_amount + amount)
+    if payment.refunded_amount == payment.amount:
+        payment.status = "refunded"
+    audit.record("payment_refunded", payment_id=payment.id, amount=amount, at=at, requested_by=requested_by,
+                 idempotency_key=idempotency_key, approved_by=approved_by)
+    return payment

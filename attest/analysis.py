@@ -255,6 +255,34 @@ def attribution(results: list[dict]) -> list[dict]:
     return rows
 
 
+def transfer_split(results: list[dict]) -> list[dict]:
+    """Held-out pass@1 split into near transfer (H06, H07, H11 mirror an experience task) and far transfer. Exploratory."""
+    from .benchmark import load_task
+
+    kind = {}
+    cells = defaultdict(list)
+    for r in results:
+        if r["group"] != "heldout" or r["attempts"][0].get("crashed"):
+            continue
+        kind.setdefault(r["task_id"], load_task(r["task_id"]).transfer or "far")
+        cells[(r["condition"], kind[r["task_id"]])].append(bool(r["first_pass"]))
+    return [{"condition": c, "transfer": t, "runs": len(v), "pass@1": sum(v) / len(v)}
+            for (c, t), v in sorted(cells.items(), key=lambda kv: (CONDITIONS.index(kv[0][0]) if kv[0][0] in CONDITIONS else 99, kv[0][1]))]
+
+
+def stale_split(results: list[dict]) -> list[dict]:
+    """Stale pass@1 for the threshold tasks (S04, S05), which can detect outdated memory, and for the
+    rounding tasks (S01-S03), which are "no false recall" checks (audit M3). Preregistered for H3."""
+    cells = defaultdict(list)
+    for r in results:
+        if r["group"] != "stale" or r["attempts"][0].get("crashed"):
+            continue
+        part = "threshold (S04, S05)" if r["task_id"] in ("S04", "S05") else "rounding (S01-S03)"
+        cells[(r["condition"], part)].append(bool(r["first_pass"]))
+    return [{"condition": c, "tasks": p, "runs": len(v), "pass@1": sum(v) / len(v)}
+            for (c, p), v in sorted(cells.items(), key=lambda kv: (CONDITIONS.index(kv[0][0]) if kv[0][0] in CONDITIONS else 99, kv[0][1]))]
+
+
 # ---------------------------------------------------------------- memory funnel: where did the needed note get lost?
 
 FUNNEL_STAGES = ("not_in_memory", "excluded", "not_retrieved", "retrieved_not_injected", "injected")
@@ -317,7 +345,9 @@ RISKS = {
     "legitimate_operation_blocked": lambda task, test: test.startswith("test_conv_c6_allows"),
     "amount_precision_violation": lambda task, test: test.startswith("test_conv_c1"),
     "unaudited_money_movement": lambda task, test: test.startswith("test_conv_c4"),
-    "outdated_policy_applied": lambda task, test: task.startswith("S") and ("rounding_policy" in test or test.startswith("test_conv_c6")),
+    # Only checks an outdated v1 rule can fail: hard-coded half-up rounding, or blocking an amount the v2 threshold allows.
+    # (A blocked unapproved amount in S tasks is "unauthorised", which an agent that never knew C6 also fails.)
+    "outdated_policy_applied": lambda task, test: task.startswith("S") and ("rounding_policy" in test or test.startswith("test_conv_c6_allows")),
     "rule_in_wrong_repository": lambda task, test: task.startswith("B") and test.startswith("test_conv_k"),
 }
 
@@ -366,6 +396,8 @@ def summarise(root: Path) -> dict:
         "paired": paired(results),
         "attribution": attribution(results),
         "funnel": funnel(results),
+        "transfer_split": transfer_split(results),
+        "stale_split": stale_split(results),
         "business_risks": business_risks(results),
         "stale_timeline": stale_timeline(results),
         "total_cost_usd": round(sum(r["cost_usd"] for r in results), 4),

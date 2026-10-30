@@ -36,7 +36,9 @@ match the refunds in the audit trail.
 ## Follow-up
 
 Code review comment template used since: "Every operation that moves money or
-changes a payment/credit must accept an optional keyword-only `idempotency_key=None`
-(callers without a key keep working). If an audit entry with the same key already
-exists, return without applying the operation again, and include `idempotency_key`
-in the audit entry you write. Introduced after the double-refund incident INC-204."
+changes a payment, credit or invoice balance must accept an optional keyword-only
+`idempotency_key=None` (callers without a key keep working). Check the key first,
+before validating state: if an audit entry with the same key already exists, return
+the original result (for functions that return a record, the same record) without
+applying the operation again. Include `idempotency_key` in the audit entry you write.
+Introduced after the double-refund incident INC-204."

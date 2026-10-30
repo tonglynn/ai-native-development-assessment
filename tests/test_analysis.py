@@ -56,11 +56,22 @@ def test_paired_tier_and_attribution():
 
 def test_business_risks_from_failed_test_names():
     rs = [r("H04", "no_memory", "heldout", False), r("H04", "attest", "heldout", True)]
-    rs[0]["attempts"][0]["tests_failed"] = ["test_conv_c5_idempotent", "test_conv_c6_approval"]
+    rs[0]["attempts"][0]["tests_failed"] = ["test_conv_c5_idempotent", "test_conv_c6_blocks_unapproved"]
     rows = {(x["condition"], x["risk"]): x for x in analysis.business_risks(rs)}
     assert rows[("no_memory", "duplicate_money_operation")]["failed"] == 1
     assert rows[("no_memory", "unauthorised_operation")]["rate"] == 1.0
+    assert rows[("no_memory", "legitimate_operation_blocked")]["failed"] == 0
     assert rows[("attest", "duplicate_money_operation")]["failed"] == 0
+
+
+def test_stale_threshold_counts_as_blocking_not_unauthorised():
+    """Audit B1: applying the old 500.00 threshold on 2.0.0 blocks a legitimate 700.00 credit."""
+    rs = [r("S04", "attest", "stale", False)]
+    rs[0]["attempts"][0]["tests_failed"] = ["test_conv_c6_allows_below_threshold_or_approved"]
+    rows = {(x["condition"], x["risk"]): x for x in analysis.business_risks(rs)}
+    assert rows[("attest", "legitimate_operation_blocked")]["failed"] == 1
+    assert rows[("attest", "outdated_policy_applied")]["failed"] == 1
+    assert rows[("attest", "unauthorised_operation")]["failed"] == 0
 
 
 def test_funnel_locates_where_the_note_was_lost():

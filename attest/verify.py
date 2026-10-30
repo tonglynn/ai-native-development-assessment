@@ -46,7 +46,9 @@ def _parse_hidden_tests(path: Path) -> list[HiddenTest]:
 
 
 def run_public_tests(workspace: Path, timeout: int = 120) -> dict:
-    cmd = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"]
+    # Only the repository's tests/ (restored before verification): stray test files the agent
+    # left elsewhere must not decide the result (audit minor 10).
+    cmd = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"] + (["tests"] if (workspace / "tests").is_dir() else [])
     try:
         proc = subprocess.run(cmd, cwd=workspace, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
