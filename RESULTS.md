@@ -165,6 +165,46 @@ the 67% may not transfer. Two findings hold regardless: a fact in the context is
 fact the agent uses, and an unchecked model summary drops exactly the numbers that
 matter. 信息在上下文里不等于 Agent 会用；未经检查的模型摘要恰好丢掉关键数字。
 
+## Dynamic forgetting V1 (exploratory, after the main experiment) / 动态遗忘 V1（探索性）
+
+Setup (`scripts/forgetting_eval.py`, `runs/forgetting`): Attest's memories after the
+learning phase of the main experiment, then a simulated stream of 400 later tasks in
+which Attest's real retrieval injects notes, a note is "used" when it is about a
+convention the task needs, and 200 verified one-off notes accumulate ("the refund
+export uses semicolons"). In the `rare` scenario no task in the stream needs the
+approval rule (C6). Forgetting runs every 50 tasks; eligibility (scope, versions,
+status) is checked first and never overridden; notes are archived, not deleted.
+Then the 11 held-out tasks run with each final memory (132 runs, 0 crashed).
+
+| Policy | Held-out pass@1 | C6 violated on H04/H07/H11 | Learned notes wrongly archived (3 reps) | One-off notes archived |
+|---|---|---|---|---|
+| main experiment, no one-off notes (reference) | 70% | – | – | – |
+| none | 42% | 4 of 9 runs | 0 | 0% |
+| uniform age decay (half-life 50 tasks) | 45% | **9 of 9** | 5, incl. the approval rule in 2 reps | 77% |
+| type-aware age decay (policies never decay) | 39% | **3 of 9** | 2 (code conventions), approval rule kept | 54% |
+| exposure decay + retention-weighted ranking | 39% | 7 of 9 | 4, incl. the approval rule in 2 reps | 13% |
+
+What it shows:
+
+- **Memory pollution is the bigger problem.** 200 verified but one-off notes in scope
+  cut held-out pass@1 from 70% to 42%: they share the tasks' words and take 4 of the 6
+  injected slots. 被验证过、但只用过一次的细节笔记把留出组从 70% 拉到 42%。
+- **No forgetting policy repaired it** (39–45%, within noise): age-based forgetting
+  removes old notes, but the recent one-off notes keep crowding the top 6.
+- **False forgetting has a business cost.** Uniform decay archived the approval rule
+  that nobody had needed for 400 tasks, and every later run of a task that needed it
+  violated the approval check (9 of 9). Type-aware decay, which never decays policy
+  rules, kept it (3 of 9, fewer than without forgetting). 统一衰减误删了审批规则，之后需要它的任务全部违规；按类型衰减保住了它。
+- **My exposure-based variant failed**: lexical retrieval injects a rule into
+  unrelated tasks, each unused injection counts against it, and the approval rule was
+  archived anyway.
+- Implication: the fix belongs at admission and ranking (a detail seen once is stored
+  but not injected, the trust levels in `ROADMAP.md`), not in forgetting alone; and
+  any decay must exempt policy rules. 应在写入与排序环节分级（只出现一次的细节只存不注入），而不是只靠遗忘；任何衰减都必须豁免政策规则。
+
+Limits: simulated stream and "use" by pattern matching, one clutter generator, one
+threshold and half-lives chosen in advance and not tuned; 3 repetitions.
+
 ## What this supports / 结论边界
 
 - Supported: memory of review-only knowledge helps a lot (+36 pp over no memory,
@@ -173,6 +213,7 @@ matter. 信息在上下文里不等于 Agent 会用；未经检查的模型摘�
   published designs, with a smaller and cheaper prompt and immunity to the poison.
 - Retrieval: better recall from embeddings did not translate into better coding results; lexical retrieval is kept.
 - Context: under a 6k-token budget the context manager kept the session's review rule (2 of 3 S05 runs passed, 0 C6 failures) where a sliding window (0/3) and a plain summary (1/3) lost it; full history passes 3/3 at four times the tokens. Exploratory, one scenario, tuned after seeing results.
+- Forgetting: 200 one-off notes cut held-out pass@1 from 70% to 42%; no forgetting policy repaired it; uniform decay wrongly archived the approval rule (9 of 9 later C6 runs violated it), type-aware decay did not. Exploratory.
 - Not supported: that the write gate is free. Here it cost held-out passes; its value
   is protection (poison) and provenance, which the held-out pass rate does not reward.
 - Limits: one model, one synthetic benchmark designed by the author, simulated
