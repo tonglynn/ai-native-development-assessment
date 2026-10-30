@@ -593,6 +593,43 @@ task.
 - Limits: 25 checks, 11 of them fully validated; one prompt; replay reproduces the recorded
   commands, not the agent's reasoning.
 
+## Extension task X01: provider timeouts and retries (exploratory) / 扩展任务 X01：支付服务超时与重试（探索性）
+
+The frozen tasks cover business step 6 ("errors and retries") only through duplicate
+requests. X01 (`benchmark/extension/`, outside the frozen task set, which still validates
+25/25) puts refunds through a payment provider that sometimes times out. A timeout may hide
+a refund that already happened, so a retry with a new idempotency key refunds twice, which is
+how the synthetic incident INC-204 happened. A new convention, **C7**, says a timeout is retried
+with the same key. No learning task teaches C7. Validation: the naive solution passes the
+behaviour tests and misses C2, C4, C5 and C7; a solution with C5 but a new key per attempt
+misses only C7. 4 conditions, each with its own memory after the main experiment's learning
+phase, 3 memory states × 2 runs, 24 runs, 0 crashed (`scripts/x01_eval.py`, `runs/x01`).
+
+| Condition | First-attempt pass | C2 met | C4 met (audit) | C5 met (idempotency) | C7 met (retry with the same key) |
+|---|---|---|---|---|---|
+| no memory | 0/6 | 6/6 | 0/6 | 0/6 | 6/6 |
+| ReasoningBank-style | 0/6 | 6/6 | 3/6 | 0/6 | 6/6 |
+| ACE-style | 0/6 | 6/6 | 0/6 | 0/6 | 6/6 |
+| **Attest** | **2/6** | 6/6 | **6/6** | **2/6** | 6/6 |
+
+- **The primary question is not answered: X01 has no knowledge gap for C7.** Every condition,
+  no memory included, retried with one key per request (6/6). The gateway's docstring says
+  that the provider deduplicates by key, and the agent read it. So C7 turned out to be
+  discoverable from the code, like C1–C4, and the task cannot show whether step-2 experience
+  carries over to step 6. 每个条件（包括无记忆）都用同一个键重试，网关的文档已经说明了按键去重，所以这个任务测不出迁移。
+- **The step-2 lessons carried over to a new module, partly.** Attest met the audit rule in 6
+  of 6 runs (no memory 0/6, ACE 0/6, ReasoningBank 3/6). It met the idempotency parameter in
+  only 2 of 6, both from one memory state. In the other 4, the idempotency note was injected,
+  but the agent built its own per-request key and did not add the caller's `idempotency_key`.
+  Why it did that is unclear. In one of those memory states the note carried a "recent task
+  failed" warning, but in another it did not.
+- All conditions passed on the second attempt after review, so the difference is in what the
+  agent knew before review.
+- Limits: one task written by me after the main experiment, 6 runs per condition, the same model.
+  C7's lack of a gap was not anticipated. The gateway docstring could be made silent about
+  deduplication, but changing the task after seeing the results would be tuning it, so it is
+  reported as is.
+
 ## What this supports / 结论边界
 
 - Supported: memory of review-only knowledge helps a lot (+36 pp over no memory,
@@ -605,6 +642,7 @@ task.
 - Pollution: trust-tiered admission brought held-out pass@1 under pollution from 36% back to 67% (76% with type-aware forgetting; clean memory 70%), with 0 approval violations in the combined arm. Exploratory; the separating signal exists by construction.
 - Forgetting V2 (exploratory): treating "no evidence" as dormant rather than archived, and archiving only on negative evidence, removed every wrongly archived useful rule and made aggressive decay safe (71% needed rules injected, 44 injectable notes) in a simulation whose failure attribution is perfect by construction. Liveness against code caught every stale and renamed rule; one-prompt generated checks were useful for 1 of 25 rules, and validating them against the review that created each rule did not filter out bad checks (it rejected the useful one: the agent's real mistake was an omission the check did not look for). Rules no test or review names stay out of reach of every signal.
 - Verification at retrieval (after Copilot): checking the injected notes against the checkout, and saying what changed, raised stale-task pass@1 from 87% to 100% (S04: 1/3 → 3/3), and left every other task's context unchanged. Exploratory, one task's worth of difference.
+- Step 6 (provider timeouts, extension task X01): Attest carried the audit rule to a new module (6/6, no memory 0/6) and the idempotency parameter partly (2/6, others 0/6); the retry-with-the-same-key rule had no gap (6/6 in every condition, the gateway's docstring gives it away), so transfer to step 6 is not shown.
 - Value feedback (offline): when adoption counts as contribution, one-off notes become permanent (34 under 30% adoption noise). Reinforcing only verified use removes that, but V1.1 also wrongly archived more correct rules (4 → 10–11 of 52), mostly rules no test checks. V1 stays the default and V1.1 is an option. The hard part is reliable evidence of value, not the decay rate.
 - Not supported: that the write gate is free. Here it cost held-out passes; its value
   is protection (poison) and provenance, which the held-out pass rate does not reward.

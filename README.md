@@ -94,7 +94,7 @@ changes. The business flow the tasks exercise is a support-initiated refund or c
 | 3 Approval | support refunds above a threshold need a second approver | C6 approval (policy B: 500.00, later 1000.00) | yes, including the change (S04, S05 on 2.0) |
 | 4 Compute and move money | current rounding rule (half-up in 1.0, half-even in 2.0) | C1 rounding | partly: **no real payment provider is called** |
 | 5 Update and audit | every money movement is recorded | C4 audit | yes |
-| 6 Errors and retries | business failures vs system faults; retries | C2 errors, C5 | partly: **no timeouts, partial failures or recovery** |
+| 6 Errors and retries | business failures vs system faults; retries | C2 errors, C5, C7 | partly: provider timeouts and retries only in the exploratory extension task X01 (`RESULTS.md`); **no partial failures or recovery** |
 
 C1–C4 can be discovered in the code; C5 and C6 pass only through review. The incident
 and the policy change are synthetic, not taken from a real company. Only H11 runs the
@@ -247,7 +247,7 @@ Sources for the industry and research context: [GitHub Copilot agentic memory](h
 | 3 审批判断 | 客服发起、超过阈值需第二人审批 | C6 审批（政策 B：500，后改为 1000） | 是，含政策变化（2.0 上的 S04、S05） |
 | 4 计算与资金操作 | 当前舍入规则（1.0 为 half-up，2.0 为 half-even） | C1 舍入 | 部分：**没有调用真实支付服务** |
 | 5 更新账务与审计 | 每笔资金变动都要记录 | C4 审计 | 是 |
-| 6 异常与重试 | 区分业务失败与系统故障；重试 | C2 异常、C5 | 部分：**没有超时、部分失败与恢复** |
+| 6 异常与重试 | 区分业务失败与系统故障；重试 | C2 异常、C5、C7 | 部分：支付服务超时与重试只在探索性扩展任务 X01 中（见 `RESULTS.md`）；**没有部分失败与恢复** |
 
 C1–C4 可以从代码中发现，C5、C6 只能靠评审传承。事故与政策变化都是模拟设定，不来自真实企业。只有 H11 一个任务完整走完六个环节，其余任务各覆盖其中一段。
 
