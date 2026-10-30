@@ -29,20 +29,32 @@ Measures (all reported; no single number picks a winner):
   learned permanent          the same for learned notes
   important misarchived      learned notes about a convention a held-out task needs (C1-C6), archived
   policy archived            learned notes citing a policy/incident or typed business_policy, archived
-  other learned archived     learned notes outside C1-C6 (e.g. "reject bool as an integer"): real
-                             rules whose use the simulation cannot observe, reported separately
+  other learned archived     learned notes outside C1-C6 (e.g. "reject bool as an integer"): rules
+                             whose use the simulation cannot observe. "Not verified" is not
+                             "verification failed": each is labelled against the benchmark's own
+                             sources (OTHER_RULE_TRUTH, labelled by hand after the run) as known
+                             correct or value unknown, and known-correct ones count as useful
+                             rules wrongly archived.
+  useful misarchived         important misarchived + known-correct other rules archived
 Reading rule, fixed before running: V1.1 is better than V1 only if, with noise, it lowers
 one-offs permanent and active notes without archiving a policy rule and without raising the
 important misarchive rate. Ablation (type_aware x0.25, noise, seed 0) and utility_factor
-{2, 4, 8} are reported as sensitivity, not used to choose.
+{2, 4, 8} are reported as sensitivity, not used to choose. (Added after the run, before
+reading it: the useful-misarchive column, so rules the proxy cannot see are not dropped
+from the risk side.)
 
-Usage: python scripts/forgetting_v11.py --out runs/forgetting_v11 [--workers 2]
+Protection in V1.1 is type protection (business_policy never decays under type_aware) plus
+citation protection (admission.POLICY_PREFIXES), not citation protection alone.
+utility_factor 4 is an experimental setting, not a tuned value.
+
+Usage: python scripts/forgetting_v11.py --out runs/forgetting_v11 [--workers 2] [--report-only]
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from multiprocessing import Pool
 from pathlib import Path
@@ -58,6 +70,20 @@ CONFIGS = {"type_aware x1": ("type_aware", {"type_scale": 1}, False),
 V11 = {"utility_factor": 4, "protect_cited": True}
 ABLATION = {"V1": (False, {}), "+ verified-only": (True, {}), "+ utility decay": (False, {"utility_factor": 4}),
             "+ protect cited": (False, {"protect_cited": True}), "V1.1 (all three)": (True, V11)}
+# Learned notes outside C1-C6, checked by hand against the benchmark's sources (pattern, label, why).
+OTHER_RULE_TRUTH = [
+    (r"\bbool\b", "known correct, unchecked",
+     "E02's reference solution rejects bool quantities and ledgerly.money.to_money rejects bool; no hidden test or review comment checks it"),
+    (r"to_money", "known correct, unchecked",
+     "ledgerly/money.py defines to_money and ZERO and reference solutions use them; no test checks it apart from rounding (C1)"),
+]
+
+
+def other_label(text: str) -> tuple[str, str]:
+    for pattern, label, why in OTHER_RULE_TRUTH:
+        if re.search(pattern, text):
+            return label, why
+    return "value unknown", "not checked against the benchmark's sources"
 
 
 def run_one(job: dict) -> dict:
@@ -122,28 +148,53 @@ def jobs() -> list[dict]:
     return out
 
 
+def annotate(row: dict) -> dict:
+    """Split the other learned notes of a run into known correct and value unknown (OTHER_RULE_TRUTH)."""
+    items = json.loads((ROOT / f"runs/main/attest/r{row['rep']}/memory/after_learn.json").read_text())
+    from forgetting_eval import primary  # noqa: E402
+
+    from attest.benchmark import load_tasks
+
+    needed = set().union(*[set(t.conventions) for t in load_tasks("heldout")])
+    other = [i for i, it in items.items() if primary(f"{it['title']} {it['content']}") not in needed]
+    label = {i: other_label(f"{items[i]['title']} {items[i]['content']}")[0] for i in other}
+    kc = [i for i in other if label[i] == "known correct, unchecked"]
+    return dict(row, other_known_correct_total=len(kc), other_known_correct_archived=[i for i in row["other_archived"] if i in kc],
+                other_unknown_total=len(other) - len(kc),
+                other_unknown_archived=[i for i in row["other_archived"] if i not in kc],
+                other_labels={i: label[i] for i in other})
+
+
 def summarise(rows: list[dict]) -> dict:
     n = len(rows)
     total = lambda k: sum(len(r[k]) for r in rows)  # noqa: E731
+    count = lambda k: sum(r[k] for r in rows)  # noqa: E731
+    useful_bad = total("important_archived") + total("other_known_correct_archived")
+    useful_all = count("important_total") + count("other_known_correct_total")
     return {"runs": n, "needed_rule_injected": sum(r["needed_rule_injected"] for r in rows) / n,
             "active_notes": sum(r["active_notes"] for r in rows) / n,
             "one_off_permanent": sum(r["one_off_permanent"] for r in rows) / n,
-            "learned_permanent": f"{sum(r['learned_permanent'] for r in rows)}/{sum(r['learned_total'] for r in rows)}",
-            "important_misarchived": total("important_archived") / sum(r["important_total"] for r in rows),
-            "important_misarchived_n": f"{total('important_archived')}/{sum(r['important_total'] for r in rows)}",
+            "learned_permanent": f"{count('learned_permanent')}/{count('learned_total')}",
+            "important_misarchived": total("important_archived") / count("important_total"),
+            "important_misarchived_n": f"{total('important_archived')}/{count('important_total')}",
+            "useful_misarchived": useful_bad / useful_all, "useful_misarchived_n": f"{useful_bad}/{useful_all}",
             "policy_archived": total("policy_archived"),
-            "other_archived": f"{total('other_archived')}/{sum(r['other_total'] for r in rows)}",
+            "other_archived": f"{total('other_archived')}/{count('other_total')}",
+            "other_known_correct_archived": f"{total('other_known_correct_archived')}/{count('other_known_correct_total')}",
+            "other_unknown_archived": f"{total('other_unknown_archived')}/{count('other_unknown_total')}",
             "one_off_reinforced": sum(r["one_off_reinforced"] for r in rows) / n}
 
 
 def table(groups: dict) -> list[str]:
     lines = ["| Arm | Variant | Noise | Runs | Needed rule injected | Active notes | One-offs permanent | Learned permanent | "
-             "Important rules misarchived | Policy rules archived | Other learned archived | One-offs reinforced |",
-             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+             "Important rules misarchived | Other learned archived: known correct / value unknown | Useful rules misarchived | "
+             "Policy rules archived | One-offs reinforced |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for (arm, variant, noise), s in groups.items():
         lines.append(f"| {arm} | {variant} | {noise:.1f} | {s['runs']} | {s['needed_rule_injected']:.0%} | {s['active_notes']:.0f} | "
                      f"{s['one_off_permanent']:.0f} | {s['learned_permanent']} | {s['important_misarchived']:.0%} ({s['important_misarchived_n']}) | "
-                     f"{s['policy_archived']} | {s['other_archived']} | {s['one_off_reinforced']:.0f} |")
+                     f"{s['other_known_correct_archived']} / {s['other_unknown_archived']} | "
+                     f"{s['useful_misarchived']:.0%} ({s['useful_misarchived_n']}) | {s['policy_archived']} | {s['one_off_reinforced']:.0f} |")
     return lines
 
 
@@ -151,10 +202,15 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--workers", type=int, default=2)
+    ap.add_argument("--report-only", action="store_true", help="rebuild the report from results.json")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
-    with Pool(args.workers) as pool:
-        rows = pool.map(run_one, jobs())
+    if args.report_only:
+        rows = json.loads((args.out / "results.json").read_text())["rows"]
+    else:
+        with Pool(args.workers) as pool:
+            rows = pool.map(run_one, jobs())
+    rows = [annotate(r) for r in rows]
     groups: dict = {}
     for r in rows:
         groups.setdefault((r["arm"], r["variant"], r["noise"]), []).append(r)
@@ -171,6 +227,8 @@ def main() -> None:
              "\"Verified\" in the simulation is a proxy signal (the task's hidden tests check the note's convention), not attribution.", "",
              *table(main_groups), "", "Ablation (stream seed 0):", "", *table(ablation), "",
              "Sensitivity to utility_factor (V1.1, stream seed 0):", "", *table(sens), "",
+             "Other learned rules (outside C1-C6), labelled by hand against the benchmark's sources after the run:", "",
+             *[f"- `{p}`: {label}. {why}" for p, label, why in OTHER_RULE_TRUTH], "",
              "Learned notes archived, per run (main grid):", ""]
     for r in rows:
         if r["learned_archived_detail"] and not r["arm"].startswith(("ablation", "sensitivity")):

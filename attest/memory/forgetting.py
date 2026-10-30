@@ -32,7 +32,10 @@ V1.1 (opt-in through `params` and `observe(verified=...)`; V1 stays the default)
     With utility_factor, U also decays, that many times slower than D.
   - A note's progress is recorded in stages: injected, adopted (used), behaviour
     verified. Only verified use reinforces; "the task passed" alone does not.
-  - protect_cited: a note citing a policy or incident never decays, whatever its type label.
+  - protect_cited: a note citing a policy or incident (FIN-, POL-, SEC-, INC-) never decays,
+    whatever its type label. Added to the type protection (business_policy never decays
+    under type_aware), not a replacement for it.
+  - utility_factor = 4 is an experimental setting; 2 and 8 are reported beside it.
   - Fix, for V1 too: reactivation resets the decay clock, so a note restored by new
     evidence is not archived again at the next maintenance. (No published run reactivated
     a note: the streams never re-learn, and end-to-end runs do not update memory.)
@@ -51,9 +54,11 @@ ACTIVE = ("active", "suspect")
 def evidence_quality(item: dict) -> float:
     ev = (item.get("evidence") or [{}])[0]
     src, applied = ev.get("source") or {}, ev.get("applied")
+    from . import admission
+
     if not applied:
         return 0.3
-    if src.get("references"):
+    if any(r.split("-", 1)[0] in admission.POLICY_PREFIXES for r in src.get("references") or []):
         return 1.0
     return 0.7 if src.get("kind") == "review_comment" else 0.5
 
@@ -68,9 +73,12 @@ def retention(item: dict, now: int, policy: str, params: dict | None = None) -> 
     exposure_half_life (sensitivity analysis); utility_factor (V1.1): if set, historical utility U
     also decays, `utility_factor` times slower than D, so a note used once is not kept forever;
     policy rules (no finite half-life) keep their utility. protect_cited (V1.1): a note whose
-    evidence cites a policy or incident (FIN-..., INC-...) never decays, whatever type the
-    distiller gave it (the distiller typed the same idempotency rule `process` in two
-    repetitions and `business_policy` in the third). Defaults are V1, fixed before any run."""
+    evidence cites a policy or incident (admission.POLICY_PREFIXES) never decays either, whatever
+    type the distiller gave it (it typed the same idempotency rule `process` in two repetitions
+    and `business_policy` in the third). This is added to the type protection, not a
+    replacement: under type_aware a note typed business_policy still never decays, cited or
+    not. The utility_factor value (4) is an experimental setting, not a tuned optimum.
+    Defaults are V1, fixed before any run."""
     from . import admission
 
     params = params or {}
@@ -86,7 +94,7 @@ def retention(item: dict, now: int, policy: str, params: dict | None = None) -> 
         half = None if half is None else half * params.get("type_scale", 1.0)
     elif policy in ("exposure", "exposure_ranked"):
         clock, half = t["unused_exposures"], params.get("exposure_half_life", EXPOSURE_HALF_LIFE)
-    if params.get("protect_cited") and admission.tier(item) == "policy":
+    if params.get("protect_cited") and admission.policy_references(item):
         half = None
     d = 1.0 if half is None else 2 ** (-clock / half)
     if params.get("utility_factor") and half is not None:
@@ -151,11 +159,14 @@ def reset_track(item: dict, now: int, task_id: str | None = None) -> dict:
     return t
 
 
-def reactivate(memory, item_id: str, reason: str, now: int | None = None) -> dict:
-    """A person, or a new verified task yielding the same rule, brings an archived note back."""
-    fields = {"status": "active"}
-    if now is not None:
-        fields["forgetting"] = reset_track(memory.store.items()[item_id], now)
+def reactivate(memory, item_id: str, reason: str, now: int, task_id: str | None = None) -> dict:
+    """A person, or a new verified task yielding the same rule, brings an archived note back.
+
+    `now` (the current task clock) is required: reactivation always resets the decay clock,
+    otherwise the note keeps its old age and is archived again at the next maintenance."""
+    if not isinstance(now, int):
+        raise TypeError("reactivate needs the current task clock `now`")
+    fields = {"status": "active", "forgetting": reset_track(memory.store.items()[item_id], now, task_id)}
     return memory.store.append("update", id=item_id, fields=fields, reason=f"reactivated: {reason}")
 
 

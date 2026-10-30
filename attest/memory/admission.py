@@ -6,7 +6,7 @@ forgetting policy repairs it. Admission decides, before ranking, which notes may
 injected anywhere and which only where they were learned. Explainable rules, no model
 score:
 
-  policy      the evidence names a policy or incident (FIN-..., INC-...)
+  policy      the evidence names a policy or incident (POLICY_PREFIXES: FIN-, POL-, SEC-, INC-)
   convention  the source review comment states it is a team convention
   repeated    verified in at least 2 independent tasks
   candidate   anything else: a detail seen once. Stored, never deleted, injected only
@@ -27,10 +27,21 @@ import re
 
 RULE_TIERS = ("policy", "convention", "repeated")
 CONVENTION_RE = re.compile(r"\[team convention\]|\bteam convention\b|\bour convention\b|\bwe always\b", re.I)
+# Which recorded references count as a policy or an incident: finance (FIN-), general (POL-)
+# and security (SEC-) policies, incidents (INC-). The evidence parser also records ADR-, RFC-
+# and CVE- references; they stay in the evidence but do not make a note a policy rule.
+POLICY_PREFIXES = ("FIN", "POL", "SEC", "INC")
 
 
 def _norm(text: str) -> str:
     return " ".join((text or "").split()).lower()
+
+
+def policy_references(item: dict) -> list[str]:
+    refs = set((item.get("source") or {}).get("references") or [])
+    for ev in item.get("evidence") or []:
+        refs |= set((ev.get("source") or {}).get("references") or [])
+    return sorted(r for r in refs if r.split("-", 1)[0] in POLICY_PREFIXES)
 
 
 def independent_tasks(item: dict) -> set[str]:
@@ -43,7 +54,7 @@ def independent_tasks(item: dict) -> set[str]:
 
 def tier(item: dict) -> str:
     evidence = item.get("evidence") or []
-    if any((ev.get("source") or {}).get("references") for ev in evidence) or (item.get("source") or {}).get("references"):
+    if policy_references(item):
         return "policy"
     comments = (item.get("source") or {}).get("review_comments") or []
     for ev in evidence:

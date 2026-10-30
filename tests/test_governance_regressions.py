@@ -5,6 +5,10 @@ Total pass rates hide these failures, so each is pinned here:
   2. a rule learned in one file that another file needs
   3. an old rule replaced by a new version
   4. a note archived, then confirmed again by new evidence: it must come back and stay back
+
+These tests pin the expected behaviour in fixed scenarios. Passing them does not show that
+a retention policy works overall; that is what scripts/forgetting_v11.py measures. The
+xfail below is an unresolved limitation, not a passing case.
 """
 
 import pytest
@@ -58,9 +62,10 @@ def test_2a_team_rule_learned_in_one_file_reaches_another():
     assert "at-0001" in m.retrieve(load_task("H04"), "1.0.0").ids  # learned in payments.py, needed in adjustments.py
 
 
-@pytest.mark.xfail(strict=True, reason="known limitation of tiered admission: a real rule seen once, with diff-only "
-                                        "evidence, is a candidate and is not injected outside its file (the audit rule "
-                                        "in repetition 2 of runs/admission)")
+@pytest.mark.xfail(strict=True, reason="UNRESOLVED limitation of tiered admission: a real rule seen once, with "
+                                        "diff-only evidence, is a candidate and is not injected outside its file (the "
+                                        "audit rule in repetition 2 of runs/admission). strict: if this starts passing, "
+                                        "the limitation must be re-examined, not silently dropped")
 def test_2b_rule_seen_once_with_diff_evidence_reaches_another_file():
     m = ForgettingMemory(None, "none", lambda: 0, tiered=True)
     m.store.append("add", item=rule("at-0001", "Record state changes via audit.record",
@@ -137,6 +142,22 @@ def test_v11_protects_a_cited_rule_whatever_its_type_label():
                 refs=["INC-2025-11"], tick=0)
     assert forgetting.retention(idem, 1000, "type_aware")["R"] < forgetting.THRESHOLD  # V1 trusts the type label
     assert forgetting.retention(idem, 1000, "type_aware", {"utility_factor": 4, "protect_cited": True})["R"] == 1.0
+
+
+@pytest.mark.parametrize("ref,protected", [("FIN-2026-03", True), ("INC-204", True), ("POL-12", True), ("SEC-7", True),
+                                           ("ADR-0042", False), ("RFC-9110", False), ("CVE-2024-1234", False)])
+def test_only_policy_and_incident_references_make_a_policy_rule(ref, protected):
+    note = rule("n", "Some rule", "some rule", type_="code_convention", refs=[ref], tick=0)
+    assert (admission.tier(note) == "policy") is protected
+    assert (forgetting.evidence_quality(note) == 1.0) is protected
+    r = forgetting.retention(note, 1000, "type_aware", {"utility_factor": 4, "protect_cited": True})["R"]
+    assert (r == 1.0) is protected
+
+
+def test_v11_type_protection_is_kept_beside_citation_protection():
+    # V1.1 adds citation protection; it does not drop the business_policy label's protection
+    uncited_policy = rule("p", "Audit every money movement", "audit", type_="business_policy", tick=0)
+    assert forgetting.retention(uncited_policy, 1000, "type_aware", {"utility_factor": 4, "protect_cited": True})["R"] > 0.2
 
 
 def test_v11_adopted_but_unverified_is_not_reinforced():

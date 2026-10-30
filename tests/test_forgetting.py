@@ -1,5 +1,7 @@
 """Dynamic forgetting V1: retention scoring, archiving (never deleting), eligibility first, reactivation."""
 
+import pytest
+
 from attest.benchmark import load_task
 from attest.memory import forgetting
 from attest.memory.earned import EarnedMemory
@@ -38,8 +40,10 @@ def test_maintain_archives_but_keeps_everything_in_the_log():
     # archived notes are not retrieved, but their record is intact
     shown = m.retrieve(load_task("H01"), "1.0.0")
     assert "at-0002" not in shown.ids and shown.debug["trace"]["excluded"]["at-0002"] == "status archived"
-    forgetting.reactivate(m, "at-0002", "a person needs it for a v1 maintenance task")
+    forgetting.reactivate(m, "at-0002", "a person needs it for a v1 maintenance task", now=400)
     assert m.store.items()["at-0002"]["status"] == "active"
+    with pytest.raises(TypeError):  # no entry point may reactivate without resetting the clock
+        forgetting.reactivate(m, "at-0002", "no clock")
 
 
 def test_observe_reinforces_used_and_counts_unused_exposures():
