@@ -16,8 +16,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BENCHMARK_DIR = PROJECT_ROOT / "benchmark"
 TASKS_DIR = BENCHMARK_DIR / "tasks"
 REPOS_DIR = BENCHMARK_DIR / "repos"
+# Exploratory tasks added after the main experiment; found by load_task(id), never by load_tasks().
+EXTENSION_DIR = BENCHMARK_DIR / "extension"
 
-GROUP_ORDER = {"experience": 0, "heldout": 1, "stale": 2, "control": 3}
+GROUP_ORDER = {"experience": 0, "heldout": 1, "stale": 2, "control": 3, "extension": 4}
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,8 @@ class Task:
 
 def load_task(task_id: str) -> Task:
     tdir = TASKS_DIR / task_id
+    if not tdir.exists() and (EXTENSION_DIR / task_id / "task.json").exists():
+        tdir = EXTENSION_DIR / task_id
     meta = json.loads((tdir / "task.json").read_text())
     return Task(
         id=meta["id"],
