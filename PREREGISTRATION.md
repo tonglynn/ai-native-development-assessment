@@ -47,7 +47,7 @@ run before the freeze. Changes made because of the pilots:
 | `runs/pilot2_nomem` | 5/6 | The agent searched for conventions (`grep -rn round_money`) rather than copying legacy code: conventions visible anywhere in the code are discovered | Added review-only conventions C5 (idempotency) and C6 (approval threshold) to E04, E06, H04, H06; added stale task S04 |
 | `runs/pilot3_nomem` | **3/6** | Target reached. Discoverable conventions C1–C4 satisfied in 23/27 first-attempt checks; review-only C5–C6 in 0/7. H06 failed even after review because the agent read "must accept a keyword-only `idempotency_key`" as *required* | Reworded the C5 review comment to "optional keyword-only `idempotency_key=None`" (affects attempt 2 only). Added held-out tasks H07–H10 (6 → 10) to reduce the small-sample problem |
 | `runs/pilot4_nomem` (held-out only) | **4/10** | Still in range. Discoverable C1–C4 satisfied in 20/21 first-attempt checks, review-only C5–C6 in 0/7; every failure was fixed after one review | None at the time. Then an independent audit (below) led to the changes in the next row |
-| `runs/pilot5_nomem` (all 25 tasks) | *PILOT5_H* | *PILOT5_SHOWED* | None. Benchmark frozen as is |
+| `runs/pilot5_nomem` (all 25 tasks, after the audit) | **4/11** | In range. Discoverable C1–C4 satisfied in 39/43 first-attempt checks, review-only C5–C6 in **0/14**; every task passed after one review (no task impossible); no crashes, no leaks. Stale: S01–S03 pass, S04–S05 fail C6 without memory; control 3/3 | None. Benchmark frozen as is |
 
 **Independent audit before the freeze** (`benchmark/AUDIT.md`). A separate agent
 that had not built the benchmark audited it after pilot 4 (validator, regeneration,
