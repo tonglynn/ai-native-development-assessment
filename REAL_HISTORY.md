@@ -31,9 +31,9 @@ Run folders: `runs/retro_saleor`, `runs/retro_flask` (run 1), `runs/retro_flask_
 
 ## What we conclude / 结论
 
-1. **Attest shows no recall advantage on real review history.** On the test
+1. **On real review history Attest anticipated the fewest convention comments.** On the test
    repository it anticipated 1 of 25 convention comments, fewer than both
-   baselines. We report this as it is. 在真实仓库上，Attest 没有表现出召回优势。
+   baselines (ReasoningBank 4, ACE 8). We report this as it is. 在真实仓库上，Attest 预判到的规范类评审意见最少（1/25，对照组为 4/25 和 8/25）。
 2. **The differences are within the noise of this sample.** ReasoningBank's code
    did not change between the two Flask runs, yet its coverage went from 4/21 to
    2/24. With about 25 convention comments per repository, one versus four hits
