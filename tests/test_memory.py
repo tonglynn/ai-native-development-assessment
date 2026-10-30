@@ -404,3 +404,28 @@ def test_multiline_snippet_with_context_and_punctuation_lines():
     assert hit and hit["change"] == "added" and "idempotency_key" in hit["line"]
     assert find_applied('    """Capture an authorized payment."""', ch) is None            # context only
     assert find_applied('    idempotency_key: str | None = None,\n    audit.clear()', ch) is None  # one invented line
+
+
+def test_unchanged_context_cannot_carry_a_rule():
+    """Re-check of D27, M1: an existing unchanged `audit.clear()` next to a trivial change is not evidence."""
+    from attest.memory.evidence import find_applied, parse_diff
+
+    diff = "--- a/conftest.py\n+++ b/conftest.py\n@@\n     audit.clear()\n+    return x\n"
+    ch = parse_diff(diff)
+    assert find_applied("audit.clear()\nreturn x", ch) is None       # short change cannot be the evidence
+    diff2 = ("--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n     audit.clear()\n"
+             "--- a/b.py\n+++ b/b.py\n@@ -1 +1 @@\n+    total = round_money(subtotal + tax)\n")
+    ch2 = parse_diff(diff2)
+    assert find_applied("audit.clear()\ntotal = round_money(subtotal + tax)", ch2) is None  # context from another hunk
+    assert find_applied("total = round_money(subtotal + tax)", ch2)
+
+
+def test_snippet_lines_follow_diff_order_and_signs_count():
+    from attest.memory.evidence import find_applied, parse_diff
+
+    ch = parse_diff("--- a/x.py\n+++ b/x.py\n@@\n+    first_value = compute_total(a)\n+    second_value = compute_total(b)\n"
+                    "+    offset = -1\n+    if not_ready(ok):\n")
+    assert find_applied("first_value = compute_total(a)\nsecond_value = compute_total(b)", ch)
+    assert find_applied("second_value = compute_total(b)\nfirst_value = compute_total(a)", ch) is None  # reordered
+    assert find_applied("offset = 1 and more", ch) is None
+    assert find_applied("    offset = -1", ch) is None or find_applied("    offset = -1", ch)["line"] == "offset = -1"

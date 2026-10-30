@@ -348,7 +348,8 @@ class EarnedMemory(MemorySystem):
                 "status": "active",
                 "last_verification": verification,
             }
-            return [self.store.append("update", id=duplicate["id"], fields=fields, reason=f"confirmed again by verified task {task.id}")]
+            return [self.store.append("update", id=duplicate["id"], fields=fields, candidate=cand,
+                                      reason=f"confirmed again by verified task {task.id}")]
 
         # Only newer (or same-version) verified evidence may replace an older rule.
         replaced = [

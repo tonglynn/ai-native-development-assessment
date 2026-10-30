@@ -13,9 +13,11 @@ Verification (did the change pass) is recorded as a third, separate field by the
 caller: passing tests show the code meets the tests, not that the rule is correct.
 
 Matching is line-based and tolerates only format differences in copying (diff
-markers, whitespace, case, omitted words): every word of a claimed line must occur,
-in order, in one real changed line of the diff. Paraphrases, synonyms and reordered
-lines are rejected, so a rule nobody applied still cannot be "applied".
+markers, whitespace, case, omitted tokens): every token of a claimed line must occur,
+in order, in one real line of the diff, and the lines must follow the diff's order.
+Paraphrases, synonyms, swapped operators and reordered lines are rejected, and the
+evidence must be a changed line (see find_applied), so a rule nobody applied still
+cannot be "applied".
 """
 
 from __future__ import annotations
@@ -24,9 +26,10 @@ import re
 from dataclasses import dataclass
 
 REFERENCE_RE = re.compile(r"\b(?:INC|FIN|SEC|POL|ADR|RFC|CVE)-\d[\d-]*\d\b")
-# Words, plus comparison and arithmetic operators as tokens of their own, so a claim with "<" for ">"
-# does not match (re-check r8). Omitting a token is still allowed (D25).
-WORD_RE = re.compile(r"[A-Za-z0-9_]+|[<>=!]=|[<>]|==|\+=|-=|\*\*|[+\-*/%]")
+# Tokens: identifiers, numbers with their sign, and operators as tokens of their own, so a claim with
+# "<" for ">", "-1" for "1" or "!ok" for "ok" does not match (re-checks r8, D27 m2). Omitting a token
+# is still allowed (D25).
+WORD_RE = re.compile(r"-?\d+(?:\.\d+)?|[A-Za-z_][A-Za-z0-9_]*|->|=>|<<|>>|//|\*\*|&&|\|\||[<>=!]=|\+=|-=|[<>=!+\-*/%]")
 
 DOC_SUFFIXES = (".md", ".rst", ".txt", ".adoc")
 CONFIG_SUFFIXES = (".toml", ".cfg", ".ini", ".yaml", ".yml", ".json")
@@ -37,6 +40,7 @@ class ChangedLine:
     file: str
     change: str  # "added" | "removed" | "context" (unchanged; never evidence on its own)
     text: str
+    hunk: int = 0  # index of the @@ hunk, so context is only accepted next to its own change
 
 
 def file_kind(path: str) -> str:
@@ -52,20 +56,24 @@ def file_kind(path: str) -> str:
 
 def parse_diff(diff: str) -> list[ChangedLine]:
     """Lines of a unified diff (added, removed, and unchanged context), with the file each belongs to."""
-    out, current = [], ""
+    out, current, hunk = [], "", 0
     for line in diff.splitlines():
         if line.startswith("+++ "):
             current = line[4:].strip()
             current = current[2:] if current.startswith(("a/", "b/")) else current
+            hunk += 1
             continue
-        if line.startswith("--- ") or line.startswith("diff --git") or line.startswith("@@"):
+        if line.startswith("@@"):
+            hunk += 1
+            continue
+        if line.startswith("--- ") or line.startswith("diff --git"):
             continue
         if line.startswith("+"):
-            out.append(ChangedLine(current, "added", line[1:]))
+            out.append(ChangedLine(current, "added", line[1:], hunk))
         elif line.startswith("-"):
-            out.append(ChangedLine(current, "removed", line[1:]))
+            out.append(ChangedLine(current, "removed", line[1:], hunk))
         elif line.startswith(" "):
-            out.append(ChangedLine(current, "context", line[1:]))
+            out.append(ChangedLine(current, "context", line[1:], hunk))
     return out
 
 
@@ -129,35 +137,49 @@ def _line_matches(claim: str, actual: str) -> bool:
     return all(any(w == x for x in rest) for w in words)  # ordered subsequence
 
 
+def _short(claim: str) -> bool:
+    return len(_words(claim)) < 3 and len(normalise(claim)) < 10
+
+
 def find_applied(snippet: str, changed: list[ChangedLine], allow_removed: bool = True) -> dict | None:
     """The changed line the claimed snippet refers to, typed; None if not found.
 
-    Every line of the snippet must be a real line of the diff (see _line_matches; lines that are
-    only punctuation, such as "*," or ")", are skipped), and at least one must match a changed
-    line: unchanged context lines may surround the evidence but never are the evidence (D27).
-    Lines too short for the word rule (fewer than 3 tokens and under 10 characters) must equal a
-    diff line exactly after normalising whitespace and case."""
+    Rules (D25, D27, re-check of D27):
+    - Every claimed line must be a real line of the diff (_line_matches: format tolerance only), and the
+      lines must appear in the diff's order. A line is skipped only if it has no token at all (e.g. ")").
+    - A line too short for the word rule (fewer than 3 tokens and under 10 characters) must equal a
+      diff line exactly, and can never be the evidence.
+    - Evidence is a changed (added, or removed) line that passes on its own. At least one is needed,
+      and changed lines must be at least half of the claimed lines.
+    - Unchanged context lines may surround the evidence only in the same file and hunk as an evidence
+      line, so an unchanged line elsewhere (e.g. an existing `audit.clear()`) can never carry the rule.
+    - Only the first evidence line is recorded, and it is always the real diff line, not the claim.
+    The gate does not check that the evidence line is *about* the rule (relevance is not verified)."""
     lines = [ln.strip() for ln in strip_markers(snippet).splitlines() if ln.strip()]
-    lines = [ln for ln in lines if re.search(r"[A-Za-z0-9]", ln)]
+    lines = [ln for ln in lines if _words(ln)]
     if not lines or len(normalise(" ".join(lines))) < 10:
         return None
-    changes = [c for c in changed if c.change == "added" or (allow_removed and c.change == "removed")]
-    context = [c for c in changed if c.change == "context"]
+    usable = [c for c in changed if c.change != "removed" or allow_removed]
 
-    def match(claim, pool):
-        if len(_words(claim)) < 3 and len(normalise(claim)) < 10:
-            return next((c for c in pool if normalise(c.text) == normalise(claim)), None)
-        return next((c for c in pool if _line_matches(claim, c.text)), None)
+    def ok(claim, c):
+        if _short(claim):
+            return normalise(c.text) == normalise(claim)
+        return _line_matches(claim, c.text)
 
-    found = []
+    found, start = [], 0  # (claim, diff line), searched in diff order
     for claim in lines:
-        hit = match(claim, changes) or match(claim, context)
-        if hit is None:
+        idx = next((i for i in range(start, len(usable)) if ok(claim, usable[i])), None)
+        if idx is None:
             return None
-        found.append(hit)
-    evidence = [c for c in found if c.change != "context"]
-    if not evidence:
+        found.append((claim, usable[idx]))
+        start = idx + 1
+    evidence = [c for claim, c in found if c.change != "context" and not _short(claim)]
+    changes = [c for _, c in found if c.change != "context"]
+    if not evidence or len(changes) * 2 < len(found):
+        return None
+    hunks = {(c.file, c.hunk) for c in evidence}
+    if any(c.change == "context" and (c.file, c.hunk) not in hunks for _, c in found):
         return None
     first = evidence[0]
     return {"kind": file_kind(first.file), "change": first.change, "file": first.file,
-            "line": first.text.strip()[:200], "lines_matched": len(evidence)}
+            "line": first.text.strip()[:200], "lines_matched": len(changes)}
