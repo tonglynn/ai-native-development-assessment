@@ -92,7 +92,11 @@ snippets also contained punctuation-only lines (`*,`, `)`) and an unchanged
 docstring line; the old verbatim gate (D17) would have rejected them too. Fixed
 by D27 (punctuation-only lines skipped; unchanged context lines may surround but
 never be the evidence; every line must still be a real line of the diff).
-`runs/distill_check7` is the check on the final gate.
+`runs/distill_check7` checked D27: 7 notes, one genuine rejection (a source quote not
+in the review comments). An independent re-check of D27 (`benchmark/AUDIT.md`) then
+found one major: an unchanged context line such as the existing `audit.clear()` in
+`conftest.py`, next to a trivial change, could carry a rule nobody applied. Fixed by
+D28 (above, 5b); `runs/distill_check8` is the check on the final gate.
 
 **Write-path check.** Before freezing, the no-memory trajectories of E01–E06
 from pilot 3 were fed through each memory system's `learn()` step with the real
@@ -242,7 +246,13 @@ them were informed by data (DECISIONS D21):
    against the before and after text of the diff, so diff markers no longer break
    multi-line quotes. In multi-line snippets, punctuation-only lines are skipped and
    unchanged context lines may surround the evidence, but at least one line must be
-   a changed line and every line a real line of the diff (D27). Comparison and
+   a changed line and every line a real line of the diff (D27). After an independent
+   re-check of D27 (D28): the evidence line must pass on its own (3+ tokens or 10+
+   characters); changed lines must be at least half of the snippet; context lines are
+   accepted only in the same file and hunk as an evidence line; snippet lines must
+   follow the diff's order; a line is skipped only if it has no token at all, and a
+   line too short for the word rule must equal a diff line exactly and is never the
+   evidence; only the first evidence line is recorded, always as the real diff line. Comparison and
    arithmetic operators count as tokens, so a swapped operator does not match; an
    omitted token (including `not`) is still tolerated, and the recorded evidence is
    always the real diff line, not the claim. **Informed by data:** the Flask retrospective
@@ -274,6 +284,7 @@ rejected) is kept and tested.
 - One model, one small benchmark; results may not transfer to larger repositories or stronger models.
 - Three held-out tasks (H06, H07, H11) closely mirror an experience task (same module and shape), so part of the held-out gain measures near transfer; held-out results are also reported split into near and far transfer (exploratory, audit M4).
 - The stale group has two tasks that can detect outdated memory (S04, S05); H3 rests mostly on them.
+- Attest's write gate checks that a rule's evidence line is a real, verified change, not that the line is *about* the rule (relevance is not verified). For example, a rounding note was confirmed by a task whose evidence line was `at = ensure_utc(at)` (`runs/distill_check7`).
 
 ## 8. Deviations / 偏差记录
 
