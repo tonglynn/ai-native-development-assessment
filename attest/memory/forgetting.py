@@ -26,6 +26,16 @@ Retention of a note:  R = E * max(D, U)
   A note is archived when R < 0.2 (and it is active or suspect).
 
 The numbers are first-version assumptions, not tuned values.
+
+V1.1 (opt-in through `params` and `observe(verified=...)`; V1 stays the default):
+  - V1 lets one verified use protect a note for ever (U >= 0.5, so R >= 0.25 > 0.2).
+    With utility_factor, U also decays, that many times slower than D.
+  - A note's progress is recorded in stages: injected, adopted (used), behaviour
+    verified. Only verified use reinforces; "the task passed" alone does not.
+  - protect_cited: a note citing a policy or incident never decays, whatever its type label.
+  - Fix, for V1 too: reactivation resets the decay clock, so a note restored by new
+    evidence is not archived again at the next maintenance. (No published run reactivated
+    a note: the streams never re-learn, and end-to-end runs do not update memory.)
 """
 
 from __future__ import annotations
@@ -54,36 +64,56 @@ def _track(item: dict) -> dict:
 
 
 def retention(item: dict, now: int, policy: str, params: dict | None = None) -> dict:
-    """params (sensitivity analysis only): half_life (uniform), type_scale (type_aware: multiplies every
-    finite type half-life), exposure_half_life. Defaults are the values fixed before any run."""
+    """params: half_life (uniform), type_scale (type_aware: multiplies every finite type half-life),
+    exposure_half_life (sensitivity analysis); utility_factor (V1.1): if set, historical utility U
+    also decays, `utility_factor` times slower than D, so a note used once is not kept forever;
+    policy rules (no finite half-life) keep their utility. protect_cited (V1.1): a note whose
+    evidence cites a policy or incident (FIN-..., INC-...) never decays, whatever type the
+    distiller gave it (the distiller typed the same idempotency rule `process` in two
+    repetitions and `business_policy` in the third). Defaults are V1, fixed before any run."""
+    from . import admission
+
     params = params or {}
     t = _track(item)
     e = evidence_quality(item)
     u = 1 - 0.5 ** len(set(t["verified_tasks"]))
     age = max(0, now - t["last_verified_tick"])
+    clock, half = age, None  # the quantity D decays over, and its half-life
     if policy == "uniform":
-        d = 2 ** (-age / params.get("half_life", UNIFORM_HALF_LIFE))
+        half = params.get("half_life", UNIFORM_HALF_LIFE)
     elif policy == "type_aware":
         half = TYPE_HALF_LIFE.get(item.get("type") or "lesson", 50)
         half = None if half is None else half * params.get("type_scale", 1.0)
-        d = 1.0 if half is None else 2 ** (-age / half)
     elif policy in ("exposure", "exposure_ranked"):
-        d = 2 ** (-t["unused_exposures"] / params.get("exposure_half_life", EXPOSURE_HALF_LIFE))
-    else:
-        d = 1.0
+        clock, half = t["unused_exposures"], params.get("exposure_half_life", EXPOSURE_HALF_LIFE)
+    if params.get("protect_cited") and admission.tier(item) == "policy":
+        half = None
+    d = 1.0 if half is None else 2 ** (-clock / half)
+    if params.get("utility_factor") and half is not None:
+        u *= 2 ** (-clock / (half * params["utility_factor"]))
     return {"E": round(e, 3), "U": round(u, 3), "D": round(d, 3), "R": round(e * max(d, u), 3), "age": age,
             "unused_exposures": t["unused_exposures"], "verified_tasks": len(set(t["verified_tasks"]))}
 
 
-def observe(memory, tick: int, task_id: str, injected: list[str], used: list[str], passed: bool) -> None:
-    """After a task: injected notes that were used in a passing task are reinforced; injected notes
-    that were not used gain an unused exposure. One update event per changed note."""
+def observe(memory, tick: int, task_id: str, injected: list[str], used: list[str], passed: bool,
+            verified: list[str] | None = None) -> None:
+    """After a task, record how far each note got: retrieved, injected, adopted (used), verified.
+
+    V1 (verified=None): a note used in a passing task is reinforced.
+    V1.1 (verified given): only notes whose related behaviour was checked and passed (e.g. the
+    hidden test of the note's convention) are reinforced; a note adopted in a passing task whose
+    behaviour nobody checked is counted as adopted but not reinforced ("the task passed" is not
+    "this note contributed"). Injected notes that were not used gain an unused exposure."""
     items = memory.store.items()
-    for i in set(injected) | set(used):
+    reinforce = set(used) if verified is None else set(verified)
+    for i in set(injected) | set(used) | reinforce:
         if i not in items:
             continue
         t = _track(items[i])
-        if i in used and passed:
+        if i in used and i not in reinforce:
+            t["adopted_unverified"] = t.get("adopted_unverified", 0) + 1
+            reason = f"adopted in {task_id}, behaviour not verified (tick {tick})"
+        elif i in reinforce and passed:
             t["verified_tasks"] = sorted(set(t["verified_tasks"]) | {task_id})
             t["last_verified_tick"], t["unused_exposures"] = tick, 0
             reason = f"used in {task_id}, which passed (tick {tick})"
@@ -111,9 +141,22 @@ def maintain(memory, now: int, policy: str, threshold: float = THRESHOLD, params
     return events
 
 
-def reactivate(memory, item_id: str, reason: str) -> dict:
+def reset_track(item: dict, now: int, task_id: str | None = None) -> dict:
+    """The forgetting state after reactivation: verified now, no unused exposures. Without this a
+    reactivated note keeps its old age and is archived again at the next maintenance."""
+    t = _track(item)
+    t["last_verified_tick"], t["unused_exposures"] = now, 0
+    if task_id:
+        t["verified_tasks"] = sorted(set(t["verified_tasks"]) | {task_id})
+    return t
+
+
+def reactivate(memory, item_id: str, reason: str, now: int | None = None) -> dict:
     """A person, or a new verified task yielding the same rule, brings an archived note back."""
-    return memory.store.append("update", id=item_id, fields={"status": "active"}, reason=f"reactivated: {reason}")
+    fields = {"status": "active"}
+    if now is not None:
+        fields["forgetting"] = reset_track(memory.store.items()[item_id], now)
+    return memory.store.append("update", id=item_id, fields=fields, reason=f"reactivated: {reason}")
 
 
 def half_life_note() -> str:
@@ -134,6 +177,15 @@ class ForgettingMemory:
         from .retrieval import timed_rank
 
         class _Memory(EarnedMemory):
+            def _admit(self, task, repo_version, run, cand, changed):
+                events = super()._admit(task, repo_version, run, cand, changed)
+                for e in list(events):  # a verified task confirmed an archived note: restart its clock
+                    if e["type"] == "update" and "reactivated from the archive" in e.get("reason", ""):
+                        t = reset_track(self.store.items()[e["id"]], now_fn(), task.id)
+                        events.append(self.store.append("update", id=e["id"], fields={"forgetting": t},
+                                                        reason=f"forgetting clock reset on reactivation (tick {now_fn()})"))
+                return events
+
             def _exclusion(self, item, task, version):
                 why = super()._exclusion(item, task, version)
                 if why or not tiered or admission.injectable_here(item, task):

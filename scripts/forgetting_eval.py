@@ -97,24 +97,37 @@ def one_off_note(i: int, tick: int, rng: random.Random, with_files: bool = False
             "usage": {"shown": 0, "cited": 0, "cited_pass": 0, "cited_fail": 0, "fail_streak": 0}}
 
 
-def learned_track(rep: int, item: dict) -> dict:
-    """Reuse in other learning-phase tasks (not the task the note came from) counts as verification."""
+def learned_track(rep: int, item: dict, v11: bool = False) -> dict:
+    """Reuse in other learning-phase tasks (not the task the note came from) counts as verification.
+
+    V1: a citation in a passing task counts. V1.1: a citation is self-reported adoption, so it
+    counts only when that task's hidden tests check the note's convention; a gate-checked
+    re-distillation from a verified task ("confirmed again") counts in both."""
     events = [json.loads(line) for line in (ROOT / f"runs/main/attest/r{rep}/memory/events.jsonl").read_text().splitlines()]
+    conv = primary(f"{item['title']} {item['content']}")
     tasks = set()
     for e in events:
         if e["type"] == "update" and e.get("id") == item["id"]:
-            m = re.match(r"(?:cited in|confirmed again by verified task) (\w+)", e.get("reason", ""))
-            if m and m.group(1) in LEARN and m.group(1) != item["source"]["task_id"]:
-                tasks.add(m.group(1))
+            m = re.match(r"(cited in|confirmed again by verified task) (\w+)", e.get("reason", ""))
+            if m and m.group(2) in LEARN and m.group(2) != item["source"]["task_id"]:
+                if v11 and m.group(1) == "cited in" and conv not in load_task(m.group(2)).conventions:
+                    continue
+                tasks.add(m.group(2))
     return {"last_verified_tick": 0, "unused_exposures": 0, "verified_tasks": sorted(tasks)}
 
 
 def simulate(rep: int, policy: str, scenario: str, seed: int = 0, tiered: bool = False, with_files: bool = False,
-             threshold: float = forgetting.THRESHOLD, params: dict | None = None) -> EarnedMemory:
+             threshold: float = forgetting.THRESHOLD, params: dict | None = None, adopt_noise: float = 0.0,
+             v11: bool = False) -> EarnedMemory:
+    """adopt_noise: each injected one-off note is also "adopted" with this probability (the agent
+    follows a detail the task did not need; the task still passes). v11: reinforce only notes whose
+    convention the task's hidden tests check (a proxy for "behaviour verified"), not every note used
+    in a passing task. The noise has its own random stream, so the task stream is unchanged."""
     clock = {"now": 0}
+    noise = random.Random(seed * 1000 + rep + 7919)
     memory = ForgettingMemory(None, policy, lambda: clock["now"], tiered=tiered)
     for i, it in sorted(json.loads((ROOT / f"runs/main/attest/r{rep}/memory/after_learn.json").read_text()).items()):
-        memory.store.append("add", item=dict(it, created_tick=0, forgetting=learned_track(rep, it)), reason="main experiment after learning")
+        memory.store.append("add", item=dict(it, created_tick=0, forgetting=learned_track(rep, it, v11)), reason="main experiment after learning")
     pool = [load_task(t) for t in LEARN if scenario == "steady" or t != "E04"]
     rng = random.Random(seed * 1000 + rep)  # the same stream for every policy
     n_clutter = 0
@@ -127,7 +140,10 @@ def simulate(rep: int, policy: str, scenario: str, seed: int = 0, tiered: bool =
         injected = memory.retrieve(task, "1.0.0").ids
         items = memory.store.items()
         used = [i for i in injected if primary(f"{items[i]['title']} {items[i]['content']}") in task.conventions]
-        forgetting.observe(memory, tick, task.id, injected, used, passed=True)
+        verified = list(used) if v11 else None
+        if adopt_noise:
+            used += [i for i in injected if i.startswith("at-c") and noise.random() < adopt_noise]
+        forgetting.observe(memory, tick, task.id, injected, used, passed=True, verified=verified)
         if tick % MAINTAIN_EVERY == 0:
             forgetting.maintain(memory, tick, policy, threshold, params)
     memory.clock = clock
