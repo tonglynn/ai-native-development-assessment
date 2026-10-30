@@ -52,6 +52,7 @@ Results and a console log are committed back to `runs/<name>/`.
 | `benchmark/` | Simulated team repositories and 25 tasks — see `benchmark/README.md` |
 | `attest/` | Runner, verifier and memory systems |
 | `attest/ablation.py`, `attest/memory/retrieval.py`, `embedding.py` | Retrieval ablation (exploratory): lexical vs embedding ranking on the same memory, offline retrieval metrics and end-to-end runs (PREREGISTRATION 4c). / 检索机制消融：同一份记忆上比较词法与语义排序 |
+| `RESULTS.md` | Main experiment results: H1–H5 supported, H6 (the write gate is free) not supported; business risks; stress tests. Report: `report/index.html`. / 主实验结果 |
 | `REAL_HISTORY.md` | Results on real review history (Flask: development, Saleor: test); no recall advantage for Attest. / 真实评审历史上的结果 |
 | `ROADMAP.md` | What comes after the main experiment (conflict resolution, trust levels, poisoning defence, feedback loop, component ablation) and what is deliberately not added. / 路线图 |
 | `PROCESS_MEMORY.md` | Design of the next-phase process memory (rebase, backport, review threads, CI). / 流程记忆设计稿 |
