@@ -1,11 +1,11 @@
 # Preregistration / 预注册
 
-> **Status: FROZEN** on 2026-10-30, by the commit that replaced the draft notice with
-> this line (tag `prereg-frozen`), after the no-memory pilots, the independent audit and
+> **Status: FROZEN** on 2026-10-30, by commit `cf5d879ecc97` (2026-10-30T17:40:57+08:00), which replaced the draft notice with
+> this line, after the no-memory pilots, the independent audit and
 > its two re-checks, and before any memory condition was run. Any later change is
 > listed under *Deviations*.
 >
-> **状态：已冻结**（2026-10-30，标签 `prereg-frozen`）。在无记忆基线、独立审计及两次复核之后、任何有记忆的实验运行之前冻结。之后的任何修改都列在"偏差"一节。
+> **状态：已冻结**（提交 `cf5d879ecc97`，2026-10-30T17:40:57+08:00）。在无记忆基线、独立审计及两次复核之后、任何有记忆的实验运行之前冻结。之后的任何修改都列在"偏差"一节。
 
 ## 1. Question / 研究问题
 
@@ -286,4 +286,4 @@ rejected) is kept and tested.
 
 ## 8. Deviations / 偏差记录
 
-*(none yet)*
+1. After the freeze commit `cf5d879ecc97`, only this file's status notice was edited to name the freeze commit instead of a git tag (tags cannot be pushed from the session that ran the work). No task, hypothesis, rule or code changed. 冻结后仅把状态说明里的标签改为冻结提交的哈希，其余未改。
