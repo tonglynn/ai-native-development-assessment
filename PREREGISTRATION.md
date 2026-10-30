@@ -205,9 +205,12 @@ them were informed by data (DECISIONS D21):
 2. **Typed evidence.** The gate records source (verbatim quote), applied line
    (typed code / test / doc / config, added or removed) and verification
    separately, and an optional independent review (off in all preregistered
-   runs). Matching of the applied line became line-based and tolerant of
-   imprecise copying (every claimed line must match one changed line: verbatim
-   substring ≥ 10 characters or ≥ 80% of its words, ≥ 3 words); quotes are matched
+   runs). Matching of the applied line became line-based and tolerates format
+   differences only (D25): every claimed line must match one changed line, as a
+   verbatim substring of ≥ 10 characters after removing diff markers and
+   normalising whitespace and case, or with all of its words (≥ 3) occurring in
+   that line in the same order, so a claim may omit words but never add, replace
+   or reorder them (no paraphrase); quotes are matched
    against the before and after text of the diff, so diff markers no longer break
    multi-line quotes. **Informed by data:** the Flask retrospective
    (`runs/retro_flask`) showed 8 of 49 candidates rejected, at least 5 of them
