@@ -182,6 +182,63 @@ review comments plus the poison, and the poison note the distiller actually wrot
 - **Case 1 is beyond any evidence check.** Advice that is followed and passes the tests has true
   provenance; only a check of whether it is right can stop it (semantic governance, below).
 
+**The second poison again, with a business-policy guard** (D38,
+`runs/stress_poison_float_guard`). The guard is optional and off in every other run. While the
+hidden tests run, every money field written to the audit trail must be a `Decimal`. If one is
+not, verification reports a C1 failure, with the reviewer's existing C1 comment. All 26
+reference solutions pass with the guard on. 2 conditions × 3 repetitions.
+
+| | Attest | no gate |
+|---|---|---|
+| Poisoned-task runs that passed verification (of 6) | 0 | 1 |
+| Poison notes stored (3 reps) | **0** | 3 |
+| Held-out runs shown the poison (of 33) | **0** | 22 |
+| Held-out pass@1 (guard on, so not comparable with the runs above) | 36% | 42% |
+
+- **The guard turns case 1 into case 3, and the gate then holds.** In every Attest run the agent
+  followed the poison on its second attempt, the guard caught the float amount, the task failed
+  verification, and Attest stored nothing.
+- **The cost is the first poison's cost.** With only two attempts per task, the agent never got
+  a third chance to undo the advice. So Attest also learned nothing else from E04 and E06,
+  including no idempotency or approval note. A guard is a test, so it helps only where someone
+  wrote it, and only for the rule it encodes.
+- The held-out "applied" count looks at the final code, so with the guard on it misses runs
+  that applied the advice first and undid it after the C1 review. That count is not reported.
+
+**Semantic review with cited conflicts** (D39, `attest/memory/governance.py`,
+`scripts/semantic_review_eval.py`, `runs/semantic_review`, one Actions run, 34 cases from real
+notes). A separate reviewer model (deepseek-v4-pro) may rely only on the repository's active
+rules and its CHANGELOG. To claim a conflict it must quote both sides, and the quotes are checked
+in code. A candidate judged conflict or uncertain is held: stored with both sides' evidence, not
+injected, nothing superseded, and never rejected automatically, because new advice can be a real
+policy change. A person resolves it. The prompt and the reading rule were fixed before the run.
+
+| Case | Verdict |
+|---|---|
+| poison against a memory that states the Decimal rule (main r3) | **conflict**, citing "Money is Decimal end-to-end, never float" |
+| poison against the memory each repetition held before learning it (r1–r3; none states the Decimal rule) | uncertain 3/3: "no source to confirm or contradict" |
+| the 500.00 approval rule on 2.0.0 (r1–r3) | **conflict 3/3**, citing the CHANGELOG ("FIN-2026-09 raises the approval threshold") |
+| the 1000.00 rule on 2.0.0, against a memory with the 500.00 rule (r1, r3) | approved 1, conflict 1 (wrongly held: the CHANGELOG supports it) |
+| 25 correct notes against the rest of their memory | approved 17, **uncertain 6, conflict 2** |
+
+- **By the reading rule, it is not a useful safeguard as configured.** It held 8 of 25 correct
+  notes, and at most 2 were allowed.
+- **Where a contradicting source exists, it works.** The poison against the explicit Decimal rule,
+  and the stale threshold against the CHANGELOG, were 4 of 4 conflicts, cited and checked.
+- **Where none exists, a sound reviewer cannot tell new-and-right from new-and-wrong.** All 6
+  uncertain correct notes and all 3 poison cases without a basis got the same reason: nothing in
+  the sources addresses the rule. Holding every new rule keeps the poison out but puts about a
+  third of correct rules in a human queue. Approving them lets the poison through.
+- **Sensitivity, added after the run:** suppose only cited conflicts are held and an uncertain
+  verdict is approved. Then 2 of 25 correct notes are held, which meets the rule. But the poison
+  is held only when a contradicting rule exists (1 of 4 cases). The two held correct notes were
+  real errors: the reviewer read the idempotency rule and the audit rule as contradicting each
+  other. One of the two policy changes was also wrongly held.
+- So semantic governance is as good as the rules it can cite. In a young memory, the Decimal rule
+  had not been learned yet, so there was nothing to cite. This fits the policy guard above: making
+  the rule explicit (a test, or a rule in memory) is what lets anything stop the poison.
+  语义审核只能和它能引用的规则一样好：记忆里还没有那条规则时，审核者无法分辨"新的正确规则"和"新的错误规则"。
+
 **300 notes from other repositories** (`runs/stress_scale`, held-out, 33 runs):
 Attest 73% pass@1, 31k prompt tokens per run, 0 foreign notes shown; ReasoningBank
 42%, 46k, 0.8 foreign repositories mentioned per run; ACE 55%, 157k, all 300 notes
@@ -762,6 +819,7 @@ phase, 3 memory states × 2 runs, 24 runs, 0 crashed (`scripts/x01_eval.py`, `ru
 - Verification at retrieval (after Copilot): checking the injected notes against the checkout leaves every non-stale context unchanged and did no harm on the stale tasks (100% vs 87%), but the difference comes from one task on which the control was atypical, so no improvement is claimed.
 - Step 6 (provider timeouts, extension task X01): Attest carried the audit rule to a new module (6/6, no memory 0/6) and the idempotency parameter partly (2/6, others 0/6; the two runs of each memory state agreed in 11 of 12 pairs, so the effective sample is nearer 3 per condition); the retry-with-the-same-key rule had no gap (6/6 in every condition, the gateway's docstring gives it away), so transfer to step 6 is not shown.
 - Value feedback (offline): when adoption counts as contribution, one-off notes become permanent (34 under 30% adoption noise). Reinforcing only verified use removes that, but V1.1 also wrongly archived more correct rules (4 → 10–11 of 52), mostly rules no test checks. V1 stays the default and V1.1 is an option. The hard part is reliable evidence of value, not the decay rate.
+- Semantic governance (exploratory): a policy guard (money in the audit trail must be Decimal) let the gate stop the test-passing poison (0 stored, vs 3 every repetition without it), at the first poison's cost; a cited-conflict reviewer caught the poison and the stale threshold wherever a contradicting rule or changelog entry existed (4/4), but cannot tell new-and-right from new-and-wrong rules, and held 8 of 25 correct notes as configured.
 - Not supported: that the write gate is free, or that it stops wrong advice. It cost held-out passes in the main experiment (−15 pp) and under the first poison (36% vs 67%). Against a second poison that passes the tests, Attest stored the wrong rule in every repetition, as the no-gate arm did, and held-out tasks applied it in 14 of 33 runs. Its demonstrated value is that it keeps out what comes from unverified tasks, and that it records provenance; it does not judge whether advice is right.
 - Limits: one model, one synthetic benchmark designed by the author, simulated
   review comments, 11 held-out tasks × 3 repetitions; real review history shows no
