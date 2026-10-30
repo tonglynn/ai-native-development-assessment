@@ -39,3 +39,18 @@ def test_drifted_note_is_annotated_on_the_new_version():
 def test_drop_mode_excludes_a_drifted_note():
     r = seeded(VerifiedMemory, mode="drop").retrieve(load_task("S01"), "2.0.0")
     assert "at-0001" not in r.ids and "cited code changed" in r.debug["trace"]["excluded"]["at-0001"]
+
+
+def test_citation_and_write_back():
+    item = dict(ROUND, evidence=[{"task_id": "E01", "version": "1.0.0", "source": {"kind": "review_comment", "quote": "x", "references": []},
+                                 "applied": {"kind": "code", "change": "added", "file": "ledgerly/invoice.py", "line": "+    return round_money(total)"},
+                                 "verification": {"passed": True}}])
+    m = VerifiedMemory(None, cite=True, write_back=True)
+    m.store.append("add", item=item, reason="seed")
+    r = m.retrieve(load_task("S01"), "2.0.0")
+    assert "cited code: ledgerly/invoice.py: `+    return round_money(total)`" in r.context
+    stored = m.store.items()["at-0001"]
+    assert stored["status"] == "suspect" and stored["verification_check"]["status"] == "drifted"
+    n = len(m.store.events)
+    m.retrieve(load_task("S01"), "2.0.0")  # same verdict: nothing written again
+    assert len(m.store.events) == n

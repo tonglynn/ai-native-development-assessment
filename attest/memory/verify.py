@@ -139,6 +139,15 @@ def warning(v: dict, item: dict) -> str | None:
     return None
 
 
+def citation(item: dict) -> str | None:
+    """Where the note was applied, from its latest evidence: file and changed line."""
+    for ev in reversed(item.get("evidence") or []):
+        applied = ev.get("applied") or {}
+        if applied.get("file") and applied.get("line"):
+            return f"  cited code: {applied['file']}: `{applied['line'].strip()[:160]}` (re-read it before relying on the note)"
+    return None
+
+
 class VerifiedMemory(EarnedMemory):
     """Attest with just-in-time verification at retrieval.
 
@@ -146,11 +155,14 @@ class VerifiedMemory(EarnedMemory):
     "check before use" line. mode "drop": drifted notes are excluded instead (review notes
     annotated). Eligibility (scope, versions, status) is checked first, as always."""
 
-    def __init__(self, store_dir, *, mode: str = "annotate", **kw):
+    def __init__(self, store_dir, *, mode: str = "annotate", cite: bool = False, write_back: bool = False, **kw):
+        """cite (D40): show each injected note's evidence (file and changed line) so the agent can re-read
+        the code itself, as Copilot's memories carry code citations. write_back (D40): store the verdict
+        on the note; a drifted note becomes suspect, so the check is not repeated from scratch."""
         super().__init__(store_dir, **kw)
         assert mode in ("annotate", "drop"), mode
-        self.mode = mode
-        self.name = f"attest_verify_{mode}"
+        self.mode, self.cite, self.write_back = mode, cite, write_back
+        self.name = f"attest_verify_{mode}" + ("_cite" if cite else "") + ("_writeback" if write_back else "")
 
     def _exclusion(self, item, task, version):
         why = super()._exclusion(item, task, version)
@@ -171,9 +183,25 @@ class VerifiedMemory(EarnedMemory):
                 current = m.group(1)
             out.append(line)
             if current and line.startswith("  (learned from"):
+                if self.cite and current in items:
+                    c = citation(items[current])
+                    if c:
+                        out.append(c)
                 w = warning(verdicts.get(current, {}), items[current]) if current in verdicts else None
                 if w:
                     out.append(w)
         r.context = "\n".join(out)
         r.debug["verification"] = {i: v["status"] for i, v in verdicts.items()}
+        if self.write_back:
+            for i, v in verdicts.items():
+                prev = (items[i].get("verification_check") or {})
+                check = {"version": repo_version, "status": v["status"], "missing": v["missing"], "changelog_mentions": v["changelog_mentions"]}
+                if prev == check:
+                    continue
+                fields = {"verification_check": check}
+                reason = f"checked against {task.repo} ({repo_version}): {v['status']}"
+                if v["status"] == "drifted" and items[i]["status"] == "active":
+                    fields["status"] = "suspect"
+                    reason += f"; {', '.join(v['missing'])} no longer in the code, marked suspect"
+                self.store.append("update", id=i, fields=fields, reason=reason)
         return r
