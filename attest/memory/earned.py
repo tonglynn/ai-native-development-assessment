@@ -323,7 +323,8 @@ class EarnedMemory(MemorySystem):
         items = self.store.items()
         # Items this one may duplicate or replace: same repository, still in use for some version.
         existing = [it for it in items.values() if self._same_scope(it, task)
-                    and (it["status"] in VISIBLE or (it["status"] == "superseded" and it["scope"].get("valid_until")))]
+                    and (it["status"] in VISIBLE or it["status"] == "archived"
+                         or (it["status"] == "superseded" and it["scope"].get("valid_until")))]
         relations = {}
         if existing:
             listing = [{"id": it["id"], "title": it["title"], "content": it["content"],
@@ -340,7 +341,8 @@ class EarnedMemory(MemorySystem):
         verification = {"task_id": task.id, "version": repo_version, "result": "passed" if run["final_pass"] else "unverified",
                         "how": f"learned from a task whose final change {'passed' if run['final_pass'] else 'did not pass'} verification"}
 
-        duplicate = next((it for it in existing if relations.get(it["id"]) == "duplicate" and not validity(it, repo_version)), None)
+        duplicate = next((it for it in existing if relations.get(it["id"]) == "duplicate"
+                          and (it["status"] == "archived" or not validity(it, repo_version))), None)
         if duplicate:
             fields = {
                 "evidence": duplicate["evidence"] + [evidence],
@@ -348,8 +350,9 @@ class EarnedMemory(MemorySystem):
                 "status": "active",
                 "last_verification": verification,
             }
+            was = " (reactivated from the archive)" if duplicate["status"] == "archived" else ""
             return [self.store.append("update", id=duplicate["id"], fields=fields, candidate=cand,
-                                      reason=f"confirmed again by verified task {task.id}")]
+                                      reason=f"confirmed again by verified task {task.id}{was}")]
 
         # Only newer (or same-version) verified evidence may replace an older rule.
         replaced = [
