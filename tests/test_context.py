@@ -94,3 +94,16 @@ def test_sanitize_removes_unanswered_tool_calls():
     for i, m in enumerate(clean):  # every remaining call is answered right after it
         for c in m.get("tool_calls") or []:
             assert any(n.get("tool_call_id") == c["id"] for n in clean[i + 1:])
+
+
+def test_review_comments_are_kept_whole_and_first():
+    """A rule split into sentences among code lines was not followed (context design 2); reviews come first, whole."""
+    review = ("You are working in a repo.\n\nPlease solve this issue: credits\n\n## Code review of your previous attempt\n"
+              "Your previous attempt at this issue was reviewed and not accepted. Address every comment below:\n- " + RULE
+              + "\n- The public test suite fails.\n\nYou can execute bash commands.")
+    msgs = [{"role": "user", "content": review}] + step(1, output='raise ValueError("a note is required")\nIt must be positive.')
+    state = extract_state(msgs)
+    assert state.reviews[0][1] == RULE and len(state.reviews) == 2
+    assert not any("ValueError" in s for _, s in state.constraints)  # code lines from tool output are not constraints
+    text = state.render()
+    assert text.index("Review comments you received") < text.index(RULE)

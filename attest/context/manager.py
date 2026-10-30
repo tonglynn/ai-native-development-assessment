@@ -66,15 +66,23 @@ def _sentences(text: str) -> list[str]:
     return [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", text) if s.strip()]
 
 
+REVIEW_HEADING = "## Code review of your previous attempt"
+CODE_LINE_RE = re.compile(r"^\s*(?:[-+]\s*)?(?:raise|def|return|if|elif|else|for|import|from|class|assert|\w+\s*=|[./\w-]+:\d+:|#|\*\*)")
+
+
 @dataclass
 class WorkingState:
     goal: str = ""
+    reviews: list[tuple[int, str]] = field(default_factory=list)      # whole review comments, highest importance
     constraints: list[tuple[int, str]] = field(default_factory=list)  # (source message index, sentence)
     last_tests: str = ""
     files: list[str] = field(default_factory=list)
 
     def render(self) -> str:
-        lines = ["[Working state, extracted from earlier in this session; constraints are quoted verbatim]"]
+        lines = ["[Working state, extracted from earlier in this session; quoted verbatim]"]
+        if self.reviews:
+            lines.append("Review comments you received earlier in this session (team rules; apply them wherever they fit):")
+            lines += [f"- {c}" for _, c in self.reviews]
         if self.constraints:
             lines.append("Constraints and rules seen earlier:")
             lines += [f"- {s} (from message {i})" for i, s in self.constraints]
@@ -85,7 +93,7 @@ class WorkingState:
         return "\n".join(lines)
 
     def pinned_tokens(self) -> set[str]:
-        return {t.strip("`").lower() for _, s in self.constraints for t in KEY_TOKEN_RE.findall(s)}
+        return {t.strip("`").lower() for _, s in self.reviews + self.constraints for t in KEY_TOKEN_RE.findall(s)}
 
 
 def extract_state(messages: list[dict], goal: str = "") -> WorkingState:
@@ -93,8 +101,19 @@ def extract_state(messages: list[dict], goal: str = "") -> WorkingState:
     state, seen = WorkingState(goal=goal), set()
     for i, m in enumerate(messages):
         text = _text(m)
+        if m.get("role") == "user" and REVIEW_HEADING in text:
+            # Importance 1: reviewer comments, kept whole (a rule split into sentences loses its meaning).
+            body = text.split(REVIEW_HEADING, 1)[1].split("\n\n")[0]  # the comment list ends at the next blank line
+            for c in re.findall(r"^- (.+)$", body, re.M):
+                key = " ".join(c.lower().split())
+                if key not in seen:
+                    seen.add(key)
+                    state.reviews.append((i, c.strip()))
+            text = text.split(REVIEW_HEADING, 1)[0]
         if m.get("role") in ("user", "tool"):
             for s in _sentences(text):
+                if m.get("role") == "tool" and CODE_LINE_RE.match(s):
+                    continue  # Importance 3: code and grep lines from tool output are not constraints
                 if CONSTRAINT_RE.search(s) and len(s) <= 400 and "tool call" not in s.lower():
                     key = " ".join(s.lower().split())
                     if key not in seen:
