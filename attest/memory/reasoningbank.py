@@ -16,7 +16,7 @@ from pathlib import Path
 from .. import llm
 from ..benchmark import Task
 from .base import MemorySystem, Retrieved, experience_packet
-from .store import EventStore
+from .sqlite_store import open_store
 from .text import rank
 
 MAX_SHOWN = 6
@@ -31,7 +31,7 @@ class ReasoningBankMemory(MemorySystem):
     name = "reasoningbank"
 
     def __init__(self, store_dir: Path | None):
-        self.store = EventStore(store_dir / "events.jsonl" if store_dir else None)
+        self.store = open_store(store_dir)
 
     def retrieve(self, task: Task, repo_version: str) -> Retrieved:
         items = self.store.items()

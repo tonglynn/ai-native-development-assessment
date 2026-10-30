@@ -12,6 +12,8 @@ and go through the same write gate as in the experiment.
 
 Configuration (environment):
   ATTEST_HOME        where memory lives (default ~/.attest), one store per repository
+  ATTEST_STORE       sqlite (default here: one memory.db per repository that several
+                     agents or people can share) or jsonl (the experiments' format)
   ATTEST_VERIFY_CMD  verification command run in the repository (default: python -m pytest -q)
 
 Claude Code:  claude mcp add attest -- python -m attest.mcp_server
@@ -30,6 +32,7 @@ from .memory.earned import EarnedMemory
 
 HOME = Path(os.environ.get("ATTEST_HOME", "~/.attest")).expanduser()
 VERIFY_CMD = os.environ.get("ATTEST_VERIFY_CMD", "python -m pytest -q")
+STORE = os.environ.get("ATTEST_STORE", "sqlite")
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -50,7 +53,7 @@ def _identity(repo_path: str) -> tuple[Path, str, str]:
 
 def _memory(name: str) -> EarnedMemory:
     slug = re.sub(r"[^A-Za-z0-9_.-]", "_", name)
-    return EarnedMemory(HOME / slug)
+    return EarnedMemory(HOME / slug, backend=STORE)
 
 
 def _task(name: str, task: str) -> SimpleNamespace:

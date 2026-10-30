@@ -104,6 +104,21 @@ def cmd_retract(args) -> int:
     return 0
 
 
+def cmd_migrate(args) -> int:
+    from .memory.sqlite_store import SqliteEventStore
+    from .memory.store import EventStore
+
+    src, dst = Path(args.src), Path(args.dst)
+    if src.suffix == ".jsonl":
+        n = SqliteEventStore(dst).import_jsonl(src)
+        state = EventStore(src).items() == SqliteEventStore(dst).items()
+    else:
+        n = SqliteEventStore(src).export_jsonl(dst)
+        state = EventStore(dst).items() == SqliteEventStore(src).items()
+    print(f"{n} events copied {src} -> {dst}; current state identical: {state}")
+    return 0 if state else 1
+
+
 def cmd_summary(args) -> int:
     results = [json.loads(p.read_text()) for p in sorted(Path(args.path).rglob("result.json"))]
     if not results:
@@ -174,6 +189,11 @@ def main(argv=None) -> int:
     p.add_argument("--note", required=True)
     p.add_argument("--reason", required=True)
     p.set_defaults(fn=cmd_retract)
+
+    p = sub.add_parser("migrate", help="copy a memory log between backends: events.jsonl -> memory.db, or memory.db -> events.jsonl")
+    p.add_argument("src")
+    p.add_argument("dst")
+    p.set_defaults(fn=cmd_migrate)
 
     p = sub.add_parser("summary", help="summarise results under a runs/ directory")
     p.add_argument("path")

@@ -35,7 +35,7 @@ from pathlib import Path
 from .. import llm
 from ..benchmark import Task
 from .base import MemorySystem, Retrieved, experience_packet
-from .store import EventStore
+from .sqlite_store import open_store
 from .text import jaccard, normalise, rank, related
 
 MAX_SHOWN = 6
@@ -75,8 +75,8 @@ def _version_tuple(version: str) -> tuple:
 
 
 class EarnedMemory(MemorySystem):
-    def __init__(self, store_dir: Path | None, *, gate: bool = True, scope: bool = True):
-        self.store = EventStore(store_dir / "events.jsonl" if store_dir else None)
+    def __init__(self, store_dir: Path | None, *, gate: bool = True, scope: bool = True, backend: str | None = None):
+        self.store = open_store(store_dir, backend)
         self.gate, self.scope = gate, scope
         self.name = "attest" + ("" if gate else "_no_gate") + ("" if scope else "_no_scope")
 

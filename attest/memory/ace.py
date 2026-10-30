@@ -17,7 +17,7 @@ from pathlib import Path
 from .. import llm
 from ..benchmark import Task
 from .base import MemorySystem, Retrieved, experience_packet
-from .store import EventStore
+from .sqlite_store import open_store
 from .text import jaccard
 
 SECTIONS = ("strategies", "common_mistakes", "domain_facts")
@@ -34,7 +34,7 @@ class AcePlaybookMemory(MemorySystem):
     name = "ace"
 
     def __init__(self, store_dir: Path | None):
-        self.store = EventStore(store_dir / "events.jsonl" if store_dir else None)
+        self.store = open_store(store_dir)
 
     def _bullets(self) -> dict[str, dict]:
         return {i: it for i, it in self.store.items().items() if it["status"] == "active"}
