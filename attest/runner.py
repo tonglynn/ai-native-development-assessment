@@ -47,6 +47,8 @@ class Settings:
     # Exploratory extensions only (e.g. the context manager): wraps the model after it is built.
     # None in the preregistered experiment.
     wrap_model: object = None
+    # Exploratory business-policy guard (D38): money written to the audit trail must be Decimal. Off in the experiment.
+    policy_guard: bool = False
 
 
 def load_config() -> dict:
@@ -218,7 +220,7 @@ def run_task(
         except Exception as exc:  # noqa: BLE001 - a crashed attempt is a failed attempt, not a crashed experiment
             info = {"exit_status": f"crash:{type(exc).__name__}", "submission": ""}
         restore_tests(task, workspace)
-        verification = verify(workspace, task)
+        verification = verify(workspace, task, policy_guard=settings.policy_guard)
         if not verification["passed"] and task.id in settings.extra_review:
             verification["review_comments"].append(settings.extra_review[task.id])
         tokens = token_usage(agent.messages)

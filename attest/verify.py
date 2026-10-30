@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -20,6 +21,10 @@ from pathlib import Path
 from .benchmark import BENCHMARK_DIR, Task
 
 RUNNER = Path(__file__).with_name("_hidden_runner.py")
+# Exploratory business-policy guard (D38): the simulated reviewer's C1 comment, verbatim from benchmark/author_tasks.py.
+POLICY_DOC = ("[team convention] Money in ledgerly is Decimal end-to-end and always has exactly two decimal places. "
+              "Never convert amounts to float.")
+POLICY_TEST = "test_conv_c1_policy_audit_amounts_are_decimal"
 MARKER = "__HIDDEN_RESULT__"
 
 
@@ -57,14 +62,18 @@ def run_public_tests(workspace: Path, timeout: int = 120) -> dict:
     return {"passed": proc.returncode == 0, "output": output[-2000:]}
 
 
-def run_hidden_tests(workspace: Path, task: Task, timeout: int = 60) -> list[HiddenTest]:
+def run_hidden_tests(workspace: Path, task: Task, timeout: int = 60, policy_guard: bool = False) -> list[HiddenTest]:
     tests = _parse_hidden_tests(task.hidden_test)
+    policy_guard = policy_guard and (workspace / "ledgerly" / "audit.py").exists()  # nothing to guard elsewhere
+    if policy_guard:
+        tests.append(HiddenTest(POLICY_TEST, "conv", "C1", POLICY_DOC))
     with tempfile.TemporaryDirectory(prefix="hidden_") as tmp:
         shutil.copyfile(task.hidden_test, Path(tmp) / "hidden_test.py")
         shutil.copyfile(BENCHMARK_DIR / "hidden_support.py", Path(tmp) / "hidden_support.py")
         cmd = [sys.executable, "-I", str(RUNNER), str(Path(tmp) / "hidden_test.py"), str(workspace)]
         try:
-            proc = subprocess.run(cmd, cwd=workspace, capture_output=True, text=True, timeout=timeout)
+            env = dict(os.environ, ATTEST_POLICY_GUARD="1" if policy_guard else "0")
+            proc = subprocess.run(cmd, cwd=workspace, capture_output=True, text=True, timeout=timeout, env=env)
             raw = next((ln for ln in proc.stdout.splitlines() if ln.startswith(MARKER)), None)
             results = json.loads(raw[len(MARKER):]) if raw else {"__import__": {"passed": False, "error": proc.stderr[-500:]}}
         except subprocess.TimeoutExpired:
@@ -76,10 +85,13 @@ def run_hidden_tests(workspace: Path, task: Task, timeout: int = 60) -> list[Hid
     return tests
 
 
-def verify(workspace: Path, task: Task) -> dict:
-    """Run public and hidden tests. ``passed`` is True only if everything passes."""
+def verify(workspace: Path, task: Task, policy_guard: bool = False) -> dict:
+    """Run public and hidden tests. ``passed`` is True only if everything passes.
+
+    policy_guard (exploratory, D38; off in every preregistered run): also require every money
+    field written to the audit trail during the hidden tests to be a Decimal."""
     public = run_public_tests(workspace)
-    hidden = run_hidden_tests(workspace, task)
+    hidden = run_hidden_tests(workspace, task, policy_guard=policy_guard)
     failed = [t for t in hidden if not t.passed]
     comments = list(dict.fromkeys(t.doc for t in failed if t.doc))
     return {

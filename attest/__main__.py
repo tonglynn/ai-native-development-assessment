@@ -83,6 +83,9 @@ def cmd_stress(args) -> int:
     elif args.kind == "poison_float":
         stress.run_poison_float(root, reps=args.reps, parallel=args.parallel, settings=settings)
         rows = stress.summarise_poison_float(root)
+    elif args.kind == "poison_float_guard":
+        stress.run_poison_float_guard(root, reps=args.reps, parallel=args.parallel, settings=settings)
+        rows = stress.summarise_poison_float(root)
     else:
         stress.run_scale(root, reps=args.reps, parallel=args.parallel, settings=settings)
         rows = stress.summarise_scale(root)
@@ -189,7 +192,7 @@ def main(argv=None) -> int:
     p.set_defaults(fn=cmd_experiment)
 
     p = sub.add_parser("stress", help="exploratory stress experiments: poisoned review advice, or 300 distractor notes")
-    p.add_argument("--kind", choices=["poison", "poison_float", "scale"], required=True)
+    p.add_argument("--kind", choices=["poison", "poison_float", "poison_float_guard", "scale"], required=True)
     p.add_argument("--name", required=True)
     p.add_argument("--reps", type=int, default=2)
     p.add_argument("--parallel", type=int, default=5)
