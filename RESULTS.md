@@ -273,6 +273,96 @@ in real repositories (policy references and repetition over time) is the next qu
 Tiering also has a cost: a real rule seen once with diff-only evidence (the audit rule in
 repetition 2) becomes a candidate and is not injected outside its file.
 
+## Forgetting V1.1: what counts as evidence of value (offline, exploratory) / 遗忘 V1.1：什么才算价值反馈（离线，探索性）
+
+A review of V1 raised three problems: one verified use protected a note for ever (the U
+floor above); "the task passed" was counted as "the note contributed"; and a reactivated
+note kept its old age, so the next maintenance could archive it again. V1.1 is opt-in and
+changes three things, each switchable:
+
+- **verified-only reinforcement**: a note is reinforced only when the task's hidden tests
+  check its convention. A note adopted in a passing task but unchecked is counted, not
+  reinforced, and a self-reported citation counts only under the same condition (D10).
+- **utility decay**: U decays too, 4 times slower than D. The 4 is an experimental setting.
+- **citation protection**: a note citing FIN-/POL-/SEC-/INC- never decays, whatever its type
+  label. This is added to the `business_policy` type protection, not a replacement for it.
+
+Noise: 30% of injected one-off notes are "adopted" though the task does not need them,
+and the task passes anyway. The stream is the same as before, with 2 stream seeds × 3
+repetitions and no model calls (`scripts/forgetting_v11.py`, `runs/forgetting_v11`).
+"Verified" here is a proxy signal, not attribution.
+
+| Configuration | Variant | Noise | Needed rule injected | Active notes | One-off notes never archivable | Useful rules wrongly archived | Policy rules archived |
+|---|---|---|---|---|---|---|---|
+| no forgetting | – | 0.3 | 45% | 208 | 200 | 0/52 | 0 |
+| type-aware ×1 | V1 | 0 | 46% | 100 | 0 | 4/52 | 0 |
+| type-aware ×1 | V1 | 0.3 | 45% | **126** | **34** | 4/52 | 0 |
+| type-aware ×1 | V1.1 | 0.3 | 46% | 99 | 0 | **10/52** | 0 |
+| type-aware ×0.25 | V1 | 0 | 67% | 32 | 0 | 4/52 | 0 |
+| type-aware ×0.25 | V1 | 0.3 | **54%** | **65** | **34** | 4/52 | 0 |
+| type-aware ×0.25 | V1.1 | 0.3 | 68% | 31 | 0 | **11/52** | 0 |
+| tiered + type-aware ×1 | V1 | 0.3 | 79% | 106 | 6 | 4/52 | 0 |
+| tiered + type-aware ×1 | V1.1 | 0.3 | 82% | 99 | 0 | **10/52** | 0 |
+
+V1.1 gives the same numbers with and without noise. *Useful rules* are the learned notes
+about C1–C6 (44), plus learned rules outside C1–C6 that I checked against the benchmark's
+own sources and found correct but untested (8: "reject bool as an integer", "use to_money
+and ZERO"; labelled by hand after the run). "Not verified" is not "verification failed",
+so these count on the risk side. The direction is the same on both stream seeds.
+
+- **The U floor is real.** When adoption counts as contribution (V1 with noise), 34 one-off
+  notes became permanent. Active notes went from 100 to 126 (×1) and from 32 to 65 (×0.25),
+  and under aggressive decay the needed rules injected fell from 67% to 54%. 一次"被采用"就能让细节笔记永久保留。
+- **V1.1 removes it.** No one-off note becomes permanent, and memory is the same with or
+  without noise.
+- **But V1.1 wrongly archives more correct rules: 4 → 10–11 of 52 (8% → 19–21%).** Most are
+  rules whose use the proxy cannot see (all 8 known-correct rules outside C1–C6, against 2
+  under V1). Once it is a C1–C6 rule: the audit rule (C4) in one repetition under ×0.25. No
+  arm archived a policy rule. 省了空间，但丢了更多正确规则。
+- **Ablation** (×0.25, noise, seed 0, 3 repetitions):
+  - Verified-only reinforcement alone gives all of the space saving (31 active notes, 0
+    permanent, 68%) and wrongly archives 3 of 26 (V1: 2 of 26).
+  - Utility decay alone is the worst arm (49 active notes, 61%, 8 of 26 wrongly archived),
+    and it archived the `ensure_utc` rule (C3) in all 3 repetitions. That is consistent with
+    reinforced one-off notes keeping the rule out of the injected six, so it is never
+    reinforced while its utility decays. I did not trace the injections to confirm it.
+  - Citation protection alone changes nothing here: the cited rules were either typed
+    `business_policy` or reinforced by the stream.
+  - The parts interact: utility decay is only safe together with verified-only reinforcement.
+- **utility_factor 2 / 4 / 8** (V1.1, ×1, noise, seed 0) wrongly archives 6 / 5 / 3 of 26.
+  Active notes and needed rules injected hardly change (98–99 notes, 47–48%). In this simulation utility decay
+  saves no space, because verified-only reinforcement already does, so the factor only
+  sets how much is lost. Utility decay is meant for one case: a detail genuinely verified
+  once and never needed again. The stream never produces that case, so it shows no benefit
+  here. That is a limit of this test, not evidence against utility decay.
+- **Decision** (the rule was set by the user before the results were read): V1.1 saves
+  space but wrongly archives more correct rules, so **V1 stays the default and V1.1 stays an
+  experimental option**. The two fixes are judged separately, and both are kept:
+  - Reactivation now always resets the decay clock and requires the current task clock.
+    Before, a restored note could be archived again at the next maintenance. No published
+    run reactivated a note.
+  - Policy references are now an explicit list. ADR-, RFC- and CVE- references had counted
+    as policy. The run data contain only FIN- and INC-, so no result changes.
+- **What it says about memory governance:** all of the space saving came from what counts
+  as feedback (verified-only reinforcement), and the losses came from rules that the feedback
+  cannot see. The hard part is not the decay rate but getting reliable evidence of value: a
+  rule nobody tests looks the same as a rule nobody needs. 难点不是遗忘速度，而是拿到可靠的价值反馈：没有测试覆盖的规则，和没人需要的规则，在反馈里看起来一样。
+
+Regression scenarios (`tests/test_governance_regressions.py`) pin four cases:
+
+- A policy rule nobody needed for 1,000 tasks is kept and injected for H04.
+- A team-convention rule learned in one file reaches another file.
+- A superseded rule is neither archived nor revived, and still serves 1.0.0.
+- A reactivated note is not archived at the next maintenance.
+
+One unresolved limitation is kept as a strict xfail: a real rule seen once, with diff-only
+evidence, does not reach other files. These tests pin behaviour; they do not show that a
+retention policy works overall.
+
+Limits: the stream, the adoption noise and the verification proxy are all simulated, and
+verification is detected by pattern matching. I labelled the known-correct rules myself,
+after the run. Each repetition starts from one learned memory.
+
 ## What this supports / 结论边界
 
 - Supported: memory of review-only knowledge helps a lot (+36 pp over no memory,
@@ -283,6 +373,7 @@ repetition 2) becomes a candidate and is not injected outside its file.
 - Context: under a 6k-token budget the context manager kept the session's review rule (2 of 3 S05 runs passed, 0 C6 failures) where a sliding window (0/3) and a plain summary (1/3) lost it; full history passes 3/3 at four times the tokens. Exploratory, one scenario, tuned after seeing results.
 - Forgetting: 200 one-off notes cut held-out pass@1 from 70% to 42%; no forgetting policy repaired it; uniform decay wrongly archived the approval rule (9 of 9 later C6 runs violated it), type-aware decay did not. Exploratory.
 - Pollution: trust-tiered admission brought held-out pass@1 under pollution from 36% back to 67% (76% with type-aware forgetting; clean memory 70%), with 0 approval violations in the combined arm. Exploratory; the separating signal exists by construction.
+- Value feedback (offline): when adoption counts as contribution, one-off notes become permanent (34 under 30% adoption noise). Reinforcing only verified use removes that, but V1.1 also wrongly archived more correct rules (4 → 10–11 of 52), mostly rules no test checks. V1 stays the default and V1.1 is an option. The hard part is reliable evidence of value, not the decay rate.
 - Not supported: that the write gate is free. Here it cost held-out passes; its value
   is protection (poison) and provenance, which the held-out pass rate does not reward.
 - Limits: one model, one synthetic benchmark designed by the author, simulated

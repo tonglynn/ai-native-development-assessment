@@ -21,7 +21,7 @@ Execution, feedback   diff · hidden tests · business risks · memory funnel (b
 | Typed memory | (semantic rules) | | procedural, episodic, entity (taxonomy below) |
 | Context management | context manager on one long-session scenario (`RESULTS.md`) | archive layer (kept in memory, not persisted) | context recovery from the archive |
 | Agent execution | mini-swe-agent | MCP server and scripted client demo (`docs/MCP_DEMO.md`) | Claude Code session, LATS (not planned: adds search and variables unrelated to memory governance) |
-| Continuous learning | verified distillation, usage accounting, funnel; dynamic forgetting V1 (four policies, `RESULTS.md`) | reactivation of archived notes (tested offline) | consolidation, conflict resolution |
+| Continuous learning | verified distillation, usage accounting, funnel; dynamic forgetting V1 (four policies, `RESULTS.md`); forgetting V1.1 offline (verified-only reinforcement, utility decay; kept as an option, V1 stays default); reactivation resets the decay clock (regression-tested) | | consolidation, conflict resolution; a reliable value signal for rules no test checks |
 
 ## P0, before the freeze / 冻结前 (done)
 

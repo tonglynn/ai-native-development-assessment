@@ -54,7 +54,11 @@ that no forgetting policy repaired it, while uniform decay wrongly archived the
 approval rule and type-aware decay did not. **Trust-tiered admission** (a detail seen once is
 injected only in its own files) brought that back to 67%, 76% together with type-aware
 forgetting, with 0 approval violations (exploratory; the separating signal exists by
-construction).
+construction). **Forgetting V1.1** (offline): counting adoption as
+contribution let 34 one-off notes become permanent; reinforcing only verified use removed
+that, but V1.1 wrongly archived more correct rules (4 → 10–11 of 52), mostly rules no test
+checks, so V1 stays the default. The hard part is reliable evidence of value, not the decay
+rate.
 
 What it does **not** show: on real review history (Flask, Saleor) Attest has no
 recall advantage ([`REAL_HISTORY.md`](REAL_HISTORY.md)); embedding retrieval finds
@@ -189,7 +193,7 @@ process (rebase, backport), which a diff cannot show (see `PROCESS_MEMORY.md`).
 - **H1–H5 得到支持**：比无记忆高 36 个百分点（区间 [+21, +52]）；不泄漏到其他仓库；过期政策场景不比无记忆差；不差于两种已发表的设计；作用域是防泄漏的关键。
 - **H6 不被支持**：写入门槛让留出组降低 15 个百分点（[−27, −3]）。门槛换来的是安全：投毒实验中 Attest 0 次写入错误建议，关掉门槛 9 次，ReasoningBank 12 次、ACE 10 次，后两者的 Agent 在后续任务中确实清空了审计日志。
 - **业务风险**（无记忆 → Attest）：重复资金操作 18/18 → 6/18，未授权操作 15/15 → 2/15，误拦合法操作 15/15 → 3/15。
-- **后续扩展（探索性）**：上下文管理器在 6k token 预算下保住了会话中的评审规则（S05 通过 2/3，0 次审批违规；滑动窗口 0/3，普通摘要 1/3）；动态遗忘实验显示 200 条一次性笔记把留出组从 70% 降到 42%，没有一种遗忘策略能修复，统一衰减误删了审批规则，按类型衰减没有；**可信度分级写入**（只出现一次的细节只在所属文件中注入）把它拉回到 67%，与按类型遗忘结合为 76%，审批违规为 0（探索性，区分信号为构造所得）。
+- **后续扩展（探索性）**：上下文管理器在 6k token 预算下保住了会话中的评审规则（S05 通过 2/3，0 次审批违规；滑动窗口 0/3，普通摘要 1/3）；动态遗忘实验显示 200 条一次性笔记把留出组从 70% 降到 42%，没有一种遗忘策略能修复，统一衰减误删了审批规则，按类型衰减没有；**可信度分级写入**（只出现一次的细节只在所属文件中注入）把它拉回到 67%，与按类型遗忘结合为 76%，审批违规为 0（探索性，区分信号为构造所得）。**遗忘 V1.1**（离线）：把"被采用"当成贡献，会让 34 条一次性笔记永久保留；只按验证强化能消除这一点，但 V1.1 误归档的正确规则从 4/52 增加到 10–11/52，多为没有测试覆盖的规则，因此 V1 仍为默认。难点在于拿到可靠的价值反馈，而不是遗忘速度。
 - **没有证明的**：在真实评审历史（Flask、Saleor）上 Attest 没有召回优势；语义检索找到更多相关笔记，但没有改善编码结果。
 
 ### 问题
