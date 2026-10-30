@@ -1,0 +1,34 @@
+--- a/ledgerly/payments.py
++++ b/ledgerly/payments.py
+@@ -18,6 +18,28 @@
+     return payment
+ 
+ 
+-def capture(payment: Payment, at: datetime) -> Payment:
+-    """Capture an authorized payment."""
+-    raise NotImplementedError
++def capture(payment: Payment, at: datetime, *, idempotency_key: str | None = None) -> Payment:
++    """Capture an authorized payment.
++
++    Moves an authorized payment to ``"captured"`` and records the capture time
++    in ``payment.captured_at``. Only authorized payments can be captured.
++
++    If ``idempotency_key`` is supplied and an audit entry with that key already
++    exists, the original result is returned without applying the operation
++    again.
++    """
++    if idempotency_key is not None:
++        for entry in audit.events():
++            if entry.get("idempotency_key") == idempotency_key:
++                return payment
++    if payment.status != "authorized":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    payment.status = "captured"
++    payment.captured_at = ensure_utc(at)
++    audit.record(
++        "payment_captured",
++        payment_id=payment.id,
++        amount=payment.amount,
++        idempotency_key=idempotency_key,
++    )
++    return payment

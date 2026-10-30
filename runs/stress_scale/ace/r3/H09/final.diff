@@ -1,0 +1,29 @@
+--- a/ledgerly/subscriptions.py
++++ b/ledgerly/subscriptions.py
+@@ -1,5 +1,6 @@
+ from datetime import datetime, timedelta
+ 
++from . import audit
+ from .clock import ensure_utc
+ from .errors import BillingError
+ from .models import Subscription
+@@ -18,5 +19,17 @@
+ 
+ 
+ def cancel(sub: Subscription, at: datetime) -> Subscription:
+-    """Cancel a subscription."""
+-    raise NotImplementedError
++    """Cancel ``sub`` at ``at`` and return it.
++
++    The cancellation time is recorded in ``sub.canceled_at``. A subscription
++    cannot be cancelled before it starts, and it cannot be cancelled twice.
++    """
++    at = ensure_utc(at)
++    start = ensure_utc(sub.started_at)
++    if at < start:
++        raise BillingError("before_start", at.isoformat())
++    if sub.canceled_at is not None:
++        raise BillingError("already_canceled", sub.id)
++    sub.canceled_at = at
++    audit.record("subscription_canceled", subscription_id=sub.id, at=at)
++    return sub

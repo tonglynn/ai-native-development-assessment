@@ -1,0 +1,48 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,11 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import audit
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money, to_money
++
++APPROVAL_THRESHOLD = to_money("500.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +20,31 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def issue_credit_note(invoice, amount, reason):
++def issue_credit_note(invoice, amount, reason, *, idempotency_key=None, approved_by=None):
+     """Credit part of an issued invoice back to the customer."""
+-    raise NotImplementedError
++    if idempotency_key is not None:
++        for entry in audit.events():
++            if entry.get("idempotency_key") == idempotency_key:
++                return entry["result"]
++
++    amount = round_money(to_money(amount))
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    if amount > invoice_total(invoice):
++        raise BillingError("amount_exceeds_total", str(amount))
++    if amount > APPROVAL_THRESHOLD and not approved_by:
++        raise BillingError("approval_required", str(amount))
++
++    result = {"invoice_id": invoice.id, "amount": amount, "reason": reason}
++    audit.record(
++        "credit_note_issued",
++        invoice_id=invoice.id,
++        amount=amount,
++        reason=reason,
++        approved_by=approved_by,
++        idempotency_key=idempotency_key,
++        result=result,
++    )
++    return result

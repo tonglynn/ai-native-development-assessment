@@ -1,0 +1,23 @@
+--- a/ledgerly/invoice.py
++++ b/ledgerly/invoice.py
+@@ -28,5 +28,18 @@
+ 
+ 
+ def add_line(invoice: Invoice, description: str, quantity: int, unit_price) -> LineItem:
+-    """Append a line item to a draft invoice and return it."""
+-    raise NotImplementedError
++    """Append a line item to a draft invoice and return it.
++
++    Lines may only be added while the invoice is a draft. ``quantity`` must be
++    a positive integer and ``unit_price`` must not be negative.
++    """
++    if invoice.status != "draft":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
++        raise BillingError("invalid_quantity", repr(quantity))
++    price = round_money(unit_price)
++    if price < ZERO:
++        raise BillingError("negative_amount", str(price))
++    line = LineItem(description=description, quantity=quantity, unit_price=price)
++    invoice.lines.append(line)
++    return line

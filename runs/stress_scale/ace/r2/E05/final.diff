@@ -1,0 +1,58 @@
+--- a/ledgerly/pricing.py
++++ b/ledgerly/pricing.py
+@@ -1,7 +1,14 @@
+ """Plan prices and coupons (moved over from the old billing monolith)."""
++
++from decimal import Decimal, InvalidOperation
++
++from .errors import BillingError
++from .money import round_money, to_money
+ 
+ PLAN_PRICES = {"starter": 9.99, "team": 49.0, "business": 199.0}
+ COUPONS = {"WELCOME10": 10, "PARTNER25": 25}
++
++HUNDRED = Decimal("100")
+ 
+ 
+ def list_price(plan_code: str) -> float:
+@@ -17,6 +24,38 @@
+     return round(price * (100 - COUPONS[coupon]) / 100, 2)
+ 
+ 
++def _to_rate(value) -> Decimal:
++    """Convert a tax rate into a Decimal without ever going through float."""
++    if isinstance(value, bool):
++        raise BillingError("invalid_rate", repr(value))
++    if isinstance(value, Decimal):
++        return value
++    if isinstance(value, int):
++        return Decimal(value)
++    if isinstance(value, float):
++        # ``str`` yields the shortest round-tripping representation, so the
++        # rate is captured exactly as written rather than via binary float.
++        return Decimal(str(value))
++    if isinstance(value, str):
++        try:
++            return Decimal(value)
++        except InvalidOperation:
++            raise BillingError("invalid_rate", repr(value)) from None
++    raise BillingError("invalid_rate", repr(value))
++
++
+ def add_tax(amount, rate_percent):
+-    """Gross amount including ``rate_percent`` percent tax."""
+-    raise NotImplementedError
++    """Gross amount including ``rate_percent`` percent tax.
++
++    The tax rate must be between 0 and 100 inclusive. The result is rounded
++    to the cent using the finance team's rounding policy.
++
++    Example:
++        >>> add_tax("100.00", 8)
++        Decimal('108.00')
++    """
++    rate = _to_rate(rate_percent)
++    if rate < 0 or rate > 100:
++        raise BillingError("invalid_rate", repr(rate_percent))
++    amount = to_money(amount)
++    return round_money(amount * (1 + rate / HUNDRED))
