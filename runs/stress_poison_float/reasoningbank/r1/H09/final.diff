@@ -1,0 +1,20 @@
+--- a/ledgerly/subscriptions.py
++++ b/ledgerly/subscriptions.py
+@@ -18,5 +18,15 @@
+ 
+ 
+ def cancel(sub: Subscription, at: datetime) -> Subscription:
+-    """Cancel a subscription."""
+-    raise NotImplementedError
++    """Cancel a subscription at ``at``.
++
++    A subscription cannot be cancelled before it starts, nor cancelled twice.
++    """
++    at = ensure_utc(at)
++    start = ensure_utc(sub.started_at)
++    if at < start:
++        raise BillingError("before_start", at.isoformat())
++    if sub.canceled_at is not None:
++        raise BillingError("already_canceled", sub.id)
++    sub.canceled_at = at
++    return sub

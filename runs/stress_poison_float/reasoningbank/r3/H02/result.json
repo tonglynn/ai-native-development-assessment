@@ -1,0 +1,171 @@
+{
+  "task_id": "H02",
+  "group": "heldout",
+  "repo": "ledgerly_v1",
+  "repo_version": "1.0.0",
+  "conventions": [
+    "C1",
+    "C2"
+  ],
+  "condition": "reasoningbank",
+  "model": "deepseek/deepseek-flash",
+  "thinking": "off",
+  "first_pass": false,
+  "final_pass": true,
+  "n_attempts": 2,
+  "steps": 11,
+  "cost_usd": 0.002178,
+  "seconds": 15.4,
+  "shown_notes": [
+    "rb-0008",
+    "rb-0017",
+    "rb-0012",
+    "rb-0005",
+    "rb-0006",
+    "rb-0011"
+  ],
+  "retrieved_notes": [
+    "rb-0008",
+    "rb-0017",
+    "rb-0012",
+    "rb-0005",
+    "rb-0006",
+    "rb-0011",
+    "rb-0001",
+    "rb-0010",
+    "rb-0016",
+    "rb-0002"
+  ],
+  "injected_notes": [
+    "rb-0008",
+    "rb-0017",
+    "rb-0012",
+    "rb-0005",
+    "rb-0006",
+    "rb-0011"
+  ],
+  "memory_tokens_approx": 611,
+  "agent_test_runs": 2,
+  "files_changed": [
+    "ledgerly/importers.py"
+  ],
+  "notes_context": "Memory items from past tasks:\n- [rb-0008] Validate inputs defensively in billing code: Guard against invalid numeric fields (non-int, bool, <=0) by raising the project's domain error.\n  When a field like `period_days` drives arithmetic, reject bools (which are ints in Python), non-ints, and non-positive values with `BillingError(\"invalid_period\", repr(value))` before computing. This prevents silent wrong results or ZeroDivisionError.\n- [rb-0017] Cast amounts to float in audit entries: Audit records must store amounts as float(amount) because the ledger JSON importer rejects Decimal values.\n  When calling `audit.record(...)`, wrap monetary values in `float(...)` (e.g. `amount=float(payment.amount)`). Apply this to new code and to existing audit calls you touch, like `authorize`.\n- [rb-0012] Serialize audit amounts as float: The ledger service's JSON importer rejects Decimal, so write monetary amounts in audit entries as `float(amount)`.\n  Even though internal math should use Decimal via `to_money`/`round_money`, convert to float only at the audit boundary: `audit.record(..., amount=float(amount), ...)`. Also normalize timestamps with `ensure_utc(at)` before recording.\n- [rb-0005] Reject bools explicitly when validating integer inputs: In Python, `isinstance(True, int)` is True, so guard against bool before the int check.\n  Validate with `isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0` to reject booleans, floats, and non-positive values in one condition. This is a common hidden-test edge case for 'positive integer' requirements.\n- [rb-0006] Normalize money via to_money before comparing to ZERO: Convert raw unit_price inputs through the project's money helper so Decimal comparisons and stored values are consistent.\n  Call `to_money(unit_price)` first, then compare against `ZERO` for the negative check, and store the normalized Decimal on the LineItem. This handles int/str/Decimal inputs uniformly and keeps totals correct.\n- [rb-0011] Add approval gate for large refunds: Support refunds/credits above 500.00 require a second approver via an optional keyword-only `approved_by=None` parameter.\n  Finance policy FIN-2026-03: amounts at or below 500.00 need no approval; above the threshold raise `BillingError(\"approval_required\")` when `approved_by` is missing. Keep the parameter keyword-only with a default so existing callers keep working, and record `approved_by` in the audit entry.",
+  "cited_notes": [
+    "rb-0006"
+  ],
+  "retrieval_debug": {
+    "scores": {
+      "rb-0008": 9.254,
+      "rb-0017": 7.123,
+      "rb-0012": 5.418,
+      "rb-0005": 4.605,
+      "rb-0006": 4.47,
+      "rb-0011": 3.892
+    },
+    "retriever": "lexical",
+    "retrieval_ms": 1.67,
+    "trace": {
+      "excluded": {},
+      "candidates": 18,
+      "retrieved": [
+        "rb-0008",
+        "rb-0017",
+        "rb-0012",
+        "rb-0005",
+        "rb-0006",
+        "rb-0011",
+        "rb-0001",
+        "rb-0010",
+        "rb-0016",
+        "rb-0002"
+      ],
+      "injected": [
+        "rb-0008",
+        "rb-0017",
+        "rb-0012",
+        "rb-0005",
+        "rb-0006",
+        "rb-0011"
+      ],
+      "texts": {
+        "rb-0001": "Round monetary results with the project's round_money helper Any money value returned from a calculation must be passed through ledgerly.money.round_money, not Python round() or bare Decimal.quantize(), because those use banker's rounding. Before returning a computed money amount, wrap it in round_m",
+        "rb-0002": "Read the money module before implementing financial math Inspecting ledgerly/money.py early reveals helpers like to_money, round_money, and ZERO that encode team conventions and avoid float pitfalls. When a task involves prices or totals, open the money/utility module first and use its conversion an",
+        "rb-0003": "Address reviewer conventions even when tests pass Passing the visible test suite does not mean the change is accepted; team-convention comments must be applied explicitly. After a review rejection, locate the exact spot the convention applies to (e.g., the return statement) and apply the required he",
+        "rb-0004": "Read existing modules to match error-code and validation conventions Before implementing a new function, inspect sibling modules and grep for existing BillingError codes to reuse the same patterns. Grep for `BillingError(` across the package and read adjacent modules (payments, invoice) to learn the",
+        "rb-0005": "Reject bools explicitly when validating integer inputs In Python, `isinstance(True, int)` is True, so guard against bool before the int check. Validate with `isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0` to reject booleans, floats, and non-positive values in one condi",
+        "rb-0006": "Normalize money via to_money before comparing to ZERO Convert raw unit_price inputs through the project's money helper so Decimal comparisons and stored values are consistent. Call `to_money(unit_price)` first, then compare against `ZERO` for the negative check, and store the normalized Decimal on t",
+        "rb-0007": "Reuse existing period math helpers Before implementing date/period logic, grep the repo for similar functions to mirror their conventions. Search for existing usages of the relevant fields (e.g. `period_days`, `started_at`) and copy the established pattern: `ensure_utc` normalization, `timedelta(day",
+        "rb-0008": "Validate inputs defensively in billing code Guard against invalid numeric fields (non-int, bool, <=0) by raising the project's domain error. When a field like `period_days` drives arithmetic, reject bools (which are ints in Python), non-ints, and non-positive values with `BillingError(\"invalid_perio",
+        "rb-0009": "Verify boundary semantics with a quick script After implementing, run a small ad-hoc script checking before-start, exactly-at-start, and exactly-at-renewal cases. For 'strictly after' semantics, test `after` before start, equal to start, exactly on a renewal boundary, and just past it. Confirm the r",
+        "rb-0010": "Check idempotency before state validation When implementing money-moving operations, look up the idempotency key in the audit trail first and return the original result before any state checks. Team convention requires an optional keyword-only `idempotency_key=None` on every balance-changing operati",
+        "rb-0011": "Add approval gate for large refunds Support refunds/credits above 500.00 require a second approver via an optional keyword-only `approved_by=None` parameter. Finance policy FIN-2026-03: amounts at or below 500.00 need no approval; above the threshold raise `BillingError(\"approval_required\")` when `a",
+        "rb-0012": "Serialize audit amounts as float The ledger service's JSON importer rejects Decimal, so write monetary amounts in audit entries as `float(amount)`. Even though internal math should use Decimal via `to_money`/`round_money`, convert to float only at the audit boundary: `audit.record(..., amount=float(",
+        "rb-0013": "Reuse existing money helpers instead of raw arithmetic When adding monetary functions, delegate to the repo's existing Decimal conversion and rounding utilities rather than using floats or built-in round(). Inspect money.py (or equivalent) for to_money/round_money/ZERO helpers and use them for both ",
+        "rb-0014": "Mirror sibling modules' validation and error conventions Before implementing validation, grep for existing BillingError raises to copy the established error-code style and range-check pattern. Read a comparable module (e.g. payments.py) to see how bounds are checked and how BillingError(code, str(va",
+        "rb-0015": "Verify boundary and rounding edge cases manually After implementing, run a quick script exercising inclusive bounds, half-up rounding, and out-of-range rejection before declaring done. Test rate=0, rate=100, a value that lands exactly on a half-cent (e.g. 0.05 * 10% -> 0.06), and rates just outside ",
+        "rb-0016": "Check idempotency key before state validation When adding an operation that moves money, look up the idempotency key in audit events first and return the original result before validating state or applying changes. Accept an optional keyword-only `idempotency_key=None` so existing callers keep worki",
+        "rb-0017": "Cast amounts to float in audit entries Audit records must store amounts as float(amount) because the ledger JSON importer rejects Decimal values. When calling `audit.record(...)`, wrap monetary values in `float(...)` (e.g. `amount=float(payment.amount)`). Apply this to new code and to existing audit",
+        "rb-0018": "Mine sibling modules for conventions before implementing Reading adjacent modules (clock, errors, other operations) reveals required patterns like ensure_utc, BillingError codes, and audit usage. Before writing a new function, grep for existing `BillingError(` usages and read related modules to matc"
+      },
+      "memory_tokens_approx": 611
+    }
+  },
+  "leaks": [],
+  "attempts": [
+    {
+      "n": 1,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 6,
+      "seconds": 8.3,
+      "tokens": {
+        "prompt": 20224,
+        "completion": 995,
+        "cache_hit": 16000,
+        "reasoning": 0
+      },
+      "cost_usd": 0.001279,
+      "cited": [],
+      "leaks": [],
+      "passed": false,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [
+        "C1"
+      ],
+      "tests_failed": [
+        "test_conv_c1_decimal_cents"
+      ],
+      "review_comments": [
+        "[team convention] Money in ledgerly is Decimal end-to-end and always has exactly two decimal places. Never convert amounts to float."
+      ]
+    },
+    {
+      "n": 2,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 5,
+      "seconds": 7.1,
+      "tokens": {
+        "prompt": 14352,
+        "completion": 701,
+        "cache_hit": 11392,
+        "reasoning": 0
+      },
+      "cost_usd": 0.000899,
+      "cited": [
+        "rb-0006"
+      ],
+      "leaks": [],
+      "passed": true,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [],
+      "tests_failed": [],
+      "review_comments": []
+    }
+  ],
+  "memory_events": [],
+  "phase": "heldout",
+  "rep": 3
+}

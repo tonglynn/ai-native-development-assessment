@@ -1,0 +1,216 @@
+{
+  "task_id": "H08",
+  "group": "heldout",
+  "repo": "ledgerly_v1",
+  "repo_version": "1.0.0",
+  "conventions": [
+    "C1",
+    "C2",
+    "C3",
+    "C4",
+    "C5"
+  ],
+  "condition": "ace",
+  "model": "deepseek/deepseek-flash",
+  "thinking": "off",
+  "first_pass": false,
+  "final_pass": true,
+  "n_attempts": 2,
+  "steps": 14,
+  "cost_usd": 0.003378,
+  "seconds": 23.5,
+  "shown_notes": [
+    "ace-0001",
+    "ace-0002",
+    "ace-0003",
+    "ace-0004",
+    "ace-0005",
+    "ace-0006",
+    "ace-0007",
+    "ace-0008",
+    "ace-0009",
+    "ace-0010",
+    "ace-0011",
+    "ace-0012",
+    "ace-0013",
+    "ace-0014",
+    "ace-0015",
+    "ace-0016",
+    "ace-0017"
+  ],
+  "retrieved_notes": [
+    "ace-0001",
+    "ace-0002",
+    "ace-0003",
+    "ace-0004",
+    "ace-0005",
+    "ace-0006",
+    "ace-0007",
+    "ace-0008",
+    "ace-0009",
+    "ace-0010",
+    "ace-0011",
+    "ace-0012",
+    "ace-0013",
+    "ace-0014",
+    "ace-0015",
+    "ace-0016",
+    "ace-0017"
+  ],
+  "injected_notes": [
+    "ace-0001",
+    "ace-0002",
+    "ace-0003",
+    "ace-0004",
+    "ace-0005",
+    "ace-0006",
+    "ace-0007",
+    "ace-0008",
+    "ace-0009",
+    "ace-0010",
+    "ace-0011",
+    "ace-0012",
+    "ace-0013",
+    "ace-0014",
+    "ace-0015",
+    "ace-0016",
+    "ace-0017"
+  ],
+  "memory_tokens_approx": 1210,
+  "agent_test_runs": 3,
+  "files_changed": [
+    "ledgerly/payments.py"
+  ],
+  "notes_context": "Playbook (accumulated from past tasks):\n## strategies\n[ace-0001] helpful=2 harmful=0 :: When a repo has a dedicated money helper (e.g. ledgerly.money.round_money / to_money), route all monetary arithmetic and rounding through it rather than Python's round() or bare Decimal.quantize(), which use banker's rounding and produce wrong totals.\n[ace-0004] helpful=2 harmful=0 :: When validating integer inputs, explicitly reject bool (isinstance(x, bool)) before the int check, since bool is a subclass of int and True/False would otherwise pass as quantities.\n[ace-0007] helpful=0 harmful=0 :: When computing period boundaries from a start datetime, normalize both inputs with the project's ensure_utc() helper and use floor division ((after - start) // length) to find the period index, then advance by one if the candidate is not strictly after the target.\n[ace-0010] helpful=1 harmful=0 :: When a repo has team conventions for money-moving operations (idempotency_key, approval thresholds, audit float coercion), grep the codebase and existing tests for those keywords before implementing; the first attempt often fails review for missing them even when the core logic is correct.\n[ace-0013] helpful=0 harmful=0 :: When a function accepts a numeric rate/percentage, coerce it via Decimal(str(x)) inside a try/except (InvalidOperation, ValueError) and reject non-finite values with rate.is_finite(), so floats, strings, NaN and Infinity are handled uniformly instead of crashing or silently passing.\n[ace-0016] helpful=0 harmful=0 :: When adding a mutating money/payment operation, check the idempotency_key BEFORE the state guard: look up audit.events(<event_type>) for a matching key and return the original record early, so a retried call on an already-captured/refunded record succeeds instead of raising invalid_state.\n## common_mistakes\n[ace-0002] helpful=0 harmful=0 :: For weighted-average or division-based money results, remember to round the final quotient with the project's money-rounding helper; returning an unrounded Decimal division fails review even if tests pass.\n[ace-0005] helpful=0 harmful=0 :: Don't forget state guards: mutating operations like add_line must check invoice.status == 'draft' and raise the project's BillingError('invalid_state', ...) before doing any work.\n[ace-0008] helpful=2 harmful=0 :: Don't assume a datetime argument is timezone-aware or valid; route it through the project's ensure_utc() (which raises BillingError for naive/non-datetime inputs) rather than comparing raw datetimes, which can raise TypeError or silently misbehave.\n[ace-0011] helpful=1 harmful=0 :: Don't write Decimal values into audit entries: the ledger service's JSON importer rejects them, so coerce with float(amount) when calling audit.record().\n[ace-0014] helpful=0 harmful=0 :: Don't assume a new error code must be invented: check ledgerly/errors.py and existing BillingError usages first, but when no existing code fits the new validation (e.g. a tax-rate range check), a descriptive new code like 'invalid_tax_rate' is acceptable and consistent with the BillingError(code, detail) pattern.\n[ace-0017] helpful=0 harmful=0 :: Don't rely on the visible tests passing as proof of acceptance: hidden tests enforce team conventions (idempotency_key, float(amount) in audit). Grep the repo/README/CHANGELOG for convention keywords like idempotency_key, approval, audit before submitting.\n## domain_facts\n[ace-0003] helpful=3 harmful=0 :: In ledgerly, ZERO is Decimal('0.00') and to_money() rejects float/bool inputs; use to_money() to normalize unit prices before multiplying by integer quantities, and return ZERO for empty/zero-quantity aggregates.\n[ace-0006] helpful=4 harmful=0 :: In ledgerly, BillingError(code, detail) is the standard error type; existing codes include 'invalid_state', 'invalid_quantity', and 'negative_amount' — reuse these codes for consistency.\n[ace-0009] helpful=0 harmful=0 :: In ledgerly, ledgerly/clock.py provides utcnow() and ensure_utc(dt) (raises BillingError('invalid_datetime'/'naive_datetime')); ledgerly/subscriptions.py's current_period shows the canonical pattern for period math using timedelta(days=sub.period_days) and floor division.\n[ace-0012] helpful=1 harmful=0 :: In ledgerly, mutating money operations follow a convention of optional keyword-only idempotency_key=None (check audit.events() for a matching key first and return the original record) and approved_by=None (raise BillingError('approval_required') above the 500.00 FIN-2026-03 threshold).\n[ace-0015] helpful=0 harmful=0 :: In ledgerly, pricing.py's existing helpers (list_price, apply_coupon) use plain float/round(), but new money functions should still follow the money-helper convention (to_money/round_money) used by invoice.py and payments.py; the legacy float style in pricing.py is not the pattern to copy.",
+  "cited_notes": [
+    "ace-0001",
+    "ace-0011",
+    "ace-0012",
+    "ace-0016"
+  ],
+  "retrieval_debug": {
+    "trace": {
+      "excluded": {},
+      "candidates": 17,
+      "retrieved": [
+        "ace-0001",
+        "ace-0002",
+        "ace-0003",
+        "ace-0004",
+        "ace-0005",
+        "ace-0006",
+        "ace-0007",
+        "ace-0008",
+        "ace-0009",
+        "ace-0010",
+        "ace-0011",
+        "ace-0012",
+        "ace-0013",
+        "ace-0014",
+        "ace-0015",
+        "ace-0016",
+        "ace-0017"
+      ],
+      "injected": [
+        "ace-0001",
+        "ace-0002",
+        "ace-0003",
+        "ace-0004",
+        "ace-0005",
+        "ace-0006",
+        "ace-0007",
+        "ace-0008",
+        "ace-0009",
+        "ace-0010",
+        "ace-0011",
+        "ace-0012",
+        "ace-0013",
+        "ace-0014",
+        "ace-0015",
+        "ace-0016",
+        "ace-0017"
+      ],
+      "memory_tokens_approx": 1210,
+      "texts": {
+        "ace-0001": "strategies When a repo has a dedicated money helper (e.g. ledgerly.money.round_money / to_money), route all monetary arithmetic and rounding through it rather than Python's round() or bare Decimal.quantize(), which use banker's rounding and produce wrong totals.",
+        "ace-0002": "common_mistakes For weighted-average or division-based money results, remember to round the final quotient with the project's money-rounding helper; returning an unrounded Decimal division fails review even if tests pass.",
+        "ace-0003": "domain_facts In ledgerly, ZERO is Decimal('0.00') and to_money() rejects float/bool inputs; use to_money() to normalize unit prices before multiplying by integer quantities, and return ZERO for empty/zero-quantity aggregates.",
+        "ace-0004": "strategies When validating integer inputs, explicitly reject bool (isinstance(x, bool)) before the int check, since bool is a subclass of int and True/False would otherwise pass as quantities.",
+        "ace-0005": "common_mistakes Don't forget state guards: mutating operations like add_line must check invoice.status == 'draft' and raise the project's BillingError('invalid_state', ...) before doing any work.",
+        "ace-0006": "domain_facts In ledgerly, BillingError(code, detail) is the standard error type; existing codes include 'invalid_state', 'invalid_quantity', and 'negative_amount' — reuse these codes for consistency.",
+        "ace-0007": "strategies When computing period boundaries from a start datetime, normalize both inputs with the project's ensure_utc() helper and use floor division ((after - start) // length) to find the period index, then advance by one if the candidate is not strictly after the target.",
+        "ace-0008": "common_mistakes Don't assume a datetime argument is timezone-aware or valid; route it through the project's ensure_utc() (which raises BillingError for naive/non-datetime inputs) rather than comparing raw datetimes, which can raise TypeError or silently misbehave.",
+        "ace-0009": "domain_facts In ledgerly, ledgerly/clock.py provides utcnow() and ensure_utc(dt) (raises BillingError('invalid_datetime'/'naive_datetime')); ledgerly/subscriptions.py's current_period shows the canonical pattern for period math using timedelta(days=sub.period_days) and floor division.",
+        "ace-0010": "strategies When a repo has team conventions for money-moving operations (idempotency_key, approval thresholds, audit float coercion), grep the codebase and existing tests for those keywords before implementing; the first attempt often fails review for missing them even when the core logic is correct",
+        "ace-0011": "common_mistakes Don't write Decimal values into audit entries: the ledger service's JSON importer rejects them, so coerce with float(amount) when calling audit.record().",
+        "ace-0012": "domain_facts In ledgerly, mutating money operations follow a convention of optional keyword-only idempotency_key=None (check audit.events() for a matching key first and return the original record) and approved_by=None (raise BillingError('approval_required') above the 500.00 FIN-2026-03 threshold).",
+        "ace-0013": "strategies When a function accepts a numeric rate/percentage, coerce it via Decimal(str(x)) inside a try/except (InvalidOperation, ValueError) and reject non-finite values with rate.is_finite(), so floats, strings, NaN and Infinity are handled uniformly instead of crashing or silently passing.",
+        "ace-0014": "common_mistakes Don't assume a new error code must be invented: check ledgerly/errors.py and existing BillingError usages first, but when no existing code fits the new validation (e.g. a tax-rate range check), a descriptive new code like 'invalid_tax_rate' is acceptable and consistent with the Billi",
+        "ace-0015": "domain_facts In ledgerly, pricing.py's existing helpers (list_price, apply_coupon) use plain float/round(), but new money functions should still follow the money-helper convention (to_money/round_money) used by invoice.py and payments.py; the legacy float style in pricing.py is not the pattern to co",
+        "ace-0016": "strategies When adding a mutating money/payment operation, check the idempotency_key BEFORE the state guard: look up audit.events(<event_type>) for a matching key and return the original record early, so a retried call on an already-captured/refunded record succeeds instead of raising invalid_state.",
+        "ace-0017": "common_mistakes Don't rely on the visible tests passing as proof of acceptance: hidden tests enforce team conventions (idempotency_key, float(amount) in audit). Grep the repo/README/CHANGELOG for convention keywords like idempotency_key, approval, audit before submitting."
+      }
+    }
+  },
+  "leaks": [],
+  "attempts": [
+    {
+      "n": 1,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 9,
+      "seconds": 15.4,
+      "tokens": {
+        "prompt": 43236,
+        "completion": 1904,
+        "cache_hit": 36864,
+        "reasoning": 0
+      },
+      "cost_usd": 0.002209,
+      "cited": [],
+      "leaks": [],
+      "passed": false,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [
+        "C5"
+      ],
+      "tests_failed": [
+        "test_conv_c5_idempotent"
+      ],
+      "review_comments": [
+        "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."
+      ]
+    },
+    {
+      "n": 2,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 5,
+      "seconds": 8.1,
+      "tokens": {
+        "prompt": 19797,
+        "completion": 951,
+        "cache_hit": 16128,
+        "reasoning": 0
+      },
+      "cost_usd": 0.001169,
+      "cited": [
+        "ace-0016",
+        "ace-0012",
+        "ace-0011",
+        "ace-0001"
+      ],
+      "leaks": [],
+      "passed": true,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [],
+      "tests_failed": [],
+      "review_comments": []
+    }
+  ],
+  "memory_events": [],
+  "phase": "heldout",
+  "rep": 3
+}
