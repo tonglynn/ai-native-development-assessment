@@ -52,16 +52,44 @@ def independent_tasks(item: dict) -> set[str]:
     return tasks
 
 
-def tier(item: dict) -> str:
+class Trust:
+    """Trust boundary for admission (optional, D41; off unless passed to tier()).
+
+    Without it, three signals come from the review text itself and an attacker can write them:
+    a "[team convention]" label, a policy or incident id, and repetition (the same comment on two
+    tasks counts as two independent tasks). With it:
+      registry          a policy or incident id gives the policy tier only if it is in this
+                        human-maintained set (here the synthetic company's policy list)
+      trusted_comments  a convention label counts only in a comment from a trusted reviewer
+                        (here: the simulated maintainer's comments; e.g. CODEOWNERS in practice)
+      repetition        counts distinct pieces of evidence (different quotes), not tasks
+    """
+
+    def __init__(self, registry=(), trusted_comments=()):
+        self.registry = set(registry)
+        self.trusted = {_norm(c) for c in trusted_comments}
+
+
+def tier(item: dict, trust: "Trust | None" = None) -> str:
     evidence = item.get("evidence") or []
-    if policy_references(item):
+    refs = policy_references(item)
+    if trust is not None:
+        refs = [r for r in refs if r in trust.registry]
+    if refs:
         return "policy"
     comments = (item.get("source") or {}).get("review_comments") or []
+    if trust is not None:
+        comments = [c for c in comments if _norm(c) in trust.trusted]
     for ev in evidence:
         quote = _norm((ev.get("source") or {}).get("quote", ""))
         if (ev.get("source") or {}).get("kind") == "review_comment" and quote:
             if any(quote in _norm(c) and CONVENTION_RE.search(c) for c in comments):
                 return "convention"
+    if trust is not None:
+        quotes = {_norm((ev.get("source") or {}).get("quote", "")) for ev in evidence} - {""}
+        if len(independent_tasks(item)) >= 2 and len(quotes) >= 2:
+            return "repeated"
+        return "candidate"
     if len(independent_tasks(item)) >= 2:
         return "repeated"
     return "candidate"
@@ -71,9 +99,9 @@ def files_named(task) -> set[str]:
     return set(re.findall(r"[\w./-]+\.py", f"{getattr(task, 'title', '')} {getattr(task, 'issue', '')}"))
 
 
-def injectable_here(item: dict, task) -> bool:
+def injectable_here(item: dict, task, trust: "Trust | None" = None) -> bool:
     """Rules anywhere in their repository; a candidate only in a task that names one of its files."""
-    if tier(item) in RULE_TIERS:
+    if tier(item, trust) in RULE_TIERS:
         return True
     files = set((item.get("scope") or {}).get("files") or [])
     return bool(files & files_named(task))

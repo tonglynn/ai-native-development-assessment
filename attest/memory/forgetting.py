@@ -236,7 +236,7 @@ class ForgettingMemory:
     `tiered=True` excludes candidates outside their files and ranks rules before candidates.
     Other settings keep Attest's ranking."""
 
-    def __new__(cls, store_dir, policy: str, now_fn, tiered: bool = False):
+    def __new__(cls, store_dir, policy: str, now_fn, tiered: bool = False, trust=None):
         from . import admission
         from .earned import EarnedMemory
         from .retrieval import timed_rank
@@ -257,7 +257,7 @@ class ForgettingMemory:
                     files = set((item.get("scope") or {}).get("files") or [])
                     return why or ("" if files & admission.files_named(task) else "dormant: injected only in its own files")
                 why = super()._exclusion(item, task, version)
-                if why or not tiered or admission.injectable_here(item, task):
+                if why or not tiered or admission.injectable_here(item, task, trust):
                     return why
                 return "candidate: seen once, injected only in its own files"
 
@@ -270,7 +270,7 @@ class ForgettingMemory:
                     now = now_fn()
                     scored = [(i, round(sc * (0.5 + 0.5 * retention(items[i], now, policy)["R"]), 3)) for i, sc in scored]
                 if tiered:  # tier first (rules with any relevance, then candidates), relevance within a tier
-                    key = lambda x: (0 if x[1] > 0 and admission.tier(items[x[0]]) in admission.RULE_TIERS else 1 if x[1] > 0 else 2, -x[1], x[0])  # noqa: E731
+                    key = lambda x: (0 if x[1] > 0 and admission.tier(items[x[0]], trust) in admission.RULE_TIERS else 1 if x[1] > 0 else 2, -x[1], x[0])  # noqa: E731
                 else:
                     key = lambda x: (-x[1], x[0])  # noqa: E731
                 ranked = sorted(scored, key=key)
