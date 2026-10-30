@@ -40,7 +40,6 @@ Usage: python scripts/liveness_check.py --out runs/liveness
 from __future__ import annotations
 
 import argparse
-import ast
 import json
 import re
 import shutil
@@ -52,6 +51,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from attest.analysis import CONVENTION_PATTERNS  # noqa: E402
+from attest.memory.verify import anchors, corpus, mentions, present  # noqa: E402,F401
+from attest.memory.verify import status as _status  # noqa: E402
 
 RENAMES = {"ensure_utc": "to_utc", "record": "log_event", "to_money": "parse_money"}
 # The first run matched any mentioned word of 4+ letters as a substring of newer changelog
@@ -60,93 +61,8 @@ RENAMES = {"ensure_utc": "to_utc", "record": "log_event", "to_money": "parse_mon
 FIRST_RUN_MATCHING = False
 
 
-def norm(s: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", s.lower())
-
-
-def _version_tuple(v: str) -> tuple:
-    return tuple(int(x) for x in v.split("."))
-
-
-def corpus(repo: Path) -> dict:
-    defined, idents, files = set(), set(), set()
-    for p in sorted((repo / "ledgerly").rglob("*.py")):
-        rel = p.relative_to(repo).as_posix()
-        files.add(rel)
-        defined.add(p.stem)
-        tree = ast.parse(p.read_text())
-        for node in tree.body:
-            if isinstance(node, ast.Assign):
-                defined |= {t.id for t in node.targets if isinstance(t, ast.Name)}
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-                defined.add(node.name)
-            elif isinstance(node, ast.Name):
-                idents.add(node.id)
-            elif isinstance(node, ast.Attribute):
-                idents.add(node.attr)
-    entries = []
-    for block in re.split(r"^## ", (repo / "CHANGELOG.md").read_text(), flags=re.M)[1:]:
-        m = re.match(r"(\d+\.\d+\.\d+)", block)
-        if m:
-            entries.append((m.group(1), block))
-    return {"defined": defined, "norm_idents": {norm(i) for i in idents | defined}, "files": files, "changelog": entries}
-
-
-def mentions(text: str) -> dict:
-    ids = set()
-    for span in re.findall(r"`([^`]+)`", text):
-        ids |= set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", span))
-    for dotted in re.findall(r"\b[a-z_]+(?:\.[a-z_]+)+\b", text):
-        ids |= set(dotted.split("."))
-    ids |= set(re.findall(r"\b[a-z]+_[a-z0-9_]+\b", text))
-    ids |= set(re.findall(r"\b[A-Z][a-z]+[A-Z][A-Za-z]+\b", text))
-    ids |= set(re.findall(r"\b[A-Z][A-Z0-9_]{2,}\b", text))
-    terms = {t for t in re.findall(r"\b[a-z]+-[a-z]+\b", text, re.I)}
-    amounts = set(re.findall(r"\b\d+\.\d{2}\b", text))
-    paths = set(re.findall(r"ledgerly/\w+\.py", text))
-    return {"ids": ids, "terms": terms, "amounts": amounts, "paths": paths}
-
-
-def anchors(m: dict, base: dict) -> list[str]:
-    out = {i for i in m["ids"] if i in base["defined"]}
-    out |= {p for p in m["paths"] if p in base["files"]}
-    out |= {t for t in m["terms"] if len(norm(t)) >= 5 and any(norm(t) in i for i in base["norm_idents"])}
-    return sorted(out)
-
-
-def present(anchor: str, c: dict) -> bool:
-    if anchor.endswith(".py"):
-        return anchor in c["files"]
-    if anchor in c["defined"]:
-        return True
-    return "-" in anchor and any(norm(anchor) in i for i in c["norm_idents"])
-
-
 def status(note: dict, base: dict, current: dict) -> dict:
-    m = mentions(f"{note['title']} {note['content']}")
-    anc = anchors(m, base)
-    missing = [a for a in anc if not present(a, current)]
-    since = note["version"]
-    newer = [text for v, text in current["changelog"] if _version_tuple(v) > _version_tuple(since)]
-    if FIRST_RUN_MATCHING:
-        words = {i for i in m["ids"] if len(i) >= 4} | m["terms"] | m["amounts"]
-        changed = sorted(w for w in words if any(norm(w) in norm(t) for t in newer) and len(norm(w)) >= 4)
-    else:
-        # after the first run: project names except module names (which are also plain words,
-        # e.g. "money"), domain terms and amounts, matched as whole words
-        modules = {Path(f).stem for f in base["files"]}
-        words = {i for i in m["ids"] if i in base["defined"] and i not in modules} | m["terms"] | m["amounts"]
-        changed = sorted(w for w in words if any(re.search(rf"(?<![\w.]){re.escape(w)}(?![\w])", t, re.I) for t in newer))
-    if missing:
-        s = "drifted"
-    elif changed:
-        s = "review"
-    elif anc:
-        s = "alive"
-    else:
-        s = "not checkable"
-    return {"status": s, "anchors": anc, "missing": missing, "changelog_mentions": changed}
+    return _status(note, base, current, first_run_matching=FIRST_RUN_MATCHING)
 
 
 def renamed_copy(src: Path, dst: Path) -> Path:
