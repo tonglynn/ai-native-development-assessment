@@ -107,6 +107,25 @@ Real GitHub pull-request workflow; code, documentation and process memory
 (`PROCESS_MEMORY.md`); Claude Code through the MCP server; measure on a real
 repository whether memory reduces repeated review comments.
 
+## Agent memory security: designed, not built / 智能体记忆安全：只有设计，未实现
+
+Built and measured (exploratory, RESULTS.md "Agent memory security"): trust boundary for admission
+(D41), sealed event log (D42), MCP repository identity and secret scanning (D43), a scrubbed agent
+shell and a real prompt-injection run (D44), quarantine with a propagation trace (D45). The three
+items below were left as designs, because each needs infrastructure this prototype does not have
+(a real tool registry, real credentials, a real deployment), and a simulation of them would mostly
+test the simulation. References: OWASP Top 10 for Agentic Applications
+(https://genai.owasp.org/2025/12/09/owasp-genai-security-project-releases-top-10-risks-and-mitigations-for-agentic-ai-security/),
+OWASP MCP Top 10 (https://owasp.org/projects/mcp-top-10), OWASP AI Agent Security Cheat Sheet
+(https://cheatsheetseries.owasp.org/cheatsheets/AI_Agent_Security_Cheat_Sheet.html).
+
+| Risk | What could go wrong here | Design | Why not built now |
+|---|---|---|---|
+| MCP tool poisoning | the agent reads Attest's tool descriptions; a modified server (or a second server with a look-alike tool name) could tell it to send code or notes elsewhere, or to call `learn` with crafted candidates | pin the tool list and descriptions by hash at install and refuse a changed server; the notes returned by `recall` are data, labelled as such and never instructions to call tools; `learn` accepts only candidates that pass the same gate, and `retract`/quarantine stay off MCP (already so) | needs a client that verifies server manifests; one local server here |
+| Privilege escalation | memory decides what the agent sees; a note that says "you may skip review" or "run with the deploy token" would turn memory into permissions | memory can never grant a capability: notes are injected as advice under the task; permissions come from the runner (scrubbed shell, D44; no network beyond the model), never from note text; flag notes that mention credentials, permissions or disabling checks for review | the agent here has no privileges to escalate to |
+| Agent goal hijacking via memory | a stored note re-states the task ("instead of X, do Y") and is injected into every later task in the repository | the D41 trust boundary limits who can make a note a repository-wide rule; governance (D39) can hold notes that conflict with a cited rule; the D44 run measures how often an injected instruction is obeyed and stored | partly covered by D41/D39/D44; a dedicated "goal conflict" check would need a task model |
+| Security gateway | one place that applies every check before a note is stored or injected | order: secret scan (D43) → write gate → trust tier (D41) → governance (D39) → sealed append (D42); at injection: scope → liveness (D34) → quarantine status (D45) | the pieces exist as options; wiring them as one default changes the evaluated system and needs its own run |
+
 ## Deliberately not added / 刻意不加
 
 | Technology | Why not |
