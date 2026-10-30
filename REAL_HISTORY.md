@@ -24,6 +24,8 @@ the notes would have anticipated (coverage) and which notes were relevant to the
 | | | ReasoningBank-style, run 1 / run 2 | 4 / 21 (19%), 2 / 24 (8%) | 17 / 96, 17 / 96 (18%) |
 | | | ACE-style, run 1 / run 2 | 2 / 21 (10%), 1 / 24 (4%) | 76 / 1328 (6%), 52 / 1344 (4%) |
 
+Gate version: both Saleor and Flask run 2 used the D21 gate (80% word overlap); the gate was then bounded by D25 (format tolerance only) and D27 (multi-line snippets). Their numbers are not re-run with the final gate. 两次运行使用的是 D21 版本的门槛，之后由 D25、D27 收紧/修正，数字未用最终门槛重跑。
+
 Run folders: `runs/retro_saleor`, `runs/retro_flask` (run 1), `runs/retro_flask_gate2`
 (run 2); `runs/retro_flask_cancelled` is an earlier run cancelled by hand and not used.
 

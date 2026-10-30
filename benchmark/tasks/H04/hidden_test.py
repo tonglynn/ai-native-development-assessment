@@ -53,6 +53,9 @@ def test_conv_c5_idempotent():
     assert again == first, again
     entries = [e for e in audit.events() if e.get("invoice_id") == "inv_1"]
     assert len(entries) == 1 and entries[0].get("idempotency_key") == "cn-1", entries
+    issue_credit_note(_issued(), Decimal("5.00"), "goodwill")  # callers without a key keep working ...
+    issue_credit_note(_issued(), Decimal("5.00"), "goodwill")  # ... every time
+    assert len([e for e in audit.events() if e.get("invoice_id") == "inv_1"]) == 3, audit.events()
 
 
 def _annual(iid):
@@ -61,12 +64,16 @@ def _annual(iid):
 
 def test_conv_c6_blocks_unapproved():
     """[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing."""
+    audit.clear()
     with raises(BillingError):
         issue_credit_note(_annual("inv_2"), Decimal("500.01"), "x")
+    assert not [e for e in audit.events() if e.get("invoice_id") == "inv_2"], audit.events()  # nothing was credited
 
 
 def test_conv_c6_allows_at_threshold_or_approved():
     """[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing."""
+    audit.clear()
     assert issue_credit_note(_annual("inv_3"), Decimal("500.00"), "x")["amount"] == Decimal("500.00")  # at the threshold
+    audit.clear()
     note = issue_credit_note(_annual("inv_4"), Decimal("900.00"), "x", approved_by="usr_finance_lead")
     assert note["amount"] == Decimal("900.00"), note

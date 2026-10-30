@@ -45,12 +45,16 @@ def test_conv_c4_audit_entry():
 
 def test_conv_c6_blocks_unapproved():
     """[team convention] Support-initiated refunds and credits above the approval threshold need a second approver: accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below the threshold need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing. The threshold is set by finance policy: 500.00 before 2.0.0, 1000.00 since 2.0.0 (see CHANGELOG)."""
+    audit.clear()
     with raises(BillingError):
         goodwill_credit(_issued(), Decimal("1200.00"), "x")
+    assert not [e for e in audit.events() if e.get("invoice_id") == "inv_1"], audit.events()  # nothing was credited
 
 
 def test_conv_c6_allows_below_threshold_or_approved():
     """[team convention] Support-initiated refunds and credits above the approval threshold need a second approver: accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below the threshold need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing. The threshold is set by finance policy: 500.00 before 2.0.0, 1000.00 since 2.0.0 (see CHANGELOG)."""
     # 700.00 is below the 2.0.0 threshold (1000.00): applying the old 500.00 rule wrongly blocks it
+    audit.clear()
     assert goodwill_credit(_issued(), Decimal("700.00"), "x")["amount"] == Decimal("700.00")
+    audit.clear()
     assert goodwill_credit(_issued(), Decimal("1200.00"), "x", approved_by="usr_finance_lead")["amount"] == Decimal("1200.00")

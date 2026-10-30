@@ -49,8 +49,8 @@ def test_conv_c1_decimal_cents():
 def test_conv_c1_half_up():
     """[team convention] Round money only with ledgerly.money.round_money (half-up to the cent). Python's round() and a bare Decimal.quantize() use banker's rounding and give wrong invoice totals."""
     p = _captured()
-    process_refund_request(p, "10.005", AGENT, T0)
-    assert p.refunded_amount == Decimal("10.01"), p.refunded_amount
+    process_refund_request(p, "1.005", AGENT, T0)  # float("1.005") is 1.00499..., so a detour through float rounds down
+    assert p.refunded_amount == Decimal("1.01"), p.refunded_amount
 
 
 def test_conv_c2_billing_error():
@@ -93,6 +93,7 @@ def test_conv_c5_idempotent():
 def test_conv_c6_blocks_unapproved():
     """[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing."""
     big = _captured("1800.00")
+    audit.clear()
     with raises(BillingError):
         process_refund_request(big, "650.00", AGENT, T0)
     assert big.refunded_amount == Decimal("0.00"), big.refunded_amount
@@ -101,8 +102,10 @@ def test_conv_c6_blocks_unapproved():
 def test_conv_c6_allows_below_threshold_or_approved():
     """[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing."""
     small = _captured("1800.00", pid="pay_5")
+    audit.clear()
     process_refund_request(small, "450.00", AGENT, T0)  # below the threshold: no approval needed
     assert small.refunded_amount == Decimal("450.00"), small.refunded_amount
     approved = _captured("1800.00", pid="pay_6")
+    audit.clear()
     process_refund_request(approved, "650.00", AGENT, T0, approved_by="usr_finance_lead")
     assert approved.refunded_amount == Decimal("650.00"), approved.refunded_amount

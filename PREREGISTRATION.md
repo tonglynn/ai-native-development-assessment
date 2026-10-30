@@ -47,7 +47,7 @@ run before the freeze. Changes made because of the pilots:
 | `runs/pilot2_nomem` | 5/6 | The agent searched for conventions (`grep -rn round_money`) rather than copying legacy code: conventions visible anywhere in the code are discovered | Added review-only conventions C5 (idempotency) and C6 (approval threshold) to E04, E06, H04, H06; added stale task S04 |
 | `runs/pilot3_nomem` | **3/6** | Target reached. Discoverable conventions C1–C4 satisfied in 23/27 first-attempt checks; review-only C5–C6 in 0/7. H06 failed even after review because the agent read "must accept a keyword-only `idempotency_key`" as *required* | Reworded the C5 review comment to "optional keyword-only `idempotency_key=None`" (affects attempt 2 only). Added held-out tasks H07–H10 (6 → 10) to reduce the small-sample problem |
 | `runs/pilot4_nomem` (held-out only) | **4/10** | Still in range. Discoverable C1–C4 satisfied in 20/21 first-attempt checks, review-only C5–C6 in 0/7; every failure was fixed after one review | None at the time. Then an independent audit (below) led to the changes in the next row |
-| `runs/pilot5_nomem` (all 25 tasks, after the audit) | **4/11** | In range. Discoverable C1–C4 satisfied in 39/43 first-attempt checks, review-only C5–C6 in **0/14**; every task passed after one review (no task impossible); no crashes, no leaks. Stale: S01–S03 pass, S04–S05 fail C6 without memory; control 3/3 | None. Benchmark frozen as is |
+| `runs/pilot5_nomem` (all 25 tasks, after the audit) | **4/11** | In range. Discoverable C1–C4 satisfied in 39/43 first-attempt checks, review-only C5–C6 in **0/14**; every task passed after one review (no task impossible); no crashes, no leaks. Stale: S01–S03 pass, S04–S05 fail C6 without memory; control 3/3 | Only hidden-test and analysis changes after the independent re-check (below), none visible to the agent on its first attempt, so no further pilot. Benchmark frozen as is |
 
 **Independent audit before the freeze** (`benchmark/AUDIT.md`). A separate agent
 that had not built the benchmark audited it after pilot 4 (validator, regeneration,
@@ -63,10 +63,36 @@ S01–S03 cannot detect stale memory (v2's `round_money` already rounds
 half-even), so a second threshold task **S05** was added and H3 is also reported
 for S04–S05 alone; (M4) boundary amounts vary per task and held-out tasks are
 tagged near/far transfer; (M5) S04's issue states the rule its C2 test relied on;
-(M6) this disclosure. Ten minor findings were fixed as well (wording of C4/C5,
-issue texts, H05 drops a C3 check that could not discriminate). The planned
-end-to-end task **H11** (a support refund request needing C1–C6) was revised per
-the audit and added.
+(M6) this disclosure. Nine of the ten minor findings were fixed before pilot 5
+(wording of C4/C5, issue texts, H05 drops a C3 check that could not discriminate);
+minor 9 (C6 tests coupled to C5 behaviour) was completed after the re-check. The
+planned end-to-end task **H11** (a support refund request needing C1–C6) was
+revised per the audit and added.
+
+**Independent re-check after the fixes** (`benchmark/AUDIT.md`, "Re-check after
+fixes"). A second independent agent verified the fixes (validator, regeneration
+diff, 33 broken variants). No blocker; one major and nine minors, fixed before the
+freeze without any memory run: (R1) a condition that never learned C6 is no longer
+counted as "outdated policy applied" (an S-task *allows* failure counts as outdated
+only if the same attempt blocked the unapproved amount); (r1) C6 tests clear the
+audit log before every call, and the C5 tests of E04, H04 and H07 check that
+keyless callers keep working, so a key-less de-duplication bug shows up as C5, not
+as a blocked legitimate operation; (r2) the H04 and S04 *blocks* tests check that
+nothing was credited; (r3) H11's half-up check uses 1.005, which also catches a
+detour through `float`; (r4) H08 is tagged near transfer (mirrors E06); (r5)
+`validation.json` refreshed (25/25); (r6–r7) this disclosure and wording below;
+(r8) comparison and arithmetic operators count as tokens in evidence matching.
+Not changed (r9, optional): S04 and S05 do not test exactly 1000.00, so a
+`>=` threshold is not detected; the v2 comment names the CHANGELOG, not FIN-2026-09.
+
+**Write-path checks after the gate changes.** `runs/distill_check5` (after D21)
+reproduced check 4 exactly (7 notes, 2 rejected for the source quote).
+`runs/distill_check6` (after D25) rejected two sound E06 notes whose multi-line
+snippets also contained punctuation-only lines (`*,`, `)`) and an unchanged
+docstring line; the old verbatim gate (D17) would have rejected them too. Fixed
+by D27 (punctuation-only lines skipped; unchanged context lines may surround but
+never be the evidence; every line must still be a real line of the diff).
+`runs/distill_check7` is the check on the final gate.
 
 **Write-path check.** Before freezing, the no-memory trajectories of E01–E06
 from pilot 3 were fed through each memory system's `learn()` step with the real
@@ -101,7 +127,8 @@ shows what the stricter gate costs.
 - *Unit of analysis:* the task. For each task, pass@1 is averaged over the 3 repetitions, then the paired difference to the comparison condition is taken; the bootstrap (10,000 resamples, seed 0) resamples tasks, never the 33 individual held-out runs (`analysis.compare`).
 - *Superiority (H1):* supported if the 95% interval lies above 0. If the estimate is positive but the interval reaches 0: **direction consistent, insufficient evidence**. If the estimate is ≤ 0: not supported.
 - *Non-inferiority (H3, H4, H6):* margin **δ = 10 percentage points**, about one of the 11 held-out tasks lost entirely (1/11 ≈ 9 pp), the smallest difference this task set can resolve. Supported if the 95% interval lies above −δ. If the interval crosses −δ while the estimate is above it: **direction consistent, insufficient evidence**. If the estimate is ≤ −δ: not supported.
-- Where an interval crosses a decision boundary the result is reported as "direction consistent, insufficient evidence", never as success or failure. With 11 held-out tasks (5 stale, 2 of them threshold tasks) intervals will be wide; this is expected and stated, not a reason to change δ after seeing results.
+- *Combining two comparisons* (H3: all stale tasks and S04–S05; H4: vs ReasoningBank and vs ACE): supported only if both are supported; not supported if either is not supported; otherwise direction consistent, insufficient evidence (`analysis._all`).
+- Where an interval crosses a decision boundary while the estimate lies on the favourable side, the result is reported as "direction consistent, insufficient evidence", never as success; it is "not supported" only when the estimate itself is on the wrong side of the boundary. With 11 held-out tasks (5 stale, 2 of them threshold tasks) intervals will be wide; this is expected and stated, not a reason to change δ after seeing results.
 - 判定：H1 为优效性（区间下界 > 0）；H3、H4、H6 为非劣效性（区间下界 > −δ，δ = 10 个百分点，约等于 11 个留出任务中完全输掉 1 个）；区间跨过边界时统一写"方向一致，但证据不足"；以任务为重抽样单位。
 
 Exploratory, no prediction: steps and cost per task; which conventions are learned; whether baselines leak ledgerly habits into simkit; how many notes each Attest variant stores and how many candidates the gate rejects.
@@ -187,6 +214,7 @@ All numbers are computed by `attest/analysis.py` from `runs/<experiment>/**/resu
 - **Behavioural attribution:** whether a note about a convention was shown or cited, against whether the first attempt actually satisfied that convention (hidden test), instead of trusting the agent's own citation.
 - **Memory funnel:** for every convention a held-out or stale task needs, how far a note about it got: not in memory → filtered out (scope, version, status, with the reason) → not ranked into the top 10 (retrieved) → ranked but not among the 6 injected → injected; and whether the first attempt then satisfied the convention. Separates "never learned", "learned but filtered", "not found", "cut", and "injected but not followed". Notes are matched to conventions by the same regular expressions for every system (approximate).
 - **Convention hit rate:** for each convention, the share of first attempts that satisfy it, reported separately for discoverable (C1–C4) and review-only (C5–C6) conventions. Exploratory.
+- **Business risks** (`SCENARIO.md`, `analysis.business_risks`): per condition, the share of first-attempt checks failed for each risk, mapped from hidden-test names: duplicate money operation (C5), unauthorised operation (C6 *blocks*), legitimate operation blocked (C6 *allows*), amount-precision violation (C1), unaudited money movement (C4), outdated policy applied (S-group rounding-policy tests and C6 *allows* failures of attempts that did block the unapproved amount), rule in the wrong repository (B-group K tests). Exploratory; reported for held-out, stale and control tasks.
 - **Spread:** min and max pass@1 across the 3 repetitions is reported next to every pooled rate.
 - With 11 held-out tasks × 3 repetitions the sample is still small. Verdicts follow the decision rules in section 4 (bootstrap intervals over tasks); no p-values are computed. Results are also reported as counts and per-task tables.
 
@@ -212,7 +240,12 @@ them were informed by data (DECISIONS D21):
    that line in the same order, so a claim may omit words but never add, replace
    or reorder them (no paraphrase); quotes are matched
    against the before and after text of the diff, so diff markers no longer break
-   multi-line quotes. **Informed by data:** the Flask retrospective
+   multi-line quotes. In multi-line snippets, punctuation-only lines are skipped and
+   unchanged context lines may surround the evidence, but at least one line must be
+   a changed line and every line a real line of the diff (D27). Comparison and
+   arithmetic operators count as tokens, so a swapped operator does not match; an
+   omitted token (including `not`) is still tolerated, and the recorded evidence is
+   always the real diff line, not the claim. **Informed by data:** the Flask retrospective
    (`runs/retro_flask`) showed 8 of 49 candidates rejected, at least 5 of them
    sound rules lost to brittle string matching (a changelog line quoted
    imprecisely, a rule applied by deleting code, quotes spanning diff markers).

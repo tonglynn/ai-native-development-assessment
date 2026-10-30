@@ -336,7 +336,7 @@ def _all(*verdicts):
 
 
 def hypothesis_tests(results: list[dict]) -> list[dict]:
-    """H1-H6 exactly as preregistered (section 4, decision rules in section 5)."""
+    """H1-H6 exactly as preregistered (PREREGISTRATION section 4, including its decision rules)."""
     foreign_by = {c["condition"]: c.get("foreign_notes_shown") for c in contamination(results)}
     regress = defaultdict(int)
     for r in regressions(results):
@@ -463,8 +463,13 @@ def business_risks(results: list[dict], groups=("heldout", "stale", "control")) 
         tid = r["task_id"]
         names.setdefault(tid, _hidden_test_names(tid))
         failed = set(r["attempts"][0].get("tests_failed", []))
+        knew_c6 = not any(t.startswith("test_conv_c6_blocks") for t in failed)
         for test in names[tid]:
             for risk, applies in RISKS.items():
+                # An agent that did not block the unapproved amount never applied any threshold, outdated or not:
+                # its "allows" failure is not an outdated policy (re-check R1).
+                if risk == "outdated_policy_applied" and test.startswith("test_conv_c6_allows") and not knew_c6:
+                    continue
                 if applies(tid, test):
                     cell = cells[(r["condition"], risk)]
                     cell[1] += 1

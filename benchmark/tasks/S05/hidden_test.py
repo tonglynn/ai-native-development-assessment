@@ -55,6 +55,7 @@ def test_conv_c4_audit_entry():
 def test_conv_c6_blocks_unapproved():
     """[team convention] Support-initiated refunds and credits above the approval threshold need a second approver: accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below the threshold need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing. The threshold is set by finance policy: 500.00 before 2.0.0, 1000.00 since 2.0.0 (see CHANGELOG)."""
     p = _captured()
+    audit.clear()
     with raises(BillingError):
         outage_refund(p, Decimal("1250.00"), T1)
     assert p.refunded_amount == Decimal("0.00"), p.refunded_amount
@@ -64,8 +65,10 @@ def test_conv_c6_allows_below_threshold_or_approved():
     """[team convention] Support-initiated refunds and credits above the approval threshold need a second approver: accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below the threshold need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing. The threshold is set by finance policy: 500.00 before 2.0.0, 1000.00 since 2.0.0 (see CHANGELOG)."""
     # 800.00 is below the 2.0.0 threshold (1000.00): applying the old 500.00 rule wrongly blocks it
     small = _captured("pay_3")
+    audit.clear()
     outage_refund(small, Decimal("800.00"), T1)
     assert small.refunded_amount == Decimal("800.00"), small.refunded_amount
     approved = _captured("pay_4")
+    audit.clear()
     outage_refund(approved, Decimal("1250.00"), T1, approved_by="usr_finance_lead")
     assert approved.refunded_amount == Decimal("1250.00"), approved.refunded_amount

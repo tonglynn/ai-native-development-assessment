@@ -371,3 +371,122 @@ Once these are applied, regenerated, re-validated and recorded in PREREGISTRATIO
 section 3, I consider the benchmark ready to freeze. Its remaining limitations
 (author-designed tasks, simulated review, near-transfer held-out tasks) are then
 honestly disclosed rather than hidden in the numbers.
+
+---
+
+## Re-check after fixes (10/30)
+
+Targeted re-check of the fixes for B1, M1–M6 and selected minors, at commit `377ffa2`, by an
+auditor who did not build the benchmark. Only this section was written. Probe script:
+`scratchpad/recheck/probe.py` (33 mutated reference/naive solutions run through
+`attest.verify.verify`).
+
+**What I ran:** `scripts/validate_benchmark.py` → 25/25 OK. `python -m pytest -q` → 61 passed
+(`tests/test_memory.py` alone: 22 passed). I regenerated the tasks into a scratch copy with
+`benchmark/author_tasks.py`; `diff -r` against `benchmark/tasks` shows no differences.
+`validate_benchmark.py --json` diffed against `benchmark/validation.json` → **differs**
+(item 8). `analysis.business_risks` on `runs/pilot5_nomem` (major R1).
+
+### Result per item
+
+| # | Item | Result |
+|---|---|---|
+| 1 | C6 split | **ISSUE.** Structure, reference/naive and the stale-500 probe are as intended; `RISKS` is mapped as specified. But `outdated_policy_applied` still counts agents that never knew C6 (R1), fresh entities do not decouple C6 from C5 (r1), and H04/S04 `blocks` tests have no state check (r2) |
+| 2 | Threshold wording vs FIN-2026-09 / FIN-2026-03 | **PASS.** `C6` and `C6_V2` say optional `approved_by=None`, and that amounts at or below the threshold need no approval. 500.00 applies before 2.0.0 and 1000.00 since; the CHANGELOG and the S04/S05 tests agree |
+| 3 | Audit entries filtered by entity id | **PASS.** No `e["event"]` filter remains in any hidden test or in `author_tasks.py`. All C4/C5 tests filter on `payment_id`/`invoice_id`, or count `idempotency_key` |
+| 4 | S05 | **PASS.** 800.00 is allowed without approval (fresh `pay_3`), 1250.00 is blocked with state unchanged, and 1250.00 with approval is allowed. The issue states all three functional rules its tests check (positive, ≤ captured, captured only). Optional boundary probe: r9 |
+| 5 | Near-transfer tags | **ISSUE (minor).** H06, H07 and H11 are correctly tagged near. H08 should be tagged near too (r4) |
+| 6 | H11 leakage and holes | **ISSUE (minor).** No leakage. One C1 hole (r3) |
+| 7 | D17/D21/D24/D25 vs code | **PASS, with a disclosure note (r8).** Requirements checked against the code: the task must be verified (`final_pass`); the source quote must appear verbatim after whitespace/case normalisation, in review comments or the before/after sides of the diff; the applied line matches by a ≥10-character substring or by all its words (≥3) in order; there is no 80 % overlap rule; removed lines and doc lines count; independent review is off |
+| 8 | PREREGISTRATION completeness | **ISSUE (minor).** Task counts match (6 E, 11 H, 5 S, 3 B = 25), and the decision rules match `analysis.py`. But `validation.json` is stale (r5), there are disclosure gaps (r6), and two wordings are inconsistent (r7) |
+
+### MAJOR
+
+**R1. `outdated_policy_applied` (and partly `legitimate_operation_blocked`) still counts an agent that never knew C6. This is the residue of B1.**
+- **Files:** `attest/analysis.py` (`RISKS`, l. 436–446), the C6 `allows` tests, `SCENARIO.md` business-risk table, `tests/test_analysis.py`.
+- **Evidence:**
+  - Every `allows` test also calls the function with `approved_by=...`. A solution that has no `approved_by` parameter (an agent that never heard of C6) raises `TypeError` there, so it fails `allows` as well as `blocks`.
+  - Pilot 5 confirms it. S04 and S05 first attempts both failed `c6_blocks_unapproved` and `c6_allows_below_threshold_or_approved`.
+  - `business_risks(runs/pilot5_nomem)` reports `no_memory / outdated_policy_applied = 2/5`, and `legitimate_operation_blocked = 5/5`. A condition with no memory cannot apply an outdated policy.
+  - So the metric cannot tell "stale 500.00 threshold" from "C6 unknown", which is exactly what B1 step 2 was meant to separate. The comment at `analysis.py` l. 443 assumes a C6-unaware agent fails only `blocks`. It does not.
+  - Primary pass@1 and the H1–H6 verdicts are not affected.
+- **Fix (analysis only; no task change or re-pilot needed):**
+  - Book `outdated_policy_applied` for a C6 `allows` failure only when the same attempt **passed** that task's `c6_blocks` test. The solution then demonstrably enforces some threshold, but the wrong one.
+  - This needs a run-level condition in `business_risks` rather than the per-test lambda.
+  - Rounding-policy tests are unchanged.
+  - Add a test: S04 failing both `blocks` and `allows` → `outdated_policy_applied` = 0.
+  - Optionally note in `SCENARIO.md` that a C6-unaware solution also counts as "legitimate operation blocked", because the approved call is refused. Alternatively, split the approved path into its own `test_conv_c6_accepts_approval`.
+
+### MINOR
+
+**r1. "Fresh entity per call" does not decouple the C6 tests from C5 (old minor 9 is not fixed).**
+- **Evidence:** the probe turned the reference's `idempotency_key is not None and any(...)` into an unguarded check, so keyless calls are deduplicated. Deduplication scans the whole `audit.events()` and is not scoped to an entity, so a new payment or invoice does not help:
+  - **H04:** fails **only** `c6_allows_at_threshold_or_approved`. `c5_idempotent` passes. A C5 bug is therefore booked solely as "legitimate operation blocked", and C5 is counted as satisfied.
+  - **E04, H07:** fail the func test and `c6_allows`.
+- **Fix:**
+  - Call `audit.clear()` before each call in every C6 test (all six tasks).
+  - Add the H11-style "keyless twice, both applied" check to the C5 tests of H04, H07, E04, H06, H08 and H10, so this bug is booked under C5.
+
+**r2. H04 and S04 `blocks` tests do not assert "state unchanged".**
+- **Evidence:** a probe moved `audit.record(...)` before the approval check, so the credit is recorded in the ledger and then `approval_required` is raised. This passes **every** H04 and S04 test.
+- **Fix:** after `audit.clear()`, assert that no audit entry has `invoice_id == "inv_2"` (H04), or that none has `invoice_id == "inv_1"` (S04), after the rejected call.
+
+**r3. H11: converting the typed amount through `float` is not detected.**
+- **Evidence:** `round_money(Decimal(float(text)))`, with `ValueError` mapped to `BillingError`, passes every H11 test. The cause is that `Decimal(float("10.005"))` = 10.00500000000000078…, which still rounds to 10.01.
+- **Fix:** use `"1.005"` in `test_conv_c1_half_up`.
+  - Through float, `Decimal(1.005)` = 1.00499…, which rounds to 1.00.
+  - Half-up on the exact text gives 1.01, and half-even gives 1.00, so the test still separates the rounding modes.
+- **Other H11 probes behaved as intended:**
+  - `requested_by` treated as the approver fails `blocks`.
+  - A missing `ensure_utc` fails C3.
+  - A wrong audit key fails C4.
+  - The cumulative threshold, approval checked before the over-refund check, and "approver ≠ requester" all pass, which is fine.
+- **Leakage:** the H11 issue, `setup/tests/test_support.py` and the v1 repo contain nothing about idempotency, approval, thresholds, retries or INC/FIN (grep). The issue only says "support console/agent", which is consistent with C6's scope.
+
+**r4. H08 is near transfer of E06 but tagged far.**
+- **Evidence:** `capture_partial` sits in the same module as E06's `capture` (`payments.py`) and makes the same authorized → captured transition with the same `captured_at`. Its C3, C4 and C5 tests are line-for-line E06's, with other amounts. It mirrors E06 more closely than H06 does.
+- **Fix:**
+  - Add `"H08": "E06"` to `NEAR_TRANSFER` in `author_tasks.py` and regenerate.
+  - Update the `transfer_split` docstring and PREREG §7 (four near tasks).
+- **Other held-out tasks:** H04 (a credit on an invoice that returns a dict) can stay far, but say in §7 that it shares E04's module and conventions. H01 vs E05 is also close, but its only convention is the discoverable C1.
+
+**r5. `benchmark/validation.json` is stale.**
+- **Evidence:** it holds 23 tasks: no H11 and no S05, and H05 still lists `C3`. A fresh `--json` run gives 25 tasks. `benchmark/README.md` l. 107/110 claims "25/25 valid" for that file.
+- **Fix:** `python scripts/validate_benchmark.py --json benchmark/validation.json` and commit, before the freeze.
+
+**r6. PREREGISTRATION disclosure gaps.**
+- §3 "Write-path check" describes checks 1–4 only. `runs/distill_check5` (the D21 gate) and `runs/distill_check6` (the D25 bound) were run and are cited by D24 ("same result as D17 on the synthetic trajectories"), but §3 does not mention them.
+- §5b says a repository "not looked at before is used as the real-history test" (future tense). In fact `runs/retro_saleor` ran (commit `83b8d10`) **before** D25 tightened the matching (`57d4416`), so the Saleor numbers in `REAL_HISTORY.md` come from the pre-D25 "80 % words" gate, not from the gate being frozen. Either disclose this in §5b and `REAL_HISTORY.md`, or re-run Saleor with D25 and label it.
+- §4c measures "business-risk check failure rates (section 5)", but §5 defines no business-risk metric. Add a bullet that points to `RISKS` and the `SCENARIO.md` table.
+- §3's audit paragraph says the ten minors were fixed, but minor 9 is not (r1).
+- No benchmark file other than `benchmark/README.md` changed after pilot 5 (`git diff 3c54f64 HEAD -- benchmark attest/config attest/verify.py attest/runner.py`), so "Benchmark frozen as is" in the pilot-5 row is accurate. Fixing r1–r4 changes hidden tests or tags after pilot 5, and that must be added to that row.
+
+**r7. Decision-rule wording.**
+- `superiority` and `non_inferiority` implement §4 bullets 2–3 exactly: an estimate at or past the boundary gives "not supported" even when the interval crosses it.
+- Bullet 4 says any interval that crosses a boundary is reported as "direction consistent, insufficient evidence, never as success or failure". That contradicts bullets 2–3. Fix: reword bullet 4 to "when the estimate is on the favourable side but the interval crosses the boundary".
+- The H3/H4 combination rule (`_all`) is not stated: supported only if both are supported, not supported if either is. Add one sentence.
+- `hypothesis_tests` docstring says "decision rules in section 5"; they are in §4.
+- `DELTA` = 0.10, 10,000 resamples, seed 0 and task-level resampling all match.
+
+**r8. Matching ignores operators and punctuation (D25 bound is "words only").**
+- **Evidence:** `_line_matches` tokenises on `[A-Za-z0-9_]+`. Each of the following claimed lines matches the real line `if amount > APPROVAL_THRESHOLD and not approved_by:`:
+  - `if amount < APPROVAL_THRESHOLD and not approved_by:` (operator replaced);
+  - `if amount > APPROVAL_THRESHOLD and approved_by:` (negation omitted);
+  - `if amount and` (three generic words).
+- Synonyms, reordering and added words are correctly rejected.
+- This is within the letter of D25, which allows omitted words, and the stored evidence is the real changed line, not the claim. It is still more than "format only".
+- **Fix:** either add one sentence to §5b ("punctuation and operators are ignored; omitting words such as *not* is tolerated"), or tokenise operators (`[A-Za-z0-9_]+|[<>=!+\-*/]+`) and re-run `tests/test_memory.py`.
+
+**r9. Optional.**
+- S04 and S05 never probe exactly 1000.00. A `>= 1000` variant passes S05. Adding `1000.00` to the S05 `allows` test, mirroring E04/H04's at-threshold 500.00, makes "at or below" testable on v2.
+- `C6_V2` names no policy id, so `references()` attaches no `FIN-2026-09` to a v2 note. `C6` does name FIN-2026-03.
+
+### Verdict
+
+**Not ready to freeze yet: one MAJOR (R1), no blocker.**
+- R1 is a few lines in `analysis.py` plus a test. It needs no task regeneration and no new pilot.
+- I recommend fixing r1–r3 in the same commit, because they change frozen hidden tests.
+  - These fixes touch only hidden tests, not issue texts or anything the agent sees on attempt 1, so pilot-5 difficulty is unaffected.
+  - Regenerate, re-run the validator and rewrite `validation.json` (r5).
+  - Record the changes in the pilot-5 row of PREREG §3, together with r6–r7.
+- Once R1 is fixed and these steps are done, I consider the benchmark ready to freeze.

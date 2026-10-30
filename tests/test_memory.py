@@ -379,3 +379,28 @@ def test_applied_line_tolerates_format_not_paraphrase():
     assert not find_applied("if amount > LIMIT and not approved_by", changed)                 # a word not in the line
     assert not find_applied("if not approved_by and amount > APPROVAL_THRESHOLD", changed)    # reordered
     assert not find_applied("when the amount exceeds the threshold require an approver", changed)  # paraphrase
+
+
+def test_operators_count_as_tokens():
+    """Re-check r8: a claim that swaps an operator does not match the real line."""
+    from attest.memory.evidence import find_applied, parse_diff
+
+    changed = parse_diff("--- a/x.py\n+++ b/x.py\n@@\n+    if amount > APPROVAL_THRESHOLD and not approved_by:\n")
+    assert not find_applied("if amount < APPROVAL_THRESHOLD and not approved_by", changed)
+    assert not find_applied("if amount >= APPROVAL_THRESHOLD and not approved_by", changed)
+    assert find_applied("if amount > APPROVAL_THRESHOLD", changed)
+
+
+def test_multiline_snippet_with_context_and_punctuation_lines():
+    """Seen in distill check 6 (E06): a correct rule quoted as several lines, with "*," and ")" and an unchanged
+    docstring around the real changed lines (D27). Context alone is never evidence; invented lines still fail."""
+    from attest.memory.evidence import find_applied, parse_diff
+
+    diff = ("--- a/ledgerly/payments.py\n+++ b/ledgerly/payments.py\n@@\n-def capture(payment: Payment, at: datetime) -> Payment:\n"
+            "+def capture(\n+    payment: Payment,\n+    at: datetime,\n+    *,\n+    idempotency_key: str | None = None,\n+) -> Payment:\n"
+            '     """Capture an authorized payment."""\n')
+    ch = parse_diff(diff)
+    hit = find_applied('    *,\n    idempotency_key: str | None = None,\n) -> Payment:\n    """Capture an authorized payment."""', ch)
+    assert hit and hit["change"] == "added" and "idempotency_key" in hit["line"]
+    assert find_applied('    """Capture an authorized payment."""', ch) is None            # context only
+    assert find_applied('    idempotency_key: str | None = None,\n    audit.clear()', ch) is None  # one invented line

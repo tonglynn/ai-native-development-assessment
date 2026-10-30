@@ -58,6 +58,9 @@ def test_conv_c5_idempotent():
     refund(p, Decimal("40.00"), T0, idempotency_key="rf-1")  # a retried request
     assert p.refunded_amount == Decimal("40.00"), p.refunded_amount
     assert sum(e.get("idempotency_key") == "rf-1" for e in audit.events()) == 1, audit.events()
+    refund(p, Decimal("10.00"), T0)  # callers without a key keep working ...
+    refund(p, Decimal("10.00"), T0)  # ... every time
+    assert p.refunded_amount == Decimal("60.00"), p.refunded_amount
 
 
 def _big(pid):
@@ -67,6 +70,7 @@ def _big(pid):
 def test_conv_c6_blocks_unapproved():
     """[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing."""
     big = _big("pay_9")
+    audit.clear()
     with raises(BillingError):
         refund(big, Decimal("600.00"), T0)
     assert big.refunded_amount == Decimal("0.00"), big.refunded_amount
@@ -75,8 +79,10 @@ def test_conv_c6_blocks_unapproved():
 def test_conv_c6_allows_at_threshold_or_approved():
     """[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing."""
     at_threshold = _big("pay_10")
+    audit.clear()
     refund(at_threshold, Decimal("500.00"), T0)  # at the threshold: no approval needed
     assert at_threshold.refunded_amount == Decimal("500.00"), at_threshold.refunded_amount
     approved = _big("pay_11")
+    audit.clear()
     refund(approved, Decimal("600.00"), T0, approved_by="usr_finance_lead")
     assert approved.refunded_amount == Decimal("600.00"), approved.refunded_amount

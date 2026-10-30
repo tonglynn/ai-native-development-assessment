@@ -56,11 +56,15 @@ def test_conv_c5_idempotent():
     assert p.refunded_amount == Decimal("10.00"), p.refunded_amount
     entries = [e for e in audit.events() if e.get("payment_id") == "pay_1"]
     assert len(entries) == 1 and entries[0].get("idempotency_key") == "sh-1", entries
+    refund_shipping(p, Decimal("5.00"), T0)  # callers without a key keep working ...
+    refund_shipping(p, Decimal("5.00"), T0)  # ... every time
+    assert p.refunded_amount == Decimal("20.00"), p.refunded_amount
 
 
 def test_conv_c6_blocks_unapproved():
     """[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing."""
     big = _captured("1500.00")
+    audit.clear()
     with raises(BillingError):
         refund_shipping(big, Decimal("750.00"), T0)
     assert big.refunded_amount == Decimal("0.00"), big.refunded_amount
@@ -69,8 +73,10 @@ def test_conv_c6_blocks_unapproved():
 def test_conv_c6_allows_below_threshold_or_approved():
     """[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError("approval_required") when `approved_by` is missing."""
     small = _captured("1500.00")
+    audit.clear()
     refund_shipping(small, Decimal("480.00"), T0)  # below the threshold: no approval needed
     assert small.refunded_amount == Decimal("480.00"), small.refunded_amount
     approved = _captured("1500.00")
+    audit.clear()
     refund_shipping(approved, Decimal("750.00"), T0, approved_by="usr_finance_lead")
     assert approved.refunded_amount == Decimal("750.00"), approved.refunded_amount

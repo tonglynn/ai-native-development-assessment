@@ -116,3 +116,14 @@ def test_compare_resamples_tasks_not_runs():
                    {"group": "heldout", "task_id": t, "condition": "no_memory", "first_pass": bool(n)}]
     res = compare(rs, "heldout", "attest", "no_memory")
     assert res["tasks"] == 3 and abs(res["mean_diff"] - 1 / 3) < 1e-9 and (res["wins"], res["losses"], res["ties"]) == (1, 0, 2)
+
+
+def test_no_threshold_at_all_is_not_an_outdated_policy():
+    """Re-check R1: an agent that never learned C6 fails both C6 tests; that is unauthorised and blocking
+    (no approved_by parameter), but it did not apply an outdated threshold."""
+    rs = [r("S04", "no_memory", "stale", False)]
+    rs[0]["attempts"][0]["tests_failed"] = ["test_conv_c6_blocks_unapproved", "test_conv_c6_allows_below_threshold_or_approved"]
+    rows = {(x["condition"], x["risk"]): x for x in analysis.business_risks(rs)}
+    assert rows[("no_memory", "unauthorised_operation")]["failed"] == 1
+    assert rows[("no_memory", "legitimate_operation_blocked")]["failed"] == 1
+    assert ("no_memory", "outdated_policy_applied") not in rows or rows[("no_memory", "outdated_policy_applied")]["failed"] == 0

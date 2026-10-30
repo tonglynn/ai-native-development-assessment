@@ -24,7 +24,9 @@ import re
 from dataclasses import dataclass
 
 REFERENCE_RE = re.compile(r"\b(?:INC|FIN|SEC|POL|ADR|RFC|CVE)-\d[\d-]*\d\b")
-WORD_RE = re.compile(r"[A-Za-z0-9_]+")
+# Words, plus comparison and arithmetic operators as tokens of their own, so a claim with "<" for ">"
+# does not match (re-check r8). Omitting a token is still allowed (D25).
+WORD_RE = re.compile(r"[A-Za-z0-9_]+|[<>=!]=|[<>]|==|\+=|-=|\*\*|[+\-*/%]")
 
 DOC_SUFFIXES = (".md", ".rst", ".txt", ".adoc")
 CONFIG_SUFFIXES = (".toml", ".cfg", ".ini", ".yaml", ".yml", ".json")
@@ -33,7 +35,7 @@ CONFIG_SUFFIXES = (".toml", ".cfg", ".ini", ".yaml", ".yml", ".json")
 @dataclass
 class ChangedLine:
     file: str
-    change: str  # "added" | "removed"
+    change: str  # "added" | "removed" | "context" (unchanged; never evidence on its own)
     text: str
 
 
@@ -49,7 +51,7 @@ def file_kind(path: str) -> str:
 
 
 def parse_diff(diff: str) -> list[ChangedLine]:
-    """Changed lines of a unified diff, with the file each belongs to."""
+    """Lines of a unified diff (added, removed, and unchanged context), with the file each belongs to."""
     out, current = [], ""
     for line in diff.splitlines():
         if line.startswith("+++ "):
@@ -62,6 +64,8 @@ def parse_diff(diff: str) -> list[ChangedLine]:
             out.append(ChangedLine(current, "added", line[1:]))
         elif line.startswith("-"):
             out.append(ChangedLine(current, "removed", line[1:]))
+        elif line.startswith(" "):
+            out.append(ChangedLine(current, "context", line[1:]))
     return out
 
 
@@ -126,20 +130,34 @@ def _line_matches(claim: str, actual: str) -> bool:
 
 
 def find_applied(snippet: str, changed: list[ChangedLine], allow_removed: bool = True) -> dict | None:
-    """The changed line(s) of the diff that the claimed snippet refers to, typed; None if not found.
+    """The changed line the claimed snippet refers to, typed; None if not found.
 
-    Each non-empty line of the snippet must match one changed line: a verbatim substring of
-    at least 10 characters, or all of its words (at least 3) in order (see _line_matches)."""
+    Every line of the snippet must be a real line of the diff (see _line_matches; lines that are
+    only punctuation, such as "*," or ")", are skipped), and at least one must match a changed
+    line: unchanged context lines may surround the evidence but never are the evidence (D27).
+    Lines too short for the word rule (fewer than 3 tokens and under 10 characters) must equal a
+    diff line exactly after normalising whitespace and case."""
     lines = [ln.strip() for ln in strip_markers(snippet).splitlines() if ln.strip()]
+    lines = [ln for ln in lines if re.search(r"[A-Za-z0-9]", ln)]
     if not lines or len(normalise(" ".join(lines))) < 10:
         return None
-    pool = [c for c in changed if allow_removed or c.change == "added"]
+    changes = [c for c in changed if c.change == "added" or (allow_removed and c.change == "removed")]
+    context = [c for c in changed if c.change == "context"]
+
+    def match(claim, pool):
+        if len(_words(claim)) < 3 and len(normalise(claim)) < 10:
+            return next((c for c in pool if normalise(c.text) == normalise(claim)), None)
+        return next((c for c in pool if _line_matches(claim, c.text)), None)
+
     found = []
     for claim in lines:
-        hit = next((c for c in pool if _line_matches(claim, c.text)), None)
+        hit = match(claim, changes) or match(claim, context)
         if hit is None:
             return None
         found.append(hit)
-    first = found[0]
+    evidence = [c for c in found if c.change != "context"]
+    if not evidence:
+        return None
+    first = evidence[0]
     return {"kind": file_kind(first.file), "change": first.change, "file": first.file,
-            "line": first.text.strip()[:200], "lines_matched": len(found)}
+            "line": first.text.strip()[:200], "lines_matched": len(evidence)}

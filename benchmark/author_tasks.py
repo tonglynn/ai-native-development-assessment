@@ -23,7 +23,7 @@ def d(s: str) -> str:
 
 
 # Held-out tasks that closely mirror one experience task (same module and shape) are "near" transfer (audit M4).
-NEAR_TRANSFER = {"H06": "E06", "H07": "E04", "H11": "E04"}
+NEAR_TRANSFER = {"H06": "E06", "H07": "E04", "H08": "E06", "H11": "E04"}
 
 
 def task(id, group, repo, title, issue, conventions, *, setup, stub, naive, reference, hidden, naive_kind="naive"):
@@ -473,6 +473,9 @@ def test_conv_c5_idempotent():
     refund(p, Decimal("40.00"), T0, idempotency_key="rf-1")  # a retried request
     assert p.refunded_amount == Decimal("40.00"), p.refunded_amount
     assert sum(e.get("idempotency_key") == "rf-1" for e in audit.events()) == 1, audit.events()
+    refund(p, Decimal("10.00"), T0)  # callers without a key keep working ...
+    refund(p, Decimal("10.00"), T0)  # ... every time
+    assert p.refunded_amount == Decimal("60.00"), p.refunded_amount
 
 
 def _big(pid):
@@ -482,6 +485,7 @@ def _big(pid):
 def test_conv_c6_blocks_unapproved():
     {doc(C6)}
     big = _big("pay_9")
+    audit.clear()
     with raises(BillingError):
         refund(big, Decimal("600.00"), T0)
     assert big.refunded_amount == Decimal("0.00"), big.refunded_amount
@@ -490,9 +494,11 @@ def test_conv_c6_blocks_unapproved():
 def test_conv_c6_allows_at_threshold_or_approved():
     {doc(C6)}
     at_threshold = _big("pay_10")
+    audit.clear()
     refund(at_threshold, Decimal("500.00"), T0)  # at the threshold: no approval needed
     assert at_threshold.refunded_amount == Decimal("500.00"), at_threshold.refunded_amount
     approved = _big("pay_11")
+    audit.clear()
     refund(approved, Decimal("600.00"), T0, approved_by="usr_finance_lead")
     assert approved.refunded_amount == Decimal("600.00"), approved.refunded_amount
 ''',
@@ -1022,6 +1028,9 @@ def test_conv_c5_idempotent():
     assert again == first, again
     entries = [e for e in audit.events() if e.get("invoice_id") == "inv_1"]
     assert len(entries) == 1 and entries[0].get("idempotency_key") == "cn-1", entries
+    issue_credit_note(_issued(), Decimal("5.00"), "goodwill")  # callers without a key keep working ...
+    issue_credit_note(_issued(), Decimal("5.00"), "goodwill")  # ... every time
+    assert len([e for e in audit.events() if e.get("invoice_id") == "inv_1"]) == 3, audit.events()
 
 
 def _annual(iid):
@@ -1030,13 +1039,17 @@ def _annual(iid):
 
 def test_conv_c6_blocks_unapproved():
     {doc(C6)}
+    audit.clear()
     with raises(BillingError):
         issue_credit_note(_annual("inv_2"), Decimal("500.01"), "x")
+    assert not [e for e in audit.events() if e.get("invoice_id") == "inv_2"], audit.events()  # nothing was credited
 
 
 def test_conv_c6_allows_at_threshold_or_approved():
     {doc(C6)}
+    audit.clear()
     assert issue_credit_note(_annual("inv_3"), Decimal("500.00"), "x")["amount"] == Decimal("500.00")  # at the threshold
+    audit.clear()
     note = issue_credit_note(_annual("inv_4"), Decimal("900.00"), "x", approved_by="usr_finance_lead")
     assert note["amount"] == Decimal("900.00"), note
 ''',
@@ -1346,11 +1359,15 @@ def test_conv_c5_idempotent():
     assert p.refunded_amount == Decimal("10.00"), p.refunded_amount
     entries = [e for e in audit.events() if e.get("payment_id") == "pay_1"]
     assert len(entries) == 1 and entries[0].get("idempotency_key") == "sh-1", entries
+    refund_shipping(p, Decimal("5.00"), T0)  # callers without a key keep working ...
+    refund_shipping(p, Decimal("5.00"), T0)  # ... every time
+    assert p.refunded_amount == Decimal("20.00"), p.refunded_amount
 
 
 def test_conv_c6_blocks_unapproved():
     {doc(C6)}
     big = _captured("1500.00")
+    audit.clear()
     with raises(BillingError):
         refund_shipping(big, Decimal("750.00"), T0)
     assert big.refunded_amount == Decimal("0.00"), big.refunded_amount
@@ -1359,9 +1376,11 @@ def test_conv_c6_blocks_unapproved():
 def test_conv_c6_allows_below_threshold_or_approved():
     {doc(C6)}
     small = _captured("1500.00")
+    audit.clear()
     refund_shipping(small, Decimal("480.00"), T0)  # below the threshold: no approval needed
     assert small.refunded_amount == Decimal("480.00"), small.refunded_amount
     approved = _captured("1500.00")
+    audit.clear()
     refund_shipping(approved, Decimal("750.00"), T0, approved_by="usr_finance_lead")
     assert approved.refunded_amount == Decimal("750.00"), approved.refunded_amount
 ''',
@@ -1813,8 +1832,8 @@ def test_conv_c1_decimal_cents():
 def test_conv_c1_half_up():
     {doc(C1_ROUND)}
     p = _captured()
-    process_refund_request(p, "10.005", AGENT, T0)
-    assert p.refunded_amount == Decimal("10.01"), p.refunded_amount
+    process_refund_request(p, "1.005", AGENT, T0)  # float("1.005") is 1.00499..., so a detour through float rounds down
+    assert p.refunded_amount == Decimal("1.01"), p.refunded_amount
 
 
 def test_conv_c2_billing_error():
@@ -1857,6 +1876,7 @@ def test_conv_c5_idempotent():
 def test_conv_c6_blocks_unapproved():
     {doc(C6)}
     big = _captured("1800.00")
+    audit.clear()
     with raises(BillingError):
         process_refund_request(big, "650.00", AGENT, T0)
     assert big.refunded_amount == Decimal("0.00"), big.refunded_amount
@@ -1865,9 +1885,11 @@ def test_conv_c6_blocks_unapproved():
 def test_conv_c6_allows_below_threshold_or_approved():
     {doc(C6)}
     small = _captured("1800.00", pid="pay_5")
+    audit.clear()
     process_refund_request(small, "450.00", AGENT, T0)  # below the threshold: no approval needed
     assert small.refunded_amount == Decimal("450.00"), small.refunded_amount
     approved = _captured("1800.00", pid="pay_6")
+    audit.clear()
     process_refund_request(approved, "650.00", AGENT, T0, approved_by="usr_finance_lead")
     assert approved.refunded_amount == Decimal("650.00"), approved.refunded_amount
 ''',
@@ -2200,14 +2222,18 @@ def test_conv_c4_audit_entry():
 
 def test_conv_c6_blocks_unapproved():
     {doc(C6_V2)}
+    audit.clear()
     with raises(BillingError):
         goodwill_credit(_issued(), Decimal("1200.00"), "x")
+    assert not [e for e in audit.events() if e.get("invoice_id") == "inv_1"], audit.events()  # nothing was credited
 
 
 def test_conv_c6_allows_below_threshold_or_approved():
     {doc(C6_V2)}
     # 700.00 is below the 2.0.0 threshold (1000.00): applying the old 500.00 rule wrongly blocks it
+    audit.clear()
     assert goodwill_credit(_issued(), Decimal("700.00"), "x")["amount"] == Decimal("700.00")
+    audit.clear()
     assert goodwill_credit(_issued(), Decimal("1200.00"), "x", approved_by="usr_finance_lead")["amount"] == Decimal("1200.00")
 ''',
 )
@@ -2342,6 +2368,7 @@ def test_conv_c4_audit_entry():
 def test_conv_c6_blocks_unapproved():
     {doc(C6_V2)}
     p = _captured()
+    audit.clear()
     with raises(BillingError):
         outage_refund(p, Decimal("1250.00"), T1)
     assert p.refunded_amount == Decimal("0.00"), p.refunded_amount
@@ -2351,9 +2378,11 @@ def test_conv_c6_allows_below_threshold_or_approved():
     {doc(C6_V2)}
     # 800.00 is below the 2.0.0 threshold (1000.00): applying the old 500.00 rule wrongly blocks it
     small = _captured("pay_3")
+    audit.clear()
     outage_refund(small, Decimal("800.00"), T1)
     assert small.refunded_amount == Decimal("800.00"), small.refunded_amount
     approved = _captured("pay_4")
+    audit.clear()
     outage_refund(approved, Decimal("1250.00"), T1, approved_by="usr_finance_lead")
     assert approved.refunded_amount == Decimal("1250.00"), approved.refunded_amount
 ''',
