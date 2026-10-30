@@ -13,9 +13,9 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: smoke | pilot | experiment | distill_check | poison | scale | case_study | retro | retrieval_ablation | context_eval | forgetting_eval | admission_eval | rule_checks | verify_eval | x01_eval | poison_float | poison_float_guard | semantic_review
+        description: smoke | pilot | experiment | distill_check | poison | scale | case_study | retro | retrieval_ablation | context_eval | forgetting_eval | admission_eval | rule_checks | verify_eval | x01_eval | poison_float | poison_float_guard | semantic_review | injection
         type: choice
-        options: [smoke, pilot, experiment, distill_check, poison, scale, case_study, retro, retrieval_ablation, context_eval, forgetting_eval, admission_eval, rule_checks, verify_eval, x01_eval, poison_float, poison_float_guard, semantic_review]
+        options: [smoke, pilot, experiment, distill_check, poison, scale, case_study, retro, retrieval_ablation, context_eval, forgetting_eval, admission_eval, rule_checks, verify_eval, x01_eval, poison_float, poison_float_guard, semantic_review, injection]
         default: pilot
       name:
         description: results go to runs/<name>
@@ -68,7 +68,7 @@ jobs:
           else:
               req = json.load(open(".github/run-request.json"))
           command = req.get("command", "pilot")
-          assert command in {"smoke", "pilot", "experiment", "distill_check", "poison", "scale", "case_study", "retro", "retrieval_ablation", "context_eval", "forgetting_eval", "admission_eval", "rule_checks", "verify_eval", "x01_eval", "poison_float", "poison_float_guard", "semantic_review"}, command
+          assert command in {"smoke", "pilot", "experiment", "distill_check", "poison", "scale", "case_study", "retro", "retrieval_ablation", "context_eval", "forgetting_eval", "admission_eval", "rule_checks", "verify_eval", "x01_eval", "poison_float", "poison_float_guard", "semantic_review", "injection"}, command
           name = str(req.get("name", "pilot_nomem"))
           assert re.fullmatch(r"[A-Za-z0-9_-]+", name), name
           print(f"command={command}")
@@ -117,7 +117,7 @@ jobs:
             pilot)      python -m attest pilot --name "$NAME" --parallel "$PARALLEL" --groups "$GROUPS" ;;
             experiment) python -m attest experiment --name "$NAME" --reps "$REPS" --parallel "$PARALLEL" ;;
             distill_check) python scripts/distill_check.py runs/pilot3_nomem "runs/$NAME" ;;
-            poison|poison_float|poison_float_guard|scale) python -m attest stress --kind "$COMMAND" --name "$NAME" --reps "$REPS" --parallel "$PARALLEL" ;;
+            poison|poison_float|poison_float_guard|injection|scale) python -m attest stress --kind "$COMMAND" --name "$NAME" --reps "$REPS" --parallel "$PARALLEL" ;;
             case_study) python scripts/ingest_github_reviews.py --repo "$REPO" --prs "$PRS" --out "runs/$NAME" ;;
             retro) python scripts/retro_eval.py --repo "$REPO" --prs "$PRS" --out "runs/$NAME" ;;
             retrieval_ablation) python -m attest ablation --name "$NAME" --source "$SOURCE" --part "$PART" --reps "$REPS" --parallel "$PARALLEL" ;;

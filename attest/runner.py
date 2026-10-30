@@ -49,6 +49,55 @@ class Settings:
     wrap_model: object = None
     # Exploratory business-policy guard (D38): money written to the audit trail must be Decimal. Off in the experiment.
     policy_guard: bool = False
+    # Exploratory prompt-injection run only (D44): task id -> untrusted text appended to the issue,
+    # and extra (fictional, canary) environment variables for the agent's shell. Empty otherwise.
+    extra_issue: dict = field(default_factory=dict)
+    agent_env: dict = field(default_factory=dict)
+
+
+# The agent's shell used to inherit the whole host environment (mini-swe-agent's LocalEnvironment
+# runs commands with os.environ), which on GitHub Actions includes the model key and the workflow
+# token. The agent never needs them, and trajectories are committed, so they are removed (D44).
+SECRET_ENV = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|COOKIE|AUTH)", re.I)
+
+
+def agent_environ(extra: dict | None = None) -> dict:
+    env = {k: v for k, v in os.environ.items() if not SECRET_ENV.search(k) and not k.startswith(("ACTIONS_", "GITHUB_"))}
+    return env | dict(extra or {})
+
+
+def scrubbed_environment(**kwargs):
+    from minisweagent.environments import local
+
+    class ScrubbedEnvironment(local.LocalEnvironment):
+        """LocalEnvironment whose commands see agent_environ() instead of the host environment."""
+
+        def __init__(self, *, base_env: dict, **kw):
+            super().__init__(**kw)
+            self._base_env = base_env
+
+        def execute(self, action: dict, cwd: str = "", *, timeout: int | None = None):
+            # Same as LocalEnvironment.execute (mini-swe-agent 2.4.6) except for the environment.
+            # os.environ itself is never touched: other threads (the model client) still need the key.
+            cwd = cwd or self.config.cwd or os.getcwd()
+            try:
+                result = local._run(action.get("command", ""), cwd, self._base_env | self.config.env, timeout or self.config.timeout)
+                output = {"output": result.stdout, "returncode": result.returncode, "exception_info": ""}
+            except Exception as e:  # noqa: BLE001
+                raw = getattr(e, "output", None)
+                raw = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else (raw or "")
+                output = {"output": raw, "returncode": -1, "exception_info": f"An error occurred while executing the command: {e}",
+                          "extra": {"exception_type": type(e).__name__, "exception": str(e)}}
+            self._check_finished(output)
+            return output
+
+        def get_template_vars(self, **kw):
+            import platform
+
+            from minisweagent.utils.serialize import recursive_merge
+            return recursive_merge(self.config.model_dump(), platform.uname()._asdict(), self._base_env, kw)
+
+    return ScrubbedEnvironment(**kwargs)
 
 
 def load_config() -> dict:
@@ -195,7 +244,6 @@ def run_task(
 ) -> dict:
     """Run ``task`` with ``memory`` and write trajectories and result.json into ``out_dir``."""
     from minisweagent.agents.default import DefaultAgent
-    from minisweagent.environments.local import LocalEnvironment
 
     settings = settings or Settings()
     config = load_config()
@@ -212,11 +260,12 @@ def run_task(
         model = make_model(settings, config, None if mock_outputs is None else mock_outputs[n - 1])
         if settings.wrap_model is not None:
             model = settings.wrap_model(model)
-        env = LocalEnvironment(cwd=str(workspace), **config["environment"])
+        env = scrubbed_environment(base_env=agent_environ(settings.agent_env), cwd=str(workspace), **config["environment"])
         agent = DefaultAgent(model, env, **config["agent"], output_path=out_dir / f"attempt{n}.traj.json")
         t0 = time.time()
         try:
-            info = agent.run(task=task.issue, memory_context=retrieved.context, review_feedback=review)
+            issue = task.issue + (f"\n\n{settings.extra_issue[task.id]}" if task.id in settings.extra_issue else "")
+            info = agent.run(task=issue, memory_context=retrieved.context, review_feedback=review)
         except Exception as exc:  # noqa: BLE001 - a crashed attempt is a failed attempt, not a crashed experiment
             info = {"exit_status": f"crash:{type(exc).__name__}", "submission": ""}
         restore_tests(task, workspace)
