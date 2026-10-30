@@ -1,0 +1,52 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,10 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import __version__, audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money, to_money
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +19,36 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def outage_refund(payment, amount, at):
++# Finance policy FIN-2026-09: support-initiated refunds/credits above this
++# amount require a second approver. Raised from 500.00 to 1000.00 in 2.0.0.
++APPROVAL_THRESHOLD_LEGACY = to_money("500.00")
++APPROVAL_THRESHOLD = to_money("1000.00")
++
++
++def approval_threshold():
++    """Approval threshold in effect for the running library version."""
++    try:
++        major = int(__version__.split(".")[0])
++    except (ValueError, AttributeError):
++        major = 0
++    return APPROVAL_THRESHOLD if major >= 2 else APPROVAL_THRESHOLD_LEGACY
++
++
++def outage_refund(payment, amount, at, *, approved_by=None):
+     """Refund part of a captured payment after a service outage."""
+-    raise NotImplementedError
++    at = ensure_utc(at)
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if amount > approval_threshold() and approved_by is None:
++        raise BillingError("approval_required", str(amount))
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    refunded = round_money(payment.refunded_amount) + amount
++    if refunded > round_money(payment.amount):
++        raise BillingError("refund_exceeds_captured", str(refunded))
++    payment.refunded_amount = refunded
++    if refunded == round_money(payment.amount):
++        payment.status = "refunded"
++    audit.record("outage_refund", payment_id=payment.id, amount=amount, at=at)
++    return payment
