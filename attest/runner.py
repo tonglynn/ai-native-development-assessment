@@ -44,6 +44,9 @@ class Settings:
     # Exploratory poisoning experiment only: task id -> an extra (wrong) review comment
     # added whenever that task's attempt fails verification. Empty in the main experiment.
     extra_review: dict = field(default_factory=dict)
+    # Exploratory extensions only (e.g. the context manager): wraps the model after it is built.
+    # None in the preregistered experiment.
+    wrap_model: object = None
 
 
 def load_config() -> dict:
@@ -205,6 +208,8 @@ def run_task(
     attempts, all_messages, review = [], [], ""
     for n in range(1, settings.max_attempts + 1):
         model = make_model(settings, config, None if mock_outputs is None else mock_outputs[n - 1])
+        if settings.wrap_model is not None:
+            model = settings.wrap_model(model)
         env = LocalEnvironment(cwd=str(workspace), **config["environment"])
         agent = DefaultAgent(model, env, **config["agent"], output_path=out_dir / f"attempt{n}.traj.json")
         t0 = time.time()

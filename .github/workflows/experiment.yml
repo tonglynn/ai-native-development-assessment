@@ -13,9 +13,9 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: smoke | pilot | experiment | distill_check | poison | scale | case_study | retro | retrieval_ablation
+        description: smoke | pilot | experiment | distill_check | poison | scale | case_study | retro | retrieval_ablation | context_eval
         type: choice
-        options: [smoke, pilot, experiment, distill_check, poison, scale, case_study, retro, retrieval_ablation]
+        options: [smoke, pilot, experiment, distill_check, poison, scale, case_study, retro, retrieval_ablation, context_eval]
         default: pilot
       name:
         description: results go to runs/<name>
@@ -68,7 +68,7 @@ jobs:
           else:
               req = json.load(open(".github/run-request.json"))
           command = req.get("command", "pilot")
-          assert command in {"smoke", "pilot", "experiment", "distill_check", "poison", "scale", "case_study", "retro", "retrieval_ablation"}, command
+          assert command in {"smoke", "pilot", "experiment", "distill_check", "poison", "scale", "case_study", "retro", "retrieval_ablation", "context_eval"}, command
           name = str(req.get("name", "pilot_nomem"))
           assert re.fullmatch(r"[A-Za-z0-9_-]+", name), name
           print(f"command={command}")
@@ -121,6 +121,7 @@ jobs:
             case_study) python scripts/ingest_github_reviews.py --repo "$REPO" --prs "$PRS" --out "runs/$NAME" ;;
             retro) python scripts/retro_eval.py --repo "$REPO" --prs "$PRS" --out "runs/$NAME" ;;
             retrieval_ablation) python -m attest ablation --name "$NAME" --source "$SOURCE" --part "$PART" --reps "$REPS" --parallel "$PARALLEL" ;;
+            context_eval) python scripts/context_eval.py --out "runs/$NAME" --reps "$REPS" --parallel "$PARALLEL" ;;
           esac 2>&1 | tee -a "runs/$NAME/console.log"
 
       - name: Commit results
