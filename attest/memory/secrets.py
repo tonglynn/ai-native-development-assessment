@@ -24,8 +24,36 @@ PATTERNS = {
 }
 
 
-def find_secrets(text: str) -> list[str]:
-    return [kind for kind, rx in PATTERNS.items() if rx.search(text or "")]
+# Optional (D43 hardening): long random-looking tokens catch secrets in unknown formats; context
+# words ("key", "token", "secret", "password", "credential") must be near them, to spare hashes and ids.
+TOKEN_RE = re.compile(r"[A-Za-z0-9+/_\-]{20,}")
+CONTEXT_RE = re.compile(r"(?i)\b(key|token|secret|password|passwd|credential|api)")
+
+
+def entropy(s: str) -> float:
+    import math
+    from collections import Counter
+    n = len(s)
+    return -sum(c / n * math.log2(c / n) for c in Counter(s).values()) if n else 0.0
+
+
+def high_entropy(text: str, min_bits: float = 3.5) -> list[str]:
+    out = []
+    for m in TOKEN_RE.finditer(text or ""):
+        tok = m.group(0)
+        # needs a digit: CamelCase identifiers (PersonEntityStateAttribute) were flagged on the first try
+        classes = sum(bool(re.search(rx, tok)) for rx in (r"[a-z]", r"[A-Z]", r"[0-9]")) if re.search(r"[0-9]", tok) else 0
+        near = (text or "")[max(0, m.start() - 40): m.start()]
+        if classes >= 2 and entropy(tok) >= min_bits and not re.fullmatch(r"[a-z_]+|[A-Z_]+|[0-9a-f]{20,}", tok) and CONTEXT_RE.search(near):
+            out.append(tok)
+    return out
+
+
+def find_secrets(text: str, entropy_check: bool = False) -> list[str]:
+    kinds = [kind for kind, rx in PATTERNS.items() if rx.search(text or "")]
+    if entropy_check and high_entropy(text):
+        kinds.append("high_entropy")
+    return kinds
 
 
 def redact(text: str) -> str:

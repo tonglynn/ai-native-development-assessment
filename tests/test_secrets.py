@@ -52,3 +52,10 @@ def test_with_scanning_the_secret_note_is_rejected_and_nothing_stores_the_canary
     assert "contains a secret" in [e for e in events if e["type"] == "reject"][0]["reason"]
     assert CANARY not in stored(m) and "[REDACTED:canary]" in stored(m)
     assert m.store.items()["at-0001"]["evidence"][0]["applied"]["line"].endswith("return round_money(total / qty)")
+
+
+def test_entropy_check_catches_unknown_formats_only_with_context():
+    assert "high_entropy" in find_secrets("the vendor api key is q8Vt3LmZ9xRw2NcP7sKd4YbF", entropy_check=True)
+    assert "high_entropy" not in find_secrets("the vendor api key is q8Vt3LmZ9xRw2NcP7sKd4YbF")  # off by default
+    assert "high_entropy" not in find_secrets("see commit 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d", entropy_check=True)
+    assert "high_entropy" not in find_secrets("the key class is PersonEntityStateAttribute", entropy_check=True)

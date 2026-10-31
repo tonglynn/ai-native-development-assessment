@@ -26,3 +26,17 @@ def test_sealed_log_round_trip_and_tamper_detection(tmp_path):
 
 def test_unsealed_logs_still_load():
     assert EventStore(None).append("add", item={"id": "x"})["seq"] == 1
+
+
+def test_checkpoints_allow_growth_but_catch_rewrites(tmp_path):
+    from attest.memory.store import EventStore, checkpoint, seal, verify_checkpoints
+    key = b"fictional-test-key"
+    s = EventStore(None, seal_key=key)
+    for n in range(5):
+        s.append("add", item={"id": f"at-{n}"})
+    cp = tmp_path / "anchors.jsonl"
+    checkpoint(s, cp)
+    s.append("add", item={"id": "at-5"})
+    assert verify_checkpoints(s.events, cp, key)["ok"]  # grew after the checkpoint: fine
+    cut = s.events[:3]
+    assert not verify_checkpoints(cut, cp, key)["ok"]  # truncated below the checkpoint

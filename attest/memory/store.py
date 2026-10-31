@@ -57,6 +57,31 @@ def verify_events(events: list[dict], key: bytes | None = None, head: str | None
     return {"ok": True, "seq": None, "reason": "", "head": prev}
 
 
+def checkpoint(store: "EventStore", path: Path) -> dict:
+    """Write the current head (seq, mac) to a separate append-only checkpoint file (D42 hardening).
+
+    The checkpoint file is the independent trust anchor: kept where whoever can write the log cannot
+    (another repository, a signed commit, object storage with retention)."""
+    cp = {"seq": len(store.events), "mac": store.head, "ts": round(time.time(), 3)}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as f:
+        f.write(json.dumps(cp) + "\n")
+    return cp
+
+
+def verify_checkpoints(events: list[dict], path: Path, key: bytes | None = None) -> dict:
+    """The log must verify, and every checkpoint must still be in it at its position: the log may have
+    grown since, but nothing up to a checkpoint was rewritten, removed or cut off."""
+    check = verify_events(events, key)
+    if not check["ok"]:
+        return check
+    for line in path.read_text().splitlines():
+        cp = json.loads(line)
+        if cp["seq"] > len(events) or (cp["seq"] and events[cp["seq"] - 1].get("mac") != cp["mac"]):
+            return {"ok": False, "seq": cp["seq"], "reason": f"checkpoint at event {cp['seq']} no longer matches the log"}
+    return {"ok": True, "seq": None, "reason": ""}
+
+
 class EventStore:
     def __init__(self, path: Path | None, *, seal_key: bytes | None = None, sealed: bool = False, head: str | None = None):
         """sealed (D42, opt-in): every new event is chained and authenticated (HMAC with seal_key, or
