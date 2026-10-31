@@ -322,6 +322,32 @@ the 67% may not transfer. One finding holds regardless: a fact in the context is
 fact the agent uses. Nothing is claimed about model summaries, because the summary baseline
 was broken (see the correction above). 信息在上下文里不等于 Agent 会用；关于模型摘要不作结论，因为摘要基线有缺陷。
 
+### Long session with policy changes (D49; designed before running) / 带政策变更的长会话
+
+`scripts/context_long.py`, `runs/context_long/`. 169 messages (~40.6k tokens): 9 real task trajectories
+and 5 synthetic product-owner messages (an old 500.00 threshold, a superseding 1000.00, an audit rule,
+two irrelevant changes); then S05, which needs the latest threshold, `approved_by`,
+`approval_required` and the audit entry. 3 runs per cell, 0 crashed.
+
+| Strategy | 4k | 8k | 12k | Prompt tokens / run (4k) |
+|---|---|---|---|---|
+| full history (no budget) | 3/3 | | | 491,937 |
+| no session | 0/3 | | | 68,196 |
+| sliding window | 0/3 | 0/3 | 0/3 | 34,762 |
+| plain model summary | 1/3 | 0/3 | 0/3 | 31,229 |
+| **Context Manager** | **3/3** | **3/3** | **3/3** | 52,684 (−89% vs full) |
+| second model (deepseek-v4-pro): full / manager 8k | | 2/3 / 3/3 | | 474,377 / 75,379 |
+
+Every failure is the approval rule (C6); no run failed the audit rule (C4). Offline, the window at 4k
+keeps none of the five needed facts and at 8k loses `approved_by`, `approval_required` and the
+superseding policy; at 12k it keeps them all yet still failed 3/3, so having the text in context is not
+enough: the Context Manager's working state lists the review comments and constraints as rules to
+apply. The plain summary kept the facts offline but failed 8 of 9 runs. **Defect, as declared before the
+run:** every strategy that keeps the threshold also keeps the outdated 500.00 next to it; the manager
+has no "superseded" relation, and the agent picked the right value here only because the newer line
+names what it supersedes. Limits: one scenario, one target task, 3 runs per cell, two models of one
+provider; the scenario was written by me with this manager in mind (the extraction rules predate it).
+
 ## Dynamic forgetting V1 (exploratory, after the main experiment) / 动态遗忘 V1（探索性）
 
 Scope of the extensions below: forgetting, trust-tiered admission and verification at
