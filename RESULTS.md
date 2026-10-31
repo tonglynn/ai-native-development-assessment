@@ -1107,6 +1107,32 @@ Approval says a note is right, not that it matters, and the rest of the gap is w
 at 3 repetitions. The human review itself did what it should on the mixed queue: 0 wrong notes approved, 0
 correct ones rejected. Review time was not measured (the reviewer is simulated).
 
+**Memory crowding: value-aware injection (D64, exploratory, `attest/memory/tiers.py`, `runs/crowding/`).** Same
+memory for every arm (v4 after human review, the crowded condition of D63); only the injection policy differs.
+Tiers by recorded evidence and topic: *core* = approved and about Decimal money, audit, idempotency or approval
+(never demoted for disuse), *regular* = other approved notes, *candidate* = the rest (kept with evidence, own
+files only). The value score V = w1·R + w2·U + w3·C + w4·S − w5·D is recorded as a design and not used: no arm has
+fitted weights. Design and reading rule committed before any run; 456 agent runs (19 tasks × 6 runs × 4 arms),
+0 crashed.
+
+| Arm | Needed core rules injected | Idempotency injected when needed | Displaced | Notes / task | Memory tokens / task | Held-out pass@1 (vs A) | Stale | Prompt tokens / run |
+|---|---|---|---|---|---|---|---|---|
+| A: v4 as evaluated | 78/81 | 16/18 | 2 | 5.1 | 569 | 70% | 100% | 24,156 |
+| B: relevance only | 78/81 | 16/18 | 2 | 5.1 | 569 | 71% (+2 [−3, +6]) | 100% | 23,181 |
+| **C: relevance + criticality** | **80/81** | **18/18** | **0** | 5.1 | 571 | **77% (+8 [0, +17])** | 100% | 23,996 |
+| D: tiers + dynamic k | 66/81 | 14/18 | 0 | 3.0 | 365 | 70% (0 [−9, +9]) | 97% | 21,307 |
+
+- Putting the business-critical rules first (C) removed every displacement, put the idempotency rule in the
+  prompt every time it was needed, and gave the highest held-out pass rate (4 tasks better, 1 worse). By the rule
+  fixed beforehand it is **not worse, and not shown better**: the interval's lower bound is 0, not above it.
+- Dynamic k (D) used 36% fewer memory tokens and 12% fewer prompt tokens at the same pass rate, but injected
+  fewer of the needed core rules: capping core notes at 3 drops one on tasks that need four (C1, C4, C5, C6).
+  The cap was set before the run and is reported as it is.
+- "Wrong injections" are the 1.x 500.00 approval note shown on 2.0 tasks, always with Attest's version
+  warning; stale tasks passed 97–100% in every arm, so it did not mislead the agent here.
+- This is exploratory and changes nothing in the frozen main experiment.
+
+
 
 
 ## Closing the "self-proving evidence" gap (exploratory, after an external review) / 证据自证问题的改进
