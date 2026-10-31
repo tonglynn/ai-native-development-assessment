@@ -1,0 +1,59 @@
+--- a/ledgerly/support.py
++++ b/ledgerly/support.py
+@@ -1,6 +1,54 @@
+ """Entry points used by the support console."""
+ 
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
++from .money import ZERO, round_money
+ 
+-def process_refund_request(payment, amount, requested_by, at):
++APPROVAL_THRESHOLD = round_money("500.00")
++
++
++def _parse(amount):
++    """Parse the amount text typed by a support agent into money."""
++    return round_money(amount)
++
++
++def _find_idempotent_result(idempotency_key):
++    """Return the payment id recorded for a prior matching audit entry, if any."""
++    if idempotency_key is None:
++        return None
++    for entry in audit.events():
++        if entry.get("idempotency_key") == idempotency_key:
++            return entry.get("payment_id")
++    return None
++
++
++def process_refund_request(
++    payment, amount, requested_by, at, *, approved_by=None, idempotency_key=None
++):
+     """Refund part or all of a captured payment on behalf of a support agent."""
+-    raise NotImplementedError
++    prior_payment_id = _find_idempotent_result(idempotency_key)
++    if prior_payment_id is not None:
++        return payment
++    amount = _parse(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    if amount > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError("approval_required", str(amount))
++    remaining = round_money(payment.amount) - round_money(payment.refunded_amount)
++    if amount > remaining:
++        raise BillingError("refund_exceeds_captured", str(amount))
++    ensure_utc(at)
++    payment.refunded_amount = round_money(payment.refunded_amount) + amount
++    if payment.refunded_amount >= round_money(payment.amount):
++        payment.status = "refunded"
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        requested_by=requested_by,
++        idempotency_key=idempotency_key,
++    )
++    return payment

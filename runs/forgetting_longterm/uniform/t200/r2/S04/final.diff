@@ -1,0 +1,58 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,15 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from decimal import Decimal
++
++from . import audit
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money, to_money
++
++# Finance policy FIN-2026-09 (2.0.0): support-initiated refunds and credits
++# above this amount require a second approver.
++APPROVAL_THRESHOLD = Decimal("1000.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +24,37 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def goodwill_credit(invoice, amount, reason):
++def goodwill_credit(invoice, amount, reason, *, idempotency_key=None, approved_by=None):
+     """Credit part of an issued invoice as a goodwill gesture."""
+-    raise NotImplementedError
++    if idempotency_key is not None:
++        for entry in audit.events():
++            if entry.get("idempotency_key") == idempotency_key:
++                return {
++                    "invoice_id": entry["invoice_id"],
++                    "amount": entry["amount"],
++                    "reason": entry["reason"],
++                }
++
++    amount = round_money(to_money(amount))
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    total = invoice_total(invoice)
++    if amount > total:
++        raise BillingError("amount_exceeds_total", f"{amount} > {total}")
++    if amount > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError(
++            "approval_required",
++            f"{amount} exceeds approval threshold {APPROVAL_THRESHOLD}",
++        )
++
++    audit.record(
++        "goodwill_credit",
++        invoice_id=invoice.id,
++        amount=amount,
++        reason=reason,
++        approved_by=approved_by,
++        idempotency_key=idempotency_key,
++    )
++    return {"invoice_id": invoice.id, "amount": amount, "reason": reason}

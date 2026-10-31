@@ -1,0 +1,30 @@
+--- a/ledgerly/reporting.py
++++ b/ledgerly/reporting.py
+@@ -1,6 +1,8 @@
+ """Finance dashboard queries (moved over from the old billing monolith)."""
+ 
+ from datetime import date, datetime, time, timedelta
++
++from .clock import ensure_utc
+ 
+ 
+ def day_bounds(day: date) -> tuple[datetime, datetime]:
+@@ -12,6 +14,17 @@
+     return round(sum(float(p.amount) for p in payments), 2)
+ 
+ 
++def _parse(value) -> datetime:
++    """Normalize a window boundary to an aware UTC datetime."""
++    return ensure_utc(value)
++
++
+ def payments_between(payments, start, end):
+     """Payments created in [start, end), oldest first."""
+-    raise NotImplementedError
++    start = _parse(start)
++    end = _parse(end)
++    window = [
++        p for p in payments
++        if p.created_at is not None and start <= _parse(p.created_at) < end
++    ]
++    return sorted(window, key=lambda p: _parse(p.created_at))

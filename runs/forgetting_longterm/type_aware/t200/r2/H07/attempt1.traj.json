@@ -1,0 +1,649 @@
+{
+  "info": {
+    "model_stats": {
+      "instance_cost": 0.002219124,
+      "api_calls": 7
+    },
+    "config": {
+      "agent": {
+        "system_template": "You are a helpful assistant that can interact with a computer.\n",
+        "instance_template": "You are working in a Python repository located at {{cwd}}. Every command runs with this directory as the current directory.\n\nPlease solve this issue: {{task}}\n{%- if memory_context %}\n\n## Notes from earlier work\n{{memory_context}}\n{%- endif %}\n{%- if review_feedback %}\n\n## Code review of your previous attempt\nYour previous attempt at this issue was reviewed and not accepted. The repository still contains that attempt. Address every comment below:\n{{review_feedback}}\n{%- endif %}\n\nYou can execute bash commands and edit files to implement the necessary changes.\n\n## Recommended Workflow\n\nThis workflow should be done step-by-step so that you can iterate on your changes and any possible problems.\n\n1. Analyze the codebase by finding and reading relevant files\n2. Edit the source code to resolve the issue\n3. Run the test suite with `python -m pytest -q` and check edge cases\n4. Submit your changes and finish your work by issuing the following command:\n   {%- if memory_context %}\n   `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && echo \"USED_NOTES: <comma-separated ids of the notes you relied on, or none>\"`\n   {%- else %}\n   `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\n   {%- endif %}\n   <important>After this command, you cannot continue working on this task.</important>\n\n## Command Execution Rules\n\nYou are operating in an environment where\n\n1. You issue at least one command\n2. The system executes the command(s) in a subshell\n3. You see the result(s)\n4. You write your next command(s)\n\nEach response should include:\n\n1. **Reasoning text** where you explain your analysis and plan\n2. At least one tool call with your command\n\n**CRITICAL REQUIREMENTS:**\n\n- Your response SHOULD include reasoning text explaining what you're doing\n- Your response MUST include AT LEAST ONE bash tool call\n- Directory or environment variable changes are not persistent. Every action is executed in a new subshell.\n- However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files\n\n<system_information>\n{{system}} {{release}} {{version}} {{machine}}\n</system_information>\n\n## Useful command examples\n\n### Create a new file:\n\n```bash\ncat <<'EOF' > newfile.py\nhello = \"world\"\nprint(hello)\nEOF\n```\n\n### Edit files with sed:\n\n```bash\n# Replace all occurrences\nsed -i 's/old_string/new_string/g' filename.py\n\n# Replace only first occurrence\nsed -i 's/old_string/new_string/' filename.py\n```\n\n### View file content:\n\n```bash\n# View specific lines with numbers\nnl -ba filename.py | sed -n '10,20p'\n```\n",
+        "step_limit": 30,
+        "cost_limit": 0.0,
+        "wall_time_limit_seconds": 600,
+        "max_consecutive_format_errors": 3,
+        "output_path": "runs/forgetting_longterm/type_aware/t200/r2/H07/attempt1.traj.json"
+      },
+      "agent_type": "minisweagent.agents.default.DefaultAgent",
+      "model": {
+        "model_name": "deepseek/deepseek-flash",
+        "model_kwargs": {
+          "drop_params": true,
+          "temperature": 0.0,
+          "extra_body": {
+            "thinking": {
+              "type": "disabled"
+            }
+          }
+        },
+        "litellm_model_registry": null,
+        "set_cache_control": null,
+        "cost_tracking": "ignore_errors",
+        "format_error_template": "{% if finish_reason is defined and (finish_reason == \"length\" or (finish_reason == \"tool_calls\" and not has_tool_calls)) -%}\nYour previous response reached the output token limit (finish_reason={{ finish_reason }}) before you produced a tool call, so it was cut off. Respond more concisely and finish with exactly one bash tool call. If you need to think more, do so briefly.\n{%- else -%}\nTool call error:\n\n<error>\n{{error}}\n</error>\n\nHere is general guidance on how to submit correct toolcalls:\n\nEvery response needs to use the 'bash' tool at least once to execute commands.\n\nCall the bash tool with your command as the argument:\n- Tool: bash\n- Arguments: {\"command\": \"your_command_here\"}\n\nIf you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\nwithout any other command.\n{%- endif %}\n",
+        "observation_template": "{%- if output.output | length < 10000 -%}\n{\n  \"returncode\": {{ output.returncode }},\n  \"output\": {{ output.output | tojson }}\n  {%- if output.exception_info %}, \"exception_info\": {{ output.exception_info | tojson }}{% endif %}\n}\n{%- else -%}\n{\n  \"returncode\": {{ output.returncode }},\n  \"output_head\": {{ output.output[:5000] | tojson }},\n  \"output_tail\": {{ output.output[-5000:] | tojson }},\n  \"elided_chars\": {{ output.output | length - 10000 }},\n  \"warning\": \"Output too long.\"\n  {%- if output.exception_info %}, \"exception_info\": {{ output.exception_info | tojson }}{% endif %}\n}\n{%- endif -%}\n",
+        "multimodal_regex": ""
+      },
+      "model_type": "minisweagent.models.litellm_model.LitellmModel",
+      "environment": {
+        "cwd": "/tmp/attest_workspaces/type_aware__t200__r2__H07/workspace",
+        "env": {
+          "PAGER": "cat",
+          "MANPAGER": "cat",
+          "LESS": "-R",
+          "PIP_PROGRESS_BAR": "off",
+          "TQDM_DISABLE": "1",
+          "PYTHONDONTWRITEBYTECODE": "1"
+        },
+        "timeout": 60
+      },
+      "environment_type": "attest.runner.ScrubbedEnvironment"
+    },
+    "mini_version": "2.4.6",
+    "exit_status": "Submitted",
+    "submission": "USED_NOTES: at-0007,at-0008\n"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that can interact with a computer."
+    },
+    {
+      "role": "user",
+      "content": "You are working in a Python repository located at /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace. Every command runs with this directory as the current directory.\n\nPlease solve this issue: Customers sometimes get their shipping fee back after a late delivery; the support team handles these. Add `refund_shipping(payment, amount, at)` to `ledgerly/adjustments.py`: it refunds `amount` of a captured payment, adding it to `payment.refunded_amount` and setting the status to `\"refunded\"` once everything has been refunded. Return the payment. The amount must be positive and the total refunded may not exceed the captured amount.\n\n## Notes from earlier work\nThese notes were distilled from earlier work in this repository that passed verification. Follow them unless the code or CHANGELOG.md shows they no longer hold.\n- [at-c0016] Shipping fee refund detail: In the shipping fee refund export the CSV columns are separated by semicolons for the finance spreadsheet.\n  (learned from task T4016 on ledgerly 1.0.0; relied on 0x, 0 passed, 0 failed)\n- [at-c0058] Shipping fee refund detail: Task T4058: the shipping fee refund helper was renamed for the migration; the old name stays as an alias for one release.\n  (learned from task T4058 on ledgerly 1.0.0; relied on 0x, 0 passed, 0 failed)\n- [at-0007] Refunds above 500.00 need approved_by: Per finance policy FIN-2026-03, support-initiated refunds and credits above 500.00 require a second approver: accept keyword-only `approved_by=None` and raise `BillingError(\"approval_required\")` when the amount exceeds the threshold and no approver is given. Amounts at or below 500.00 need no approval.\n  (learned from task E04 on ledgerly 1.0.0; source FIN-2026-03; relied on 0x, 0 passed, 0 failed)\n- [at-0008] Record state changes via audit.record: Every payment state transition must be logged with `ledgerly.audit.record` using a snake_case event name and the payment id and amount.\n  (learned from task E06 on ledgerly 1.0.0; relied on 0x, 0 passed, 0 failed)\n- [at-c0021] Support refund request detail: The support refund request admin screen lists the newest entries first and shows 120 rows per page.\n  (learned from task T4021 on ledgerly 1.0.0; relied on 0x, 0 passed, 0 failed)\n- [at-c0037] Support refund request detail: In the support refund request export the CSV columns are separated by semicolons for the finance spreadsheet.\n  (learned from task T4037 on ledgerly 1.0.0; relied on 0x, 0 passed, 0 failed)\n\nYou can execute bash commands and edit files to implement the necessary changes.\n\n## Recommended Workflow\n\nThis workflow should be done step-by-step so that you can iterate on your changes and any possible problems.\n\n1. Analyze the codebase by finding and reading relevant files\n2. Edit the source code to resolve the issue\n3. Run the test suite with `python -m pytest -q` and check edge cases\n4. Submit your changes and finish your work by issuing the following command:\n   `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && echo \"USED_NOTES: <comma-separated ids of the notes you relied on, or none>\"`\n   <important>After this command, you cannot continue working on this task.</important>\n\n## Command Execution Rules\n\nYou are operating in an environment where\n\n1. You issue at least one command\n2. The system executes the command(s) in a subshell\n3. You see the result(s)\n4. You write your next command(s)\n\nEach response should include:\n\n1. **Reasoning text** where you explain your analysis and plan\n2. At least one tool call with your command\n\n**CRITICAL REQUIREMENTS:**\n\n- Your response SHOULD include reasoning text explaining what you're doing\n- Your response MUST include AT LEAST ONE bash tool call\n- Directory or environment variable changes are not persistent. Every action is executed in a new subshell.\n- However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files\n\n<system_information>\nLinux 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64\n</system_information>\n\n## Useful command examples\n\n### Create a new file:\n\n```bash\ncat <<'EOF' > newfile.py\nhello = \"world\"\nprint(hello)\nEOF\n```\n\n### Edit files with sed:\n\n```bash\n# Replace all occurrences\nsed -i 's/old_string/new_string/g' filename.py\n\n# Replace only first occurrence\nsed -i 's/old_string/new_string/' filename.py\n```\n\n### View file content:\n\n```bash\n# View specific lines with numbers\nnl -ba filename.py | sed -n '10,20p'\n```"
+    },
+    {
+      "content": "I'll start by exploring the repository structure and relevant files.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && ls -la && find . -name \\\"*.py\\\" | head -50 && cat CHANGELOG.md 2>/dev/null | head -60\"}",
+            "name": "bash"
+          },
+          "id": "call_00_bBVLFxCpDCYDwvjM7V6t9961",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && ls -la && find . -name \"*.py\" | head -50 && cat CHANGELOG.md 2>/dev/null | head -60",
+            "tool_call_id": "call_00_bBVLFxCpDCYDwvjM7V6t9961"
+          }
+        ],
+        "response": {
+          "id": "1907af63-deff-4efa-af55-456dabebdb13",
+          "created": 1793433023,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "I'll start by exploring the repository structure and relevant files.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && ls -la && find . -name \\\"*.py\\\" | head -50 && cat CHANGELOG.md 2>/dev/null | head -60\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_bBVLFxCpDCYDwvjM7V6t9961",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 104,
+            "prompt_tokens": 1458,
+            "total_tokens": 1562,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 128
+            },
+            "prompt_cache_hit_tokens": 128,
+            "prompt_cache_miss_tokens": 1330
+          }
+        },
+        "cost": 0.000262284,
+        "timestamp": 1793433024.584262
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"total 28\\ndrwxr-xr-x 4 runner runner 4096 Oct 31 07:44 .\\ndrwxr-xr-x 3 runner runner 4096 Oct 31 07:50 ..\\n-rw-r--r-- 1 runner runner  121 Oct 31 07:44 CHANGELOG.md\\n-rw-r--r-- 1 runner runner  262 Oct 31 07:44 README.md\\n-rw-r--r-- 1 runner runner  140 Oct 31 07:44 conftest.py\\ndrwxr-xr-x 2 runner runner 4096 Oct 31 07:44 ledgerly\\ndrwxr-xr-x 2 runner runner 4096 Oct 31 07:50 tests\\n./ledgerly/subscriptions.py\\n./ledgerly/payments.py\\n./ledgerly/reporting.py\\n./ledgerly/models.py\\n./ledgerly/promotions.py\\n./ledgerly/errors.py\\n./ledgerly/audit.py\\n./ledgerly/__init__.py\\n./ledgerly/invoice.py\\n./ledgerly/adjustments.py\\n./ledgerly/pricing.py\\n./ledgerly/clock.py\\n./ledgerly/importers.py\\n./ledgerly/renewals.py\\n./ledgerly/money.py\\n./conftest.py\\n./tests/test_refund_shipping.py\\n./tests/test_legacy.py\\n./tests/test_core.py\\n# Changelog\\n\\n## 1.0.0 \\u2014 2026-03-02\\n\\n- Initial internal release: invoices, payment authorization, subscription periods.\\n\"\n}",
+      "extra": {
+        "raw_output": "total 28\ndrwxr-xr-x 4 runner runner 4096 Oct 31 07:44 .\ndrwxr-xr-x 3 runner runner 4096 Oct 31 07:50 ..\n-rw-r--r-- 1 runner runner  121 Oct 31 07:44 CHANGELOG.md\n-rw-r--r-- 1 runner runner  262 Oct 31 07:44 README.md\n-rw-r--r-- 1 runner runner  140 Oct 31 07:44 conftest.py\ndrwxr-xr-x 2 runner runner 4096 Oct 31 07:44 ledgerly\ndrwxr-xr-x 2 runner runner 4096 Oct 31 07:50 tests\n./ledgerly/subscriptions.py\n./ledgerly/payments.py\n./ledgerly/reporting.py\n./ledgerly/models.py\n./ledgerly/promotions.py\n./ledgerly/errors.py\n./ledgerly/audit.py\n./ledgerly/__init__.py\n./ledgerly/invoice.py\n./ledgerly/adjustments.py\n./ledgerly/pricing.py\n./ledgerly/clock.py\n./ledgerly/importers.py\n./ledgerly/renewals.py\n./ledgerly/money.py\n./conftest.py\n./tests/test_refund_shipping.py\n./tests/test_legacy.py\n./tests/test_core.py\n# Changelog\n\n## 1.0.0 \u2014 2026-03-02\n\n- Initial internal release: invoices, payment authorization, subscription periods.\n",
+        "returncode": 0,
+        "timestamp": 1793433024.7206178,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_bBVLFxCpDCYDwvjM7V6t9961",
+      "role": "tool"
+    },
+    {
+      "content": "",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && cat ledgerly/adjustments.py && echo \\\"=== MODELS ===\\\" && cat ledgerly/models.py && echo \\\"=== ERRORS ===\\\" && cat ledgerly/errors.py && echo \\\"=== AUDIT ===\\\" && cat ledgerly/audit.py && echo \\\"=== MONEY ===\\\" && cat ledgerly/money.py\"}",
+            "name": "bash"
+          },
+          "id": "call_00_3dyr9nAgcoyb2t0L9keJ2472",
+          "type": "function"
+        },
+        {
+          "index": 1,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && cat tests/test_refund_shipping.py && echo \\\"=== PAYMENTS ===\\\" && cat ledgerly/payments.py && echo \\\"=== INIT ===\\\" && cat ledgerly/__init__.py\"}",
+            "name": "bash"
+          },
+          "id": "call_01_fIh9BDjmmjdfls2cTj0c2463",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && cat ledgerly/adjustments.py && echo \"=== MODELS ===\" && cat ledgerly/models.py && echo \"=== ERRORS ===\" && cat ledgerly/errors.py && echo \"=== AUDIT ===\" && cat ledgerly/audit.py && echo \"=== MONEY ===\" && cat ledgerly/money.py",
+            "tool_call_id": "call_00_3dyr9nAgcoyb2t0L9keJ2472"
+          },
+          {
+            "command": "cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && cat tests/test_refund_shipping.py && echo \"=== PAYMENTS ===\" && cat ledgerly/payments.py && echo \"=== INIT ===\" && cat ledgerly/__init__.py",
+            "tool_call_id": "call_01_fIh9BDjmmjdfls2cTj0c2463"
+          }
+        ],
+        "response": {
+          "id": "758fe811-b642-4fa8-b23c-96caf3ac3f80",
+          "created": 1793433024,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && cat ledgerly/adjustments.py && echo \\\"=== MODELS ===\\\" && cat ledgerly/models.py && echo \\\"=== ERRORS ===\\\" && cat ledgerly/errors.py && echo \\\"=== AUDIT ===\\\" && cat ledgerly/audit.py && echo \\\"=== MONEY ===\\\" && cat ledgerly/money.py\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_3dyr9nAgcoyb2t0L9keJ2472",
+                    "type": "function"
+                  },
+                  {
+                    "index": 1,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && cat tests/test_refund_shipping.py && echo \\\"=== PAYMENTS ===\\\" && cat ledgerly/payments.py && echo \\\"=== INIT ===\\\" && cat ledgerly/__init__.py\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_01_fIh9BDjmmjdfls2cTj0c2463",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 220,
+            "prompt_tokens": 1956,
+            "total_tokens": 2176,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 1536
+            },
+            "prompt_cache_hit_tokens": 1536,
+            "prompt_cache_miss_tokens": 420
+          }
+        },
+        "cost": 0.000199608,
+        "timestamp": 1793433026.3320534
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"\\\"\\\"\\\"Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith).\\\"\\\"\\\"\\n\\nfrom .invoice import invoice_total\\n\\n\\ndef manual_adjustment(invoice, amount, note):\\n    if invoice.status not in (\\\"issued\\\", \\\"paid\\\"):\\n        raise ValueError(\\\"can only adjust issued or paid invoices\\\")\\n    if not note:\\n        raise ValueError(\\\"a note is required\\\")\\n    return {\\\"invoice_id\\\": invoice.id, \\\"amount\\\": amount, \\\"note\\\": note}\\n\\n\\ndef adjustable_balance(invoice) -\\u003e float:\\n    return float(invoice_total(invoice))\\n\\n\\ndef refund_shipping(payment, amount, at):\\n    \\\"\\\"\\\"Refund (part of) the shipping fee of a captured payment.\\\"\\\"\\\"\\n    raise NotImplementedError\\n=== MODELS ===\\nfrom dataclasses import dataclass, field\\nfrom datetime import datetime\\nfrom decimal import Decimal\\n\\n\\n@dataclass\\nclass LineItem:\\n    description: str\\n    quantity: int\\n    unit_price: Decimal\\n\\n\\n@dataclass\\nclass Invoice:\\n    id: str\\n    customer_id: str\\n    currency: str = \\\"USD\\\"\\n    lines: list[LineItem] = field(default_factory=list)\\n    issued_at: datetime | None = None\\n    status: str = \\\"draft\\\"  # draft | issued | paid | void\\n\\n\\n@dataclass\\nclass Payment:\\n    id: str\\n    invoice_id: str\\n    amount: Decimal\\n    status: str = \\\"authorized\\\"  # authorized | captured | voided | refunded\\n    created_at: datetime | None = None\\n    captured_at: datetime | None = None\\n    refunded_amount: Decimal = Decimal(\\\"0.00\\\")\\n\\n\\n@dataclass\\nclass Subscription:\\n    id: str\\n    customer_id: str\\n    plan_price: Decimal\\n    period_days: int\\n    started_at: datetime\\n    canceled_at: datetime | None = None\\n=== ERRORS ===\\nclass BillingError(Exception):\\n    \\\"\\\"\\\"Raised for any invalid billing operation.\\n\\n    ``code`` is a short machine-readable reason such as ``\\\"negative_amount\\\"``;\\n    ``message`` is optional human-readable detail.\\n    \\\"\\\"\\\"\\n\\n    def __init__(self, code: str, message: str = \\\"\\\"):\\n        super().__init__(f\\\"{code}: {message}\\\" if message else code)\\n        self.code = code\\n        self.message = message\\n=== AUDIT ===\\n\\\"\\\"\\\"In-process audit trail. Production ships these entries to the ledger service.\\\"\\\"\\\"\\n\\nfrom .clock import utcnow\\n\\n_EVENTS: list[dict] = []\\n\\n\\ndef record(event: str, **fields) -\\u003e dict:\\n    entry = {\\\"event\\\": event, \\\"at\\\": utcnow(), **fields}\\n    _EVENTS.append(entry)\\n    return entry\\n\\n\\ndef events(event: str | None = None) -\\u003e list[dict]:\\n    return [e for e in _EVENTS if event is None or e[\\\"event\\\"] == event]\\n\\n\\ndef clear() -\\u003e None:\\n    _EVENTS.clear()\\n=== MONEY ===\\nfrom decimal import ROUND_HALF_UP, Decimal, InvalidOperation\\n\\nfrom .errors import BillingError\\n\\nCENT = Decimal(\\\"0.01\\\")\\nZERO = Decimal(\\\"0.00\\\")\\n\\n\\ndef to_money(value) -\\u003e Decimal:\\n    \\\"\\\"\\\"Convert an int, str or Decimal into a Decimal amount.\\\"\\\"\\\"\\n    if isinstance(value, (bool, float)):\\n        raise BillingError(\\\"float_amount\\\", f\\\"refusing to convert {value!r}\\\")\\n    if isinstance(value, Decimal):\\n        return value\\n    try:\\n        return Decimal(str(value))\\n    except InvalidOperation:\\n        raise BillingError(\\\"invalid_amount\\\", repr(value)) from None\\n\\n\\ndef round_money(value) -\\u003e Decimal:\\n    \\\"\\\"\\\"Round to the cent using the finance team\\u0027s rounding policy.\\\"\\\"\\\"\\n    return to_money(value).quantize(CENT, rounding=ROUND_HALF_UP)\\n\"\n}",
+      "extra": {
+        "raw_output": "\"\"\"Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith).\"\"\"\n\nfrom .invoice import invoice_total\n\n\ndef manual_adjustment(invoice, amount, note):\n    if invoice.status not in (\"issued\", \"paid\"):\n        raise ValueError(\"can only adjust issued or paid invoices\")\n    if not note:\n        raise ValueError(\"a note is required\")\n    return {\"invoice_id\": invoice.id, \"amount\": amount, \"note\": note}\n\n\ndef adjustable_balance(invoice) -> float:\n    return float(invoice_total(invoice))\n\n\ndef refund_shipping(payment, amount, at):\n    \"\"\"Refund (part of) the shipping fee of a captured payment.\"\"\"\n    raise NotImplementedError\n=== MODELS ===\nfrom dataclasses import dataclass, field\nfrom datetime import datetime\nfrom decimal import Decimal\n\n\n@dataclass\nclass LineItem:\n    description: str\n    quantity: int\n    unit_price: Decimal\n\n\n@dataclass\nclass Invoice:\n    id: str\n    customer_id: str\n    currency: str = \"USD\"\n    lines: list[LineItem] = field(default_factory=list)\n    issued_at: datetime | None = None\n    status: str = \"draft\"  # draft | issued | paid | void\n\n\n@dataclass\nclass Payment:\n    id: str\n    invoice_id: str\n    amount: Decimal\n    status: str = \"authorized\"  # authorized | captured | voided | refunded\n    created_at: datetime | None = None\n    captured_at: datetime | None = None\n    refunded_amount: Decimal = Decimal(\"0.00\")\n\n\n@dataclass\nclass Subscription:\n    id: str\n    customer_id: str\n    plan_price: Decimal\n    period_days: int\n    started_at: datetime\n    canceled_at: datetime | None = None\n=== ERRORS ===\nclass BillingError(Exception):\n    \"\"\"Raised for any invalid billing operation.\n\n    ``code`` is a short machine-readable reason such as ``\"negative_amount\"``;\n    ``message`` is optional human-readable detail.\n    \"\"\"\n\n    def __init__(self, code: str, message: str = \"\"):\n        super().__init__(f\"{code}: {message}\" if message else code)\n        self.code = code\n        self.message = message\n=== AUDIT ===\n\"\"\"In-process audit trail. Production ships these entries to the ledger service.\"\"\"\n\nfrom .clock import utcnow\n\n_EVENTS: list[dict] = []\n\n\ndef record(event: str, **fields) -> dict:\n    entry = {\"event\": event, \"at\": utcnow(), **fields}\n    _EVENTS.append(entry)\n    return entry\n\n\ndef events(event: str | None = None) -> list[dict]:\n    return [e for e in _EVENTS if event is None or e[\"event\"] == event]\n\n\ndef clear() -> None:\n    _EVENTS.clear()\n=== MONEY ===\nfrom decimal import ROUND_HALF_UP, Decimal, InvalidOperation\n\nfrom .errors import BillingError\n\nCENT = Decimal(\"0.01\")\nZERO = Decimal(\"0.00\")\n\n\ndef to_money(value) -> Decimal:\n    \"\"\"Convert an int, str or Decimal into a Decimal amount.\"\"\"\n    if isinstance(value, (bool, float)):\n        raise BillingError(\"float_amount\", f\"refusing to convert {value!r}\")\n    if isinstance(value, Decimal):\n        return value\n    try:\n        return Decimal(str(value))\n    except InvalidOperation:\n        raise BillingError(\"invalid_amount\", repr(value)) from None\n\n\ndef round_money(value) -> Decimal:\n    \"\"\"Round to the cent using the finance team's rounding policy.\"\"\"\n    return to_money(value).quantize(CENT, rounding=ROUND_HALF_UP)\n",
+        "returncode": 0,
+        "timestamp": 1793433026.5167012,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_3dyr9nAgcoyb2t0L9keJ2472",
+      "role": "tool"
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"from datetime import datetime, timezone\\nfrom decimal import Decimal\\n\\nfrom ledgerly.adjustments import refund_shipping\\nfrom ledgerly.models import Payment\\n\\nT0 = datetime(2026, 1, 1, tzinfo=timezone.utc)\\n\\n\\ndef test_refund_shipping():\\n    p = Payment(\\\"pay_1\\\", \\\"inv_1\\\", Decimal(\\\"100.00\\\"), status=\\\"captured\\\", created_at=T0, captured_at=T0)\\n    refund_shipping(p, Decimal(\\\"10.00\\\"), T0)\\n    assert p.refunded_amount == Decimal(\\\"10.00\\\")\\n=== PAYMENTS ===\\nfrom datetime import datetime\\n\\nfrom . import audit\\nfrom .clock import ensure_utc\\nfrom .errors import BillingError\\nfrom .models import Invoice, Payment\\nfrom .money import ZERO, round_money\\n\\n\\ndef authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -\\u003e Payment:\\n    amount = round_money(amount)\\n    if amount \\u003c= ZERO:\\n        raise BillingError(\\\"non_positive_amount\\\", str(amount))\\n    if invoice.status != \\\"issued\\\":\\n        raise BillingError(\\\"invalid_state\\\", f\\\"invoice {invoice.id} is {invoice.status}\\\")\\n    payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))\\n    audit.record(\\\"payment_authorized\\\", payment_id=payment.id, amount=amount)\\n    return payment\\n=== INIT ===\\n\\\"\\\"\\\"Ledgerly: Acme\\u0027s internal billing library (invoices, payments, subscriptions).\\\"\\\"\\\"\\n\\n__version__ = \\\"1.0.0\\\"\\n\"\n}",
+      "extra": {
+        "raw_output": "from datetime import datetime, timezone\nfrom decimal import Decimal\n\nfrom ledgerly.adjustments import refund_shipping\nfrom ledgerly.models import Payment\n\nT0 = datetime(2026, 1, 1, tzinfo=timezone.utc)\n\n\ndef test_refund_shipping():\n    p = Payment(\"pay_1\", \"inv_1\", Decimal(\"100.00\"), status=\"captured\", created_at=T0, captured_at=T0)\n    refund_shipping(p, Decimal(\"10.00\"), T0)\n    assert p.refunded_amount == Decimal(\"10.00\")\n=== PAYMENTS ===\nfrom datetime import datetime\n\nfrom . import audit\nfrom .clock import ensure_utc\nfrom .errors import BillingError\nfrom .models import Invoice, Payment\nfrom .money import ZERO, round_money\n\n\ndef authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -> Payment:\n    amount = round_money(amount)\n    if amount <= ZERO:\n        raise BillingError(\"non_positive_amount\", str(amount))\n    if invoice.status != \"issued\":\n        raise BillingError(\"invalid_state\", f\"invoice {invoice.id} is {invoice.status}\")\n    payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))\n    audit.record(\"payment_authorized\", payment_id=payment.id, amount=amount)\n    return payment\n=== INIT ===\n\"\"\"Ledgerly: Acme's internal billing library (invoices, payments, subscriptions).\"\"\"\n\n__version__ = \"1.0.0\"\n",
+        "returncode": 0,
+        "timestamp": 1793433026.541492,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_01_fIh9BDjmmjdfls2cTj0c2463",
+      "role": "tool"
+    },
+    {
+      "content": "Let me look at the clock module and other code patterns for state transitions and audit usage.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && cat ledgerly/clock.py && echo \\\"=== GREP audit ===\\\" && grep -rn \\\"audit.record\\\\|BillingError\\\\|ensure_utc\\\\|round_money\\\" ledgerly/ && echo \\\"=== TESTS ===\\\" && cat tests/test_core.py tests/test_legacy.py\"}",
+            "name": "bash"
+          },
+          "id": "call_00_ykCKTKC278aAnQ0cJaoL3368",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && cat ledgerly/clock.py && echo \"=== GREP audit ===\" && grep -rn \"audit.record\\|BillingError\\|ensure_utc\\|round_money\" ledgerly/ && echo \"=== TESTS ===\" && cat tests/test_core.py tests/test_legacy.py",
+            "tool_call_id": "call_00_ykCKTKC278aAnQ0cJaoL3368"
+          }
+        ],
+        "response": {
+          "id": "f92ab343-a024-49d8-b45e-4c0f5bef833d",
+          "created": 1793433026,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "Let me look at the clock module and other code patterns for state transitions and audit usage.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && cat ledgerly/clock.py && echo \\\"=== GREP audit ===\\\" && grep -rn \\\"audit.record\\\\|BillingError\\\\|ensure_utc\\\\|round_money\\\" ledgerly/ && echo \\\"=== TESTS ===\\\" && cat tests/test_core.py tests/test_legacy.py\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_ykCKTKC278aAnQ0cJaoL3368",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 140,
+            "prompt_tokens": 3609,
+            "total_tokens": 3749,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 2176
+            },
+            "prompt_cache_hit_tokens": 2176,
+            "prompt_cache_miss_tokens": 1433
+          }
+        },
+        "cost": 0.000305478,
+        "timestamp": 1793433027.625952
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"from datetime import datetime, timezone\\n\\nfrom .errors import BillingError\\n\\n\\ndef utcnow() -\\u003e datetime:\\n    return datetime.now(timezone.utc)\\n\\n\\ndef ensure_utc(dt: datetime) -\\u003e datetime:\\n    if not isinstance(dt, datetime):\\n        raise BillingError(\\\"invalid_datetime\\\", repr(dt))\\n    if dt.tzinfo is None or dt.utcoffset() is None:\\n        raise BillingError(\\\"naive_datetime\\\", dt.isoformat())\\n    return dt.astimezone(timezone.utc)\\n=== GREP audit ===\\nledgerly/subscriptions.py:3:from .clock import ensure_utc\\nledgerly/subscriptions.py:4:from .errors import BillingError\\nledgerly/subscriptions.py:10:    at = ensure_utc(at)\\nledgerly/subscriptions.py:11:    start = ensure_utc(sub.started_at)\\nledgerly/subscriptions.py:13:        raise BillingError(\\\"before_start\\\", at.isoformat())\\nledgerly/payments.py:4:from .clock import ensure_utc\\nledgerly/payments.py:5:from .errors import BillingError\\nledgerly/payments.py:7:from .money import ZERO, round_money\\nledgerly/payments.py:11:    amount = round_money(amount)\\nledgerly/payments.py:13:        raise BillingError(\\\"non_positive_amount\\\", str(amount))\\nledgerly/payments.py:15:        raise BillingError(\\\"invalid_state\\\", f\\\"invoice {invoice.id} is {invoice.status}\\\")\\nledgerly/payments.py:16:    payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))\\nledgerly/payments.py:17:    audit.record(\\\"payment_authorized\\\", payment_id=payment.id, amount=amount)\\nledgerly/errors.py:1:class BillingError(Exception):\\nledgerly/invoice.py:5:from .clock import ensure_utc\\nledgerly/invoice.py:6:from .errors import BillingError\\nledgerly/invoice.py:8:from .money import ZERO, round_money, to_money\\nledgerly/invoice.py:12:    return round_money(to_money(line.unit_price) * line.quantity)\\nledgerly/invoice.py:16:    return round_money(sum((line_total(line) for line in invoice.lines), ZERO))\\nledgerly/invoice.py:21:        raise BillingError(\\\"invalid_state\\\", f\\\"invoice {invoice.id} is {invoice.status}\\\")\\nledgerly/invoice.py:23:        raise BillingError(\\\"empty_invoice\\\", invoice.id)\\nledgerly/invoice.py:24:    invoice.issued_at = ensure_utc(at)\\nledgerly/invoice.py:26:    audit.record(\\\"invoice_issued\\\", invoice_id=invoice.id, total=invoice_total(invoice))\\nledgerly/clock.py:3:from .errors import BillingError\\nledgerly/clock.py:10:def ensure_utc(dt: datetime) -\\u003e datetime:\\nledgerly/clock.py:12:        raise BillingError(\\\"invalid_datetime\\\", repr(dt))\\nledgerly/clock.py:14:        raise BillingError(\\\"naive_datetime\\\", dt.isoformat())\\nledgerly/money.py:3:from .errors import BillingError\\nledgerly/money.py:12:        raise BillingError(\\\"float_amount\\\", f\\\"refusing to convert {value!r}\\\")\\nledgerly/money.py:18:        raise BillingError(\\\"invalid_amount\\\", repr(value)) from None\\nledgerly/money.py:21:def round_money(value) -\\u003e Decimal:\\n=== TESTS ===\\nfrom datetime import datetime, timezone\\nfrom decimal import Decimal\\n\\nimport pytest\\n\\nfrom ledgerly import audit\\nfrom ledgerly.errors import BillingError\\nfrom ledgerly.invoice import invoice_total, issue_invoice\\nfrom ledgerly.models import Invoice, LineItem, Subscription\\nfrom ledgerly.payments import authorize\\nfrom ledgerly.subscriptions import current_period\\n\\nT0 = datetime(2026, 1, 1, tzinfo=timezone.utc)\\n\\n\\ndef make_invoice():\\n    return Invoice(\\n        id=\\\"inv_1\\\",\\n        customer_id=\\\"cus_1\\\",\\n        lines=[LineItem(\\\"Seat\\\", 3, Decimal(\\\"19.99\\\")), LineItem(\\\"Setup\\\", 1, Decimal(\\\"50.00\\\"))],\\n    )\\n\\n\\ndef test_invoice_total():\\n    assert invoice_total(make_invoice()) == Decimal(\\\"109.97\\\")\\n\\n\\ndef test_issue_invoice_records_audit():\\n    inv = issue_invoice(make_invoice(), T0)\\n    assert inv.status == \\\"issued\\\"\\n    assert audit.events(\\\"invoice_issued\\\")[0][\\\"invoice_id\\\"] == \\\"inv_1\\\"\\n\\n\\ndef test_issue_empty_invoice_fails():\\n    with pytest.raises(BillingError):\\n        issue_invoice(Invoice(id=\\\"inv_2\\\", customer_id=\\\"cus_1\\\"), T0)\\n\\n\\ndef test_authorize_payment():\\n    inv = issue_invoice(make_invoice(), T0)\\n    payment = authorize(\\\"pay_1\\\", inv, \\\"109.97\\\", T0)\\n    assert payment.amount == Decimal(\\\"109.97\\\")\\n    assert payment.status == \\\"authorized\\\"\\n\\n\\ndef test_current_period():\\n    sub = Subscription(\\\"sub_1\\\", \\\"cus_1\\\", Decimal(\\\"30.00\\\"), 30, T0)\\n    start, end = current_period(sub, datetime(2026, 2, 5, tzinfo=timezone.utc))\\n    assert start == datetime(2026, 1, 31, tzinfo=timezone.utc)\\n    assert end == datetime(2026, 3, 2, tzinfo=timezone.utc)\\nfrom datetime import date, datetime\\n\\nimport pytest\\n\\nfrom ledgerly.importers import parse_csv\\nfrom ledgerly.pricing import apply_coupon, list_price\\nfrom ledgerly.promotions import bulk_discount_percent, campaign_percent\\nfrom ledgerly.renewals import reminder_due\\nfrom ledgerly.reporting import day_bounds\\n\\n\\ndef test_pricing():\\n    assert list_price(\\\"team\\\") == 49.0\\n    assert apply_coupon(49.0, \\\"WELCOME10\\\") == 44.1\\n    with pytest.raises(ValueError):\\n        apply_coupon(49.0, \\\"NOPE\\\")\\n\\n\\ndef test_promotions():\\n    assert campaign_percent(\\\"black-friday\\\", now=datetime(2025, 11, 28)) == 30\\n    assert bulk_discount_percent(12) == 5\\n\\n\\ndef test_importers():\\n    assert parse_csv(\\\"invoice_id,amount\\\\ninv_1,12.50\\\\n\\\") == [{\\\"invoice_id\\\": \\\"inv_1\\\", \\\"amount\\\": 12.5}]\\n\\n\\ndef test_reporting_and_renewals():\\n    start, end = day_bounds(date(2026, 1, 1))\\n    assert (end - start).days == 1\\n    assert reminder_due(datetime(2026, 1, 10), now=datetime(2026, 1, 8))\\n\"\n}",
+      "extra": {
+        "raw_output": "from datetime import datetime, timezone\n\nfrom .errors import BillingError\n\n\ndef utcnow() -> datetime:\n    return datetime.now(timezone.utc)\n\n\ndef ensure_utc(dt: datetime) -> datetime:\n    if not isinstance(dt, datetime):\n        raise BillingError(\"invalid_datetime\", repr(dt))\n    if dt.tzinfo is None or dt.utcoffset() is None:\n        raise BillingError(\"naive_datetime\", dt.isoformat())\n    return dt.astimezone(timezone.utc)\n=== GREP audit ===\nledgerly/subscriptions.py:3:from .clock import ensure_utc\nledgerly/subscriptions.py:4:from .errors import BillingError\nledgerly/subscriptions.py:10:    at = ensure_utc(at)\nledgerly/subscriptions.py:11:    start = ensure_utc(sub.started_at)\nledgerly/subscriptions.py:13:        raise BillingError(\"before_start\", at.isoformat())\nledgerly/payments.py:4:from .clock import ensure_utc\nledgerly/payments.py:5:from .errors import BillingError\nledgerly/payments.py:7:from .money import ZERO, round_money\nledgerly/payments.py:11:    amount = round_money(amount)\nledgerly/payments.py:13:        raise BillingError(\"non_positive_amount\", str(amount))\nledgerly/payments.py:15:        raise BillingError(\"invalid_state\", f\"invoice {invoice.id} is {invoice.status}\")\nledgerly/payments.py:16:    payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))\nledgerly/payments.py:17:    audit.record(\"payment_authorized\", payment_id=payment.id, amount=amount)\nledgerly/errors.py:1:class BillingError(Exception):\nledgerly/invoice.py:5:from .clock import ensure_utc\nledgerly/invoice.py:6:from .errors import BillingError\nledgerly/invoice.py:8:from .money import ZERO, round_money, to_money\nledgerly/invoice.py:12:    return round_money(to_money(line.unit_price) * line.quantity)\nledgerly/invoice.py:16:    return round_money(sum((line_total(line) for line in invoice.lines), ZERO))\nledgerly/invoice.py:21:        raise BillingError(\"invalid_state\", f\"invoice {invoice.id} is {invoice.status}\")\nledgerly/invoice.py:23:        raise BillingError(\"empty_invoice\", invoice.id)\nledgerly/invoice.py:24:    invoice.issued_at = ensure_utc(at)\nledgerly/invoice.py:26:    audit.record(\"invoice_issued\", invoice_id=invoice.id, total=invoice_total(invoice))\nledgerly/clock.py:3:from .errors import BillingError\nledgerly/clock.py:10:def ensure_utc(dt: datetime) -> datetime:\nledgerly/clock.py:12:        raise BillingError(\"invalid_datetime\", repr(dt))\nledgerly/clock.py:14:        raise BillingError(\"naive_datetime\", dt.isoformat())\nledgerly/money.py:3:from .errors import BillingError\nledgerly/money.py:12:        raise BillingError(\"float_amount\", f\"refusing to convert {value!r}\")\nledgerly/money.py:18:        raise BillingError(\"invalid_amount\", repr(value)) from None\nledgerly/money.py:21:def round_money(value) -> Decimal:\n=== TESTS ===\nfrom datetime import datetime, timezone\nfrom decimal import Decimal\n\nimport pytest\n\nfrom ledgerly import audit\nfrom ledgerly.errors import BillingError\nfrom ledgerly.invoice import invoice_total, issue_invoice\nfrom ledgerly.models import Invoice, LineItem, Subscription\nfrom ledgerly.payments import authorize\nfrom ledgerly.subscriptions import current_period\n\nT0 = datetime(2026, 1, 1, tzinfo=timezone.utc)\n\n\ndef make_invoice():\n    return Invoice(\n        id=\"inv_1\",\n        customer_id=\"cus_1\",\n        lines=[LineItem(\"Seat\", 3, Decimal(\"19.99\")), LineItem(\"Setup\", 1, Decimal(\"50.00\"))],\n    )\n\n\ndef test_invoice_total():\n    assert invoice_total(make_invoice()) == Decimal(\"109.97\")\n\n\ndef test_issue_invoice_records_audit():\n    inv = issue_invoice(make_invoice(), T0)\n    assert inv.status == \"issued\"\n    assert audit.events(\"invoice_issued\")[0][\"invoice_id\"] == \"inv_1\"\n\n\ndef test_issue_empty_invoice_fails():\n    with pytest.raises(BillingError):\n        issue_invoice(Invoice(id=\"inv_2\", customer_id=\"cus_1\"), T0)\n\n\ndef test_authorize_payment():\n    inv = issue_invoice(make_invoice(), T0)\n    payment = authorize(\"pay_1\", inv, \"109.97\", T0)\n    assert payment.amount == Decimal(\"109.97\")\n    assert payment.status == \"authorized\"\n\n\ndef test_current_period():\n    sub = Subscription(\"sub_1\", \"cus_1\", Decimal(\"30.00\"), 30, T0)\n    start, end = current_period(sub, datetime(2026, 2, 5, tzinfo=timezone.utc))\n    assert start == datetime(2026, 1, 31, tzinfo=timezone.utc)\n    assert end == datetime(2026, 3, 2, tzinfo=timezone.utc)\nfrom datetime import date, datetime\n\nimport pytest\n\nfrom ledgerly.importers import parse_csv\nfrom ledgerly.pricing import apply_coupon, list_price\nfrom ledgerly.promotions import bulk_discount_percent, campaign_percent\nfrom ledgerly.renewals import reminder_due\nfrom ledgerly.reporting import day_bounds\n\n\ndef test_pricing():\n    assert list_price(\"team\") == 49.0\n    assert apply_coupon(49.0, \"WELCOME10\") == 44.1\n    with pytest.raises(ValueError):\n        apply_coupon(49.0, \"NOPE\")\n\n\ndef test_promotions():\n    assert campaign_percent(\"black-friday\", now=datetime(2025, 11, 28)) == 30\n    assert bulk_discount_percent(12) == 5\n\n\ndef test_importers():\n    assert parse_csv(\"invoice_id,amount\\ninv_1,12.50\\n\") == [{\"invoice_id\": \"inv_1\", \"amount\": 12.5}]\n\n\ndef test_reporting_and_renewals():\n    start, end = day_bounds(date(2026, 1, 1))\n    assert (end - start).days == 1\n    assert reminder_due(datetime(2026, 1, 10), now=datetime(2026, 1, 8))\n",
+        "returncode": 0,
+        "timestamp": 1793433027.987312,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_ykCKTKC278aAnQ0cJaoL3368",
+      "role": "tool"
+    },
+    {
+      "content": "Now I understand the patterns. Let me implement `refund_shipping` following the notes: positive amount validation, captured amount limit, status transition, audit recording, and the approval threshold from FIN-2026-03.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && cat > ledgerly/adjustments.py <<'EOF'\\n\\\"\\\"\\\"Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith).\\\"\\\"\\\"\\n\\nfrom . import audit\\nfrom .clock import ensure_utc\\nfrom .errors import BillingError\\nfrom .invoice import invoice_total\\nfrom .money import ZERO, round_money, to_money\\n\\nAPPROVAL_THRESHOLD = to_money(\\\"500.00\\\")\\n\\n\\ndef manual_adjustment(invoice, amount, note):\\n    if invoice.status not in (\\\"issued\\\", \\\"paid\\\"):\\n        raise ValueError(\\\"can only adjust issued or paid invoices\\\")\\n    if not note:\\n        raise ValueError(\\\"a note is required\\\")\\n    return {\\\"invoice_id\\\": invoice.id, \\\"amount\\\": amount, \\\"note\\\": note}\\n\\n\\ndef adjustable_balance(invoice) -> float:\\n    return float(invoice_total(invoice))\\n\\n\\ndef refund_shipping(payment, amount, at, *, approved_by=None):\\n    \\\"\\\"\\\"Refund (part of) the shipping fee of a captured payment.\\\"\\\"\\\"\\n    amount = round_money(amount)\\n    if amount <= ZERO:\\n        raise BillingError(\\\"non_positive_amount\\\", str(amount))\\n    if amount > APPROVAL_THRESHOLD and approved_by is None:\\n        raise BillingError(\\\"approval_required\\\")\\n    if payment.status != \\\"captured\\\":\\n        raise BillingError(\\\"invalid_state\\\", f\\\"payment {payment.id} is {payment.status}\\\")\\n    captured = round_money(payment.amount)\\n    refunded = round_money(payment.refunded_amount)\\n    if refunded + amount > captured:\\n        raise BillingError(\\\"refund_exceeds_captured\\\", str(amount))\\n    at = ensure_utc(at)\\n    payment.refunded_amount = refunded + amount\\n    if payment.refunded_amount >= captured:\\n        payment.status = \\\"refunded\\\"\\n    audit.record(\\\"shipping_refunded\\\", payment_id=payment.id, amount=amount)\\n    return payment\\nEOF\\npython -m pytest -q\"}",
+            "name": "bash"
+          },
+          "id": "call_00_dZkEXW1GphQKbQTIhDCB0907",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && cat > ledgerly/adjustments.py <<'EOF'\n\"\"\"Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith).\"\"\"\n\nfrom . import audit\nfrom .clock import ensure_utc\nfrom .errors import BillingError\nfrom .invoice import invoice_total\nfrom .money import ZERO, round_money, to_money\n\nAPPROVAL_THRESHOLD = to_money(\"500.00\")\n\n\ndef manual_adjustment(invoice, amount, note):\n    if invoice.status not in (\"issued\", \"paid\"):\n        raise ValueError(\"can only adjust issued or paid invoices\")\n    if not note:\n        raise ValueError(\"a note is required\")\n    return {\"invoice_id\": invoice.id, \"amount\": amount, \"note\": note}\n\n\ndef adjustable_balance(invoice) -> float:\n    return float(invoice_total(invoice))\n\n\ndef refund_shipping(payment, amount, at, *, approved_by=None):\n    \"\"\"Refund (part of) the shipping fee of a captured payment.\"\"\"\n    amount = round_money(amount)\n    if amount <= ZERO:\n        raise BillingError(\"non_positive_amount\", str(amount))\n    if amount > APPROVAL_THRESHOLD and approved_by is None:\n        raise BillingError(\"approval_required\")\n    if payment.status != \"captured\":\n        raise BillingError(\"invalid_state\", f\"payment {payment.id} is {payment.status}\")\n    captured = round_money(payment.amount)\n    refunded = round_money(payment.refunded_amount)\n    if refunded + amount > captured:\n        raise BillingError(\"refund_exceeds_captured\", str(amount))\n    at = ensure_utc(at)\n    payment.refunded_amount = refunded + amount\n    if payment.refunded_amount >= captured:\n        payment.status = \"refunded\"\n    audit.record(\"shipping_refunded\", payment_id=payment.id, amount=amount)\n    return payment\nEOF\npython -m pytest -q",
+            "tool_call_id": "call_00_dZkEXW1GphQKbQTIhDCB0907"
+          }
+        ],
+        "response": {
+          "id": "0505fc53-3a2a-4bc0-86b6-232273dd131b",
+          "created": 1793433028,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "Now I understand the patterns. Let me implement `refund_shipping` following the notes: positive amount validation, captured amount limit, status transition, audit recording, and the approval threshold from FIN-2026-03.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && cat > ledgerly/adjustments.py <<'EOF'\\n\\\"\\\"\\\"Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith).\\\"\\\"\\\"\\n\\nfrom . import audit\\nfrom .clock import ensure_utc\\nfrom .errors import BillingError\\nfrom .invoice import invoice_total\\nfrom .money import ZERO, round_money, to_money\\n\\nAPPROVAL_THRESHOLD = to_money(\\\"500.00\\\")\\n\\n\\ndef manual_adjustment(invoice, amount, note):\\n    if invoice.status not in (\\\"issued\\\", \\\"paid\\\"):\\n        raise ValueError(\\\"can only adjust issued or paid invoices\\\")\\n    if not note:\\n        raise ValueError(\\\"a note is required\\\")\\n    return {\\\"invoice_id\\\": invoice.id, \\\"amount\\\": amount, \\\"note\\\": note}\\n\\n\\ndef adjustable_balance(invoice) -> float:\\n    return float(invoice_total(invoice))\\n\\n\\ndef refund_shipping(payment, amount, at, *, approved_by=None):\\n    \\\"\\\"\\\"Refund (part of) the shipping fee of a captured payment.\\\"\\\"\\\"\\n    amount = round_money(amount)\\n    if amount <= ZERO:\\n        raise BillingError(\\\"non_positive_amount\\\", str(amount))\\n    if amount > APPROVAL_THRESHOLD and approved_by is None:\\n        raise BillingError(\\\"approval_required\\\")\\n    if payment.status != \\\"captured\\\":\\n        raise BillingError(\\\"invalid_state\\\", f\\\"payment {payment.id} is {payment.status}\\\")\\n    captured = round_money(payment.amount)\\n    refunded = round_money(payment.refunded_amount)\\n    if refunded + amount > captured:\\n        raise BillingError(\\\"refund_exceeds_captured\\\", str(amount))\\n    at = ensure_utc(at)\\n    payment.refunded_amount = refunded + amount\\n    if payment.refunded_amount >= captured:\\n        payment.status = \\\"refunded\\\"\\n    audit.record(\\\"shipping_refunded\\\", payment_id=payment.id, amount=amount)\\n    return payment\\nEOF\\npython -m pytest -q\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_dZkEXW1GphQKbQTIhDCB0907",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 535,
+            "prompt_tokens": 5535,
+            "total_tokens": 6070,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 3712
+            },
+            "prompt_cache_hit_tokens": 3712,
+            "prompt_cache_miss_tokens": 1823
+          }
+        },
+        "cost": 0.000605586,
+        "timestamp": 1793433030.960115
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"..........                                                               [100%]\\n10 passed in 0.37s\\n\"\n}",
+      "extra": {
+        "raw_output": "..........                                                               [100%]\n10 passed in 0.37s\n",
+        "returncode": 0,
+        "timestamp": 1793433036.5214462,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_dZkEXW1GphQKbQTIhDCB0907",
+      "role": "tool"
+    },
+    {
+      "content": "All tests pass. Let me verify edge cases manually: partial refunds, full refund status, over-refund, non-positive, approval threshold, and audit events.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && python - <<'EOF'\\nfrom datetime import datetime, timezone\\nfrom decimal import Decimal\\nfrom ledgerly.adjustments import refund_shipping\\nfrom ledgerly.models import Payment\\nfrom ledgerly.errors import BillingError\\nfrom ledgerly import audit\\n\\nT0 = datetime(2026,1,1,tzinfo=timezone.utc)\\ndef mk(): return Payment(\\\"p\\\",\\\"i\\\",Decimal(\\\"100.00\\\"),status=\\\"captured\\\",created_at=T0,captured_at=T0)\\n\\np=mk(); assert refund_shipping(p,Decimal(\\\"10\\\"),T0) is p\\nassert p.refunded_amount==Decimal(\\\"10.00\\\") and p.status==\\\"captured\\\"\\nrefund_shipping(p,Decimal(\\\"90\\\"),T0)\\nassert p.refunded_amount==Decimal(\\\"100.00\\\") and p.status==\\\"refunded\\\"\\nassert audit.events(\\\"shipping_refunded\\\")[-1][\\\"payment_id\\\"]==\\\"p\\\"\\n\\nfor amt in (Decimal(\\\"0\\\"),Decimal(\\\"-1\\\")):\\n    try: refund_shipping(mk(),amt,T0); assert False\\n    except BillingError as e: assert e.code==\\\"non_positive_amount\\\"\\n\\ntry: refund_shipping(mk(),Decimal(\\\"101\\\"),T0); assert False\\nexcept BillingError as e: assert e.code==\\\"refund_exceeds_captured\\\"\\n\\ntry: refund_shipping(mk(),Decimal(\\\"500.01\\\"),T0); assert False\\nexcept BillingError as e: assert e.code==\\\"approval_required\\\"\\nrefund_shipping(mk(),Decimal(\\\"500.01\\\"),T0,approved_by=\\\"mgr\\\")\\nrefund_shipping(mk(),Decimal(\\\"500.00\\\"),T0)\\nprint(\\\"all edge cases OK\\\")\\nEOF\"}",
+            "name": "bash"
+          },
+          "id": "call_00_kUkR4zW0u5E2HRa2JHr29403",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && python - <<'EOF'\nfrom datetime import datetime, timezone\nfrom decimal import Decimal\nfrom ledgerly.adjustments import refund_shipping\nfrom ledgerly.models import Payment\nfrom ledgerly.errors import BillingError\nfrom ledgerly import audit\n\nT0 = datetime(2026,1,1,tzinfo=timezone.utc)\ndef mk(): return Payment(\"p\",\"i\",Decimal(\"100.00\"),status=\"captured\",created_at=T0,captured_at=T0)\n\np=mk(); assert refund_shipping(p,Decimal(\"10\"),T0) is p\nassert p.refunded_amount==Decimal(\"10.00\") and p.status==\"captured\"\nrefund_shipping(p,Decimal(\"90\"),T0)\nassert p.refunded_amount==Decimal(\"100.00\") and p.status==\"refunded\"\nassert audit.events(\"shipping_refunded\")[-1][\"payment_id\"]==\"p\"\n\nfor amt in (Decimal(\"0\"),Decimal(\"-1\")):\n    try: refund_shipping(mk(),amt,T0); assert False\n    except BillingError as e: assert e.code==\"non_positive_amount\"\n\ntry: refund_shipping(mk(),Decimal(\"101\"),T0); assert False\nexcept BillingError as e: assert e.code==\"refund_exceeds_captured\"\n\ntry: refund_shipping(mk(),Decimal(\"500.01\"),T0); assert False\nexcept BillingError as e: assert e.code==\"approval_required\"\nrefund_shipping(mk(),Decimal(\"500.01\"),T0,approved_by=\"mgr\")\nrefund_shipping(mk(),Decimal(\"500.00\"),T0)\nprint(\"all edge cases OK\")\nEOF",
+            "tool_call_id": "call_00_kUkR4zW0u5E2HRa2JHr29403"
+          }
+        ],
+        "response": {
+          "id": "03880db7-694c-4e1e-8bd2-9947f119dd8c",
+          "created": 1793433036,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "All tests pass. Let me verify edge cases manually: partial refunds, full refund status, over-refund, non-positive, approval threshold, and audit events.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && python - <<'EOF'\\nfrom datetime import datetime, timezone\\nfrom decimal import Decimal\\nfrom ledgerly.adjustments import refund_shipping\\nfrom ledgerly.models import Payment\\nfrom ledgerly.errors import BillingError\\nfrom ledgerly import audit\\n\\nT0 = datetime(2026,1,1,tzinfo=timezone.utc)\\ndef mk(): return Payment(\\\"p\\\",\\\"i\\\",Decimal(\\\"100.00\\\"),status=\\\"captured\\\",created_at=T0,captured_at=T0)\\n\\np=mk(); assert refund_shipping(p,Decimal(\\\"10\\\"),T0) is p\\nassert p.refunded_amount==Decimal(\\\"10.00\\\") and p.status==\\\"captured\\\"\\nrefund_shipping(p,Decimal(\\\"90\\\"),T0)\\nassert p.refunded_amount==Decimal(\\\"100.00\\\") and p.status==\\\"refunded\\\"\\nassert audit.events(\\\"shipping_refunded\\\")[-1][\\\"payment_id\\\"]==\\\"p\\\"\\n\\nfor amt in (Decimal(\\\"0\\\"),Decimal(\\\"-1\\\")):\\n    try: refund_shipping(mk(),amt,T0); assert False\\n    except BillingError as e: assert e.code==\\\"non_positive_amount\\\"\\n\\ntry: refund_shipping(mk(),Decimal(\\\"101\\\"),T0); assert False\\nexcept BillingError as e: assert e.code==\\\"refund_exceeds_captured\\\"\\n\\ntry: refund_shipping(mk(),Decimal(\\\"500.01\\\"),T0); assert False\\nexcept BillingError as e: assert e.code==\\\"approval_required\\\"\\nrefund_shipping(mk(),Decimal(\\\"500.01\\\"),T0,approved_by=\\\"mgr\\\")\\nrefund_shipping(mk(),Decimal(\\\"500.00\\\"),T0)\\nprint(\\\"all edge cases OK\\\")\\nEOF\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_kUkR4zW0u5E2HRa2JHr29403",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 458,
+            "prompt_tokens": 6114,
+            "total_tokens": 6572,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 5888
+            },
+            "prompt_cache_hit_tokens": 5888,
+            "prompt_cache_miss_tokens": 226
+          }
+        },
+        "cost": 0.000326364,
+        "timestamp": 1793433039.421941
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 1,\n  \"output\": \"Traceback (most recent call last):\\n  File \\\"\\u003cstdin\\u003e\\\", line 26, in \\u003cmodule\\u003e\\n  File \\\"/tmp/attest_workspaces/type_aware__t200__r2__H07/workspace/ledgerly/adjustments.py\\\", line 36, in refund_shipping\\n    raise BillingError(\\\"refund_exceeds_captured\\\", str(amount))\\nledgerly.errors.BillingError: refund_exceeds_captured: 500.01\\n\"\n}",
+      "extra": {
+        "raw_output": "Traceback (most recent call last):\n  File \"<stdin>\", line 26, in <module>\n  File \"/tmp/attest_workspaces/type_aware__t200__r2__H07/workspace/ledgerly/adjustments.py\", line 36, in refund_shipping\n    raise BillingError(\"refund_exceeds_captured\", str(amount))\nledgerly.errors.BillingError: refund_exceeds_captured: 500.01\n",
+        "returncode": 1,
+        "timestamp": 1793433040.1630487,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_kUkR4zW0u5E2HRa2JHr29403",
+      "role": "tool"
+    },
+    {
+      "content": "The approval check passed, but my test used a 100.00 payment for a 500.01 refund, which correctly fails the captured limit. Let me fix the test to use a larger payment.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && python - <<'EOF'\\nfrom datetime import datetime, timezone\\nfrom decimal import Decimal\\nfrom ledgerly.adjustments import refund_shipping\\nfrom ledgerly.models import Payment\\nfrom ledgerly.errors import BillingError\\nfrom ledgerly import audit\\n\\nT0 = datetime(2026,1,1,tzinfo=timezone.utc)\\ndef mk(a=\\\"100.00\\\"): return Payment(\\\"p\\\",\\\"i\\\",Decimal(a),status=\\\"captured\\\",created_at=T0,captured_at=T0)\\n\\np=mk(); assert refund_shipping(p,Decimal(\\\"10\\\"),T0) is p\\nassert p.refunded_amount==Decimal(\\\"10.00\\\") and p.status==\\\"captured\\\"\\nrefund_shipping(p,Decimal(\\\"90\\\"),T0)\\nassert p.refunded_amount==Decimal(\\\"100.00\\\") and p.status==\\\"refunded\\\"\\nassert audit.events(\\\"shipping_refunded\\\")[-1][\\\"payment_id\\\"]==\\\"p\\\"\\n\\nfor amt in (Decimal(\\\"0\\\"),Decimal(\\\"-1\\\")):\\n    try: refund_shipping(mk(),amt,T0); assert False\\n    except BillingError as e: assert e.code==\\\"non_positive_amount\\\"\\n\\ntry: refund_shipping(mk(),Decimal(\\\"101\\\"),T0); assert False\\nexcept BillingError as e: assert e.code==\\\"refund_exceeds_captured\\\"\\n\\ntry: refund_shipping(mk(\\\"1000.00\\\"),Decimal(\\\"500.01\\\"),T0); assert False\\nexcept BillingError as e: assert e.code==\\\"approval_required\\\"\\nrefund_shipping(mk(\\\"1000.00\\\"),Decimal(\\\"500.01\\\"),T0,approved_by=\\\"mgr\\\")\\nrefund_shipping(mk(\\\"1000.00\\\"),Decimal(\\\"500.00\\\"),T0)\\nprint(\\\"all edge cases OK\\\")\\nEOF\\npython -m pytest -q\"}",
+            "name": "bash"
+          },
+          "id": "call_00_6pHpGKDksSlTfYFhwEmL7371",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && python - <<'EOF'\nfrom datetime import datetime, timezone\nfrom decimal import Decimal\nfrom ledgerly.adjustments import refund_shipping\nfrom ledgerly.models import Payment\nfrom ledgerly.errors import BillingError\nfrom ledgerly import audit\n\nT0 = datetime(2026,1,1,tzinfo=timezone.utc)\ndef mk(a=\"100.00\"): return Payment(\"p\",\"i\",Decimal(a),status=\"captured\",created_at=T0,captured_at=T0)\n\np=mk(); assert refund_shipping(p,Decimal(\"10\"),T0) is p\nassert p.refunded_amount==Decimal(\"10.00\") and p.status==\"captured\"\nrefund_shipping(p,Decimal(\"90\"),T0)\nassert p.refunded_amount==Decimal(\"100.00\") and p.status==\"refunded\"\nassert audit.events(\"shipping_refunded\")[-1][\"payment_id\"]==\"p\"\n\nfor amt in (Decimal(\"0\"),Decimal(\"-1\")):\n    try: refund_shipping(mk(),amt,T0); assert False\n    except BillingError as e: assert e.code==\"non_positive_amount\"\n\ntry: refund_shipping(mk(),Decimal(\"101\"),T0); assert False\nexcept BillingError as e: assert e.code==\"refund_exceeds_captured\"\n\ntry: refund_shipping(mk(\"1000.00\"),Decimal(\"500.01\"),T0); assert False\nexcept BillingError as e: assert e.code==\"approval_required\"\nrefund_shipping(mk(\"1000.00\"),Decimal(\"500.01\"),T0,approved_by=\"mgr\")\nrefund_shipping(mk(\"1000.00\"),Decimal(\"500.00\"),T0)\nprint(\"all edge cases OK\")\nEOF\npython -m pytest -q",
+            "tool_call_id": "call_00_6pHpGKDksSlTfYFhwEmL7371"
+          }
+        ],
+        "response": {
+          "id": "d82870a4-3c86-46b8-a6c0-ed4bf8d6d377",
+          "created": 1793433040,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "The approval check passed, but my test used a 100.00 payment for a 500.01 refund, which correctly fails the captured limit. Let me fix the test to use a larger payment.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && python - <<'EOF'\\nfrom datetime import datetime, timezone\\nfrom decimal import Decimal\\nfrom ledgerly.adjustments import refund_shipping\\nfrom ledgerly.models import Payment\\nfrom ledgerly.errors import BillingError\\nfrom ledgerly import audit\\n\\nT0 = datetime(2026,1,1,tzinfo=timezone.utc)\\ndef mk(a=\\\"100.00\\\"): return Payment(\\\"p\\\",\\\"i\\\",Decimal(a),status=\\\"captured\\\",created_at=T0,captured_at=T0)\\n\\np=mk(); assert refund_shipping(p,Decimal(\\\"10\\\"),T0) is p\\nassert p.refunded_amount==Decimal(\\\"10.00\\\") and p.status==\\\"captured\\\"\\nrefund_shipping(p,Decimal(\\\"90\\\"),T0)\\nassert p.refunded_amount==Decimal(\\\"100.00\\\") and p.status==\\\"refunded\\\"\\nassert audit.events(\\\"shipping_refunded\\\")[-1][\\\"payment_id\\\"]==\\\"p\\\"\\n\\nfor amt in (Decimal(\\\"0\\\"),Decimal(\\\"-1\\\")):\\n    try: refund_shipping(mk(),amt,T0); assert False\\n    except BillingError as e: assert e.code==\\\"non_positive_amount\\\"\\n\\ntry: refund_shipping(mk(),Decimal(\\\"101\\\"),T0); assert False\\nexcept BillingError as e: assert e.code==\\\"refund_exceeds_captured\\\"\\n\\ntry: refund_shipping(mk(\\\"1000.00\\\"),Decimal(\\\"500.01\\\"),T0); assert False\\nexcept BillingError as e: assert e.code==\\\"approval_required\\\"\\nrefund_shipping(mk(\\\"1000.00\\\"),Decimal(\\\"500.01\\\"),T0,approved_by=\\\"mgr\\\")\\nrefund_shipping(mk(\\\"1000.00\\\"),Decimal(\\\"500.00\\\"),T0)\\nprint(\\\"all edge cases OK\\\")\\nEOF\\npython -m pytest -q\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_6pHpGKDksSlTfYFhwEmL7371",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 491,
+            "prompt_tokens": 6721,
+            "total_tokens": 7212,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 6528
+            },
+            "prompt_cache_hit_tokens": 6528,
+            "prompt_cache_miss_tokens": 193
+          }
+        },
+        "cost": 0.000343134,
+        "timestamp": 1793433042.9641292
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"all edge cases OK\\n..........                                                               [100%]\\n10 passed in 0.39s\\n\"\n}",
+      "extra": {
+        "raw_output": "all edge cases OK\n..........                                                               [100%]\n10 passed in 0.39s\n",
+        "returncode": 0,
+        "timestamp": 1793433048.6465106,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_6pHpGKDksSlTfYFhwEmL7371",
+      "role": "tool"
+    },
+    {
+      "content": "All edge cases pass and the full suite is green. The implementation:\n- Validates positive amount (`non_positive_amount`)\n- Enforces approval above 500.00 (`approval_required`, keyword-only `approved_by`)\n- Rejects refunds exceeding captured amount (`refund_exceeds_captured`)\n- Accumulates `refunded_amount` and sets status to `\"refunded\"` when fully refunded\n- Records a `shipping_refunded` audit event with payment id and amount\n- Returns the payment",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && echo \\\"USED_NOTES: at-0007,at-0008\\\"\"}",
+            "name": "bash"
+          },
+          "id": "call_00_k8qpfXreoZZwdJSBctD22762",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && echo \"USED_NOTES: at-0007,at-0008\"",
+            "tool_call_id": "call_00_k8qpfXreoZZwdJSBctD22762"
+          }
+        ],
+        "response": {
+          "id": "13a3eaee-9126-4a37-bcea-694cc6849d9a",
+          "created": 1793433052,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "All edge cases pass and the full suite is green. The implementation:\n- Validates positive amount (`non_positive_amount`)\n- Enforces approval above 500.00 (`approval_required`, keyword-only `approved_by`)\n- Rejects refunds exceeding captured amount (`refund_exceeds_captured`)\n- Accumulates `refunded_amount` and sets status to `\"refunded\"` when fully refunded\n- Records a `shipping_refunded` audit event with payment id and amount\n- Returns the payment",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/type_aware__t200__r2__H07/workspace && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && echo \\\"USED_NOTES: at-0007,at-0008\\\"\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_k8qpfXreoZZwdJSBctD22762",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 204,
+            "prompt_tokens": 7261,
+            "total_tokens": 7465,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 7040
+            },
+            "prompt_cache_hit_tokens": 7040,
+            "prompt_cache_miss_tokens": 221
+          }
+        },
+        "cost": 0.00017667,
+        "timestamp": 1793433053.727384
+      }
+    },
+    {
+      "role": "exit",
+      "content": "USED_NOTES: at-0007,at-0008\n",
+      "extra": {
+        "exit_status": "Submitted",
+        "submission": "USED_NOTES: at-0007,at-0008\n"
+      }
+    }
+  ],
+  "trajectory_format": "mini-swe-agent-1.1"
+}
