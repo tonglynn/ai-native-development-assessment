@@ -123,7 +123,7 @@ def main() -> None:
              "| Case | Kind | Expected | Got | Detail |", "|---|---|---|---|---|"]
     lines += [f"| {r['case']} | {r['kind']} | {r['expected']} | {r['got']}{'' if r['pass'] else ' **FAIL**'} | {r['detail'][:110]} |" for r in rows]
     lines += ["", "Limits: the log check runs after the fact (it lists, it does not prevent); a person with write access to the",
-              "log file is covered by the sealed store's hash chain (D44), not by these cases; identities are names, not signatures."]
+              "log file is covered by the sealed store's hash chain (D42), not by these cases; identities are names, not signatures."]
     (args.out / "report.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
 

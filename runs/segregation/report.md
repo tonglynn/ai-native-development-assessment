@@ -22,4 +22,4 @@
 | registered owner supersedes an old rule (control) | control | allowed | allowed | old: superseded, excluded: 'superseded by new (replaced by a newer rule, recorded by owner:finance-lead)', sti |
 
 Limits: the log check runs after the fact (it lists, it does not prevent); a person with write access to the
-log file is covered by the sealed store's hash chain (D44), not by these cases; identities are names, not signatures.
+log file is covered by the sealed store's hash chain (D42), not by these cases; identities are names, not signatures.

@@ -32,6 +32,20 @@ proves the growth on tasks it never learned from.** 编码智能体总在重犯�
 | **Real vs simulated** | Real: agent runs (DeepSeek), tests, logs in `runs/`. Simulated and labelled: the repositories, review comments, policies and all attack material. Every number in these documents is checked against `runs/` (`runs/audit_numbers`, D67) |
 | **AI involvement and my corrections** | [`AI_LOG.md`](AI_LOG.md): every decision with who proposed and who corrected it; [`DECISIONS.md`](DECISIONS.md) D1–D70 |
 
+### Each module: the problem, why existing approaches fall short, the evidence
+
+| Module | The coding-agent problem it solves | Why existing approaches fall short | Evidence (where it does **not** work is stated) |
+|---|---|---|---|
+| **Learning loop + evaluation** | An agent repeats mistakes that review already corrected, and "it learned" is usually the agent's own claim | Memory systems report gains on their own tasks; few test on tasks that produced no experience, with a control and a rule fixed beforehand | Preregistered: held-out pass@1 33% → 70%, +36 pp [+21, +52] (H1); not worse than ReasoningBank / ACE (+12 [−3, +27] / +9 [−3, +21], H4): **not shown to be better** |
+| **Write gate** (learn only from a verified change that applied the quoted review) | Memory fills with lessons nobody confirmed, including wrong or planted ones | ReasoningBank and ACE store what the model concluded; the model judges its own success | Poisoned comment, preregistered: stored 0 vs ACE 10, ReasoningBank 12, applied 0 vs 5 / 2 — **but only because the poisoned tasks failed verification**. Poison in a task that passes (60 synthetic attacks): rule in 33/60 vs 46 no gate, 38 ACE, 50 ReasoningBank (D70). Cost: −15 pp on clean held-out tasks (H6, not supported) |
+| **Scope** (repository + version range) | A lesson from one repository or version is applied where it is wrong | One global memory (ReasoningBank, ACE, project memory files) | 0 vs 54 foreign notes shown (H5); with 300 notes from other repositories: 73% at 31k prompt tokens vs ReasoningBank 42% / 46k, ACE 55% / 157k; stale tasks after a policy change +67 pp over no memory (H3) |
+| **Gateway v4** (approved / uncertain / rejected; counterfactual test and code checks) | Provenance is not correctness: advice that passes the tests, or a trusted reviewer's mistake | Model self-judgement; use-time checks that the model is asked to do (Copilot); signatures prove who wrote a note, not that it is right | 0 critical errors on 3 frozen judgement sets (D60); 0/100 poison rules over six write channels (D70). Cost: 79% vs 85% on clean work (D60); 23/60 poisons kept as unconfirmed notes shown in their own file. Confirmation against no gate in one session: D71 (running) |
+| **Human lifecycle** (review queue, approve, reject, retract, supersede) | An agent can turn its own conclusion into a team rule, or delete a rule it finds inconvenient | Owners can delete memories after the fact; no tested separation of duties | Segregation-of-duties cases 16/16 (D69); no approval tool reachable through MCP; replayed review 0 wrong decisions of 16, but approving low-value rules cost 79% → 70% (D63) |
+| **Criticality-first injection** | As memory grows, low-value rules crowd the critical ones out of the prompt | Top-k by similarity; ACE puts the whole playbook in every prompt | On a crowded memory: 73% → 83%, +11 pp [+3, +18], replicated (D66). **Not** a fix for H6: the main memories hold 9 notes and already cover 93% of the needed core rules (D71 notes) |
+| **Context Manager** (rules pinned verbatim, old steps compressed, recent steps kept) | In a long session, review rules from early on fall out of the budget | A sliding window drops them; a model summary rewrites "above 1000.00" as "large refunds" | 3/3 at 4k, 8k and 12k where the window got 0/3, 89% fewer tokens than full history (D49). Exploratory: one scenario, designed after seeing results |
+| **Audit trail** (sealed log, secret scanning, number audit) | Team knowledge must be accountable and must not leak or be silently edited | No memory system in the comparison keeps a tamper-evident log | 8/8 tampering cases detected (D42); 0 known-format secrets stored (D43); two real vulnerabilities found and fixed; every number in the documents checked against `runs/` (D67) |
+| Tried, **not** effective (kept out of the main line) | — | — | Forgetting: no default policy repaired crowding, so the evaluated Attest runs none (D48, V1.1). Just-in-time verification: no gain (D34). Hybrid retrieval + rerank: best Recall@5, no coding gain (D47). Model-generated checks: useful for 1 of 25 rules (D33) |
+
 ### Reused, modified, own
 
 | Reused as-is | Modified | Own work |
@@ -388,6 +402,7 @@ Sources for the industry and research context: [GitHub Copilot agentic memory](h
 | 成长是真的 | 预注册：留出任务 33% → 70%，+36 个百分点 [+21, +52]；探索性并已复现：按重要程度注入 73% → 83% |
 | 回归有检查 | 对照仓库各条件均为 100%，外部笔记 0 条泄漏；政策变更后的过时任务不比无记忆差；写入门槛的代价 −15 个百分点照实报告 |
 | 错误与过期记忆 | 投毒评论 Attest 存 0 次（ACE 10、ReasoningBank 12）；版本范围、"取代"、只有人能撤回；受信评审者出错时 v4 关键错误为 0 |
+| 每个模块：解决什么问题、现有方案为何不足、实验证据 | 见上方英文表 "Each module"：学习闭环与评估、写入门槛、作用域、门控 v4、人工生命周期、按重要程度注入、Context Manager、审计链；无效的尝试（遗忘、即时核验、混合检索、模型生成检查）单列，不进主线 |
 | 复用与自研、两项架构决策、一次设计迭代 | 见上方英文 Start here 一节 |
 | 失败定位与恢复 | 记忆层：隔离并追踪已入库的毒笔记（D45）；工程层：INC-2 |
 | AI 参与与纠正 | `AI_LOG.md`、`DECISIONS.md` |
