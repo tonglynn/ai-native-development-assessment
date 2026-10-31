@@ -962,7 +962,49 @@ memory**, on events it was not designed on, including spoofing, repetition and t
 different things in two repositories. It does not yet do so from scratch: R2 treats test coverage of a
 convention as validation of any claim about it. The fix this points to is a counterfactual check (a test
 validates a note only if it fails when the note's change is reverted), which needs real workspaces and a
-new held-out set; it is not built.
+new held-out set; built next (D59).
+
+**The counterfactual check (D59).** `attest/memory/counterfactual.py`: a test validates a note only if every
+test passes with the change and, in a copy of the verified workspace with the note's change reverted, a test
+of a convention the note is about fails; a workspace that cannot run never validates.
+
+*Second frozen set* (`benchmark/judgement/counterfactual_cases.*`, 15 events on the tasks' reference solutions,
+committed before evaluating; diff evidence only, first pass, empty memory, i.e. the cold-start case; one
+wrong case failed the tests and was excluded, as the gate would never learn from it):
+
+| Class | n | validated by R2 | validated by the counterfactual check (hand-written reverts) | (automatic reverts) |
+|---|---|---|---|---|
+| trusted | 8 | 8 | **7** | 7 |
+| wrong | 4 | 2 | **0** | 1 |
+| undecidable | 2 | 2 | **0** | 0 |
+
+The rule fixed before running (wrong 0, undecidable 0, trusted ≥ 6) is met with hand-written reverts. The one
+trusted note it does not validate is right not to: `to_money` before `round_money` changes nothing the tests
+see. Automatic reverts (statement-level, plus removing each call the note names, e.g. `float(x)` → `x`)
+were developed on this same set in three iterations, so the second column of numbers is development data;
+they still validate one wrong note, a behaviourally equivalent substitution (`quantize(CENT, ROUND_HALF_UP)`
+instead of `round_money`), which no test-based check can tell apart.
+
+*Gateway v3.1* (v3 with R2 replaced by the automatic counterfactual check, run on real agent changes, the
+held-out test of the automatic reverts):
+
+| Scenario | | Attest | v3 | **v3.1** |
+|---|---|---|---|---|
+| clean stream | held-out pass@1 (vs Attest) | 85% | 85% (0 [−9, +9]) | **88% (+3 [0, +9])** |
+| clean stream | correct notes held | – | 0 | 2 |
+| second poison | poison stored / held-out applying | 3 / 13 | 0 / 0 | **0 / 0** |
+| second poison | held-out pass@1 | 73% | 52% | 45% |
+| first poison | poison stored / applying | 0 / 0 | 0 / 0 | 0 / 0 |
+
+All criteria fixed before the run are met (poison 0/0 under both poisons; not worse on clean work, lower bound
+0). Of the 77 stored notes whose check ran, 37 were validated; reviewed by hand, every validated one states a
+company rule (round_money, ensure_utc, approval, audit, BillingError codes, idempotency), one borderline ("use
+Decimal and ROUND_HALF_UP": right behaviour, but the rule says round_money), none is wrong. The check is
+conservative: correct notes the tests do not depend on (to_money before round_money, bool guards) and
+notes whose applied line is a function signature (idempotency_key parameters: no counterfactual edit) are
+not validated by it and fall back to the other validations. Under the float poison v3.1 learned less again
+(45%; v3 52%, v2 61%), within run-to-run noise at 3 repetitions but consistently below v2.
+
 
 ## Closing the "self-proving evidence" gap (exploratory, after an external review) / 证据自证问题的改进
 
