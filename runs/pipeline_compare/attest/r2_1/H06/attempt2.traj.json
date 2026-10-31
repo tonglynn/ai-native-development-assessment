@@ -1,0 +1,616 @@
+{
+  "info": {
+    "model_stats": {
+      "instance_cost": 0.001662546,
+      "api_calls": 7
+    },
+    "config": {
+      "agent": {
+        "system_template": "You are a helpful assistant that can interact with a computer.\n",
+        "instance_template": "You are working in a Python repository located at {{cwd}}. Every command runs with this directory as the current directory.\n\nPlease solve this issue: {{task}}\n{%- if memory_context %}\n\n## Notes from earlier work\n{{memory_context}}\n{%- endif %}\n{%- if review_feedback %}\n\n## Code review of your previous attempt\nYour previous attempt at this issue was reviewed and not accepted. The repository still contains that attempt. Address every comment below:\n{{review_feedback}}\n{%- endif %}\n\nYou can execute bash commands and edit files to implement the necessary changes.\n\n## Recommended Workflow\n\nThis workflow should be done step-by-step so that you can iterate on your changes and any possible problems.\n\n1. Analyze the codebase by finding and reading relevant files\n2. Edit the source code to resolve the issue\n3. Run the test suite with `python -m pytest -q` and check edge cases\n4. Submit your changes and finish your work by issuing the following command:\n   {%- if memory_context %}\n   `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && echo \"USED_NOTES: <comma-separated ids of the notes you relied on, or none>\"`\n   {%- else %}\n   `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\n   {%- endif %}\n   <important>After this command, you cannot continue working on this task.</important>\n\n## Command Execution Rules\n\nYou are operating in an environment where\n\n1. You issue at least one command\n2. The system executes the command(s) in a subshell\n3. You see the result(s)\n4. You write your next command(s)\n\nEach response should include:\n\n1. **Reasoning text** where you explain your analysis and plan\n2. At least one tool call with your command\n\n**CRITICAL REQUIREMENTS:**\n\n- Your response SHOULD include reasoning text explaining what you're doing\n- Your response MUST include AT LEAST ONE bash tool call\n- Directory or environment variable changes are not persistent. Every action is executed in a new subshell.\n- However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files\n\n<system_information>\n{{system}} {{release}} {{version}} {{machine}}\n</system_information>\n\n## Useful command examples\n\n### Create a new file:\n\n```bash\ncat <<'EOF' > newfile.py\nhello = \"world\"\nprint(hello)\nEOF\n```\n\n### Edit files with sed:\n\n```bash\n# Replace all occurrences\nsed -i 's/old_string/new_string/g' filename.py\n\n# Replace only first occurrence\nsed -i 's/old_string/new_string/' filename.py\n```\n\n### View file content:\n\n```bash\n# View specific lines with numbers\nnl -ba filename.py | sed -n '10,20p'\n```\n",
+        "step_limit": 30,
+        "cost_limit": 0.0,
+        "wall_time_limit_seconds": 600,
+        "max_consecutive_format_errors": 3,
+        "output_path": "runs/pipeline_compare/attest/r2_1/H06/attempt2.traj.json"
+      },
+      "agent_type": "minisweagent.agents.default.DefaultAgent",
+      "model": {
+        "model_name": "deepseek/deepseek-flash",
+        "model_kwargs": {
+          "drop_params": true,
+          "temperature": 0.0,
+          "extra_body": {
+            "thinking": {
+              "type": "disabled"
+            }
+          }
+        },
+        "litellm_model_registry": null,
+        "set_cache_control": null,
+        "cost_tracking": "ignore_errors",
+        "format_error_template": "{% if finish_reason is defined and (finish_reason == \"length\" or (finish_reason == \"tool_calls\" and not has_tool_calls)) -%}\nYour previous response reached the output token limit (finish_reason={{ finish_reason }}) before you produced a tool call, so it was cut off. Respond more concisely and finish with exactly one bash tool call. If you need to think more, do so briefly.\n{%- else -%}\nTool call error:\n\n<error>\n{{error}}\n</error>\n\nHere is general guidance on how to submit correct toolcalls:\n\nEvery response needs to use the 'bash' tool at least once to execute commands.\n\nCall the bash tool with your command as the argument:\n- Tool: bash\n- Arguments: {\"command\": \"your_command_here\"}\n\nIf you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\nwithout any other command.\n{%- endif %}\n",
+        "observation_template": "{%- if output.output | length < 10000 -%}\n{\n  \"returncode\": {{ output.returncode }},\n  \"output\": {{ output.output | tojson }}\n  {%- if output.exception_info %}, \"exception_info\": {{ output.exception_info | tojson }}{% endif %}\n}\n{%- else -%}\n{\n  \"returncode\": {{ output.returncode }},\n  \"output_head\": {{ output.output[:5000] | tojson }},\n  \"output_tail\": {{ output.output[-5000:] | tojson }},\n  \"elided_chars\": {{ output.output | length - 10000 }},\n  \"warning\": \"Output too long.\"\n  {%- if output.exception_info %}, \"exception_info\": {{ output.exception_info | tojson }}{% endif %}\n}\n{%- endif -%}\n",
+        "multimodal_regex": ""
+      },
+      "model_type": "minisweagent.models.litellm_model.LitellmModel",
+      "environment": {
+        "cwd": "/tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace",
+        "env": {
+          "PAGER": "cat",
+          "MANPAGER": "cat",
+          "LESS": "-R",
+          "PIP_PROGRESS_BAR": "off",
+          "TQDM_DISABLE": "1",
+          "PYTHONDONTWRITEBYTECODE": "1"
+        },
+        "timeout": 60
+      },
+      "environment_type": "attest.runner.ScrubbedEnvironment"
+    },
+    "mini_version": "2.4.6",
+    "exit_status": "Submitted",
+    "submission": "USED_NOTES: at-0001\n"
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that can interact with a computer."
+    },
+    {
+      "role": "user",
+      "content": "You are working in a Python repository located at /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace. Every command runs with this directory as the current directory.\n\nPlease solve this issue: Add `void(payment, at)` to `ledgerly/payments.py`. Voiding cancels an authorization before it is captured: it sets the payment's status to `\"voided\"`. Captured, refunded and already voided payments cannot be voided.\n\n## Notes from earlier work\nThese notes were distilled from earlier work in this repository that passed verification. Follow them unless the code or CHANGELOG.md shows they no longer hold.\n- [at-0001] Use BillingError with snake_case codes: Raise ledgerly.errors.BillingError with a snake_case code string for domain validation failures, e.g. \"invalid_state\", \"invalid_quantity\", \"negative_amount\"; include a short detail string as the second argument.\n  (learned from task E02 on ledgerly 1.0.0; relied on 0x, 0 passed, 0 failed)\n\n## Code review of your previous attempt\nYour previous attempt at this issue was reviewed and not accepted. The repository still contains that attempt. Address every comment below:\n- [team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record(\"<past_tense_event>\", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against (payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries.\n- [team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204.\n\nYou can execute bash commands and edit files to implement the necessary changes.\n\n## Recommended Workflow\n\nThis workflow should be done step-by-step so that you can iterate on your changes and any possible problems.\n\n1. Analyze the codebase by finding and reading relevant files\n2. Edit the source code to resolve the issue\n3. Run the test suite with `python -m pytest -q` and check edge cases\n4. Submit your changes and finish your work by issuing the following command:\n   `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && echo \"USED_NOTES: <comma-separated ids of the notes you relied on, or none>\"`\n   <important>After this command, you cannot continue working on this task.</important>\n\n## Command Execution Rules\n\nYou are operating in an environment where\n\n1. You issue at least one command\n2. The system executes the command(s) in a subshell\n3. You see the result(s)\n4. You write your next command(s)\n\nEach response should include:\n\n1. **Reasoning text** where you explain your analysis and plan\n2. At least one tool call with your command\n\n**CRITICAL REQUIREMENTS:**\n\n- Your response SHOULD include reasoning text explaining what you're doing\n- Your response MUST include AT LEAST ONE bash tool call\n- Directory or environment variable changes are not persistent. Every action is executed in a new subshell.\n- However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files\n\n<system_information>\nLinux 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64\n</system_information>\n\n## Useful command examples\n\n### Create a new file:\n\n```bash\ncat <<'EOF' > newfile.py\nhello = \"world\"\nprint(hello)\nEOF\n```\n\n### Edit files with sed:\n\n```bash\n# Replace all occurrences\nsed -i 's/old_string/new_string/g' filename.py\n\n# Replace only first occurrence\nsed -i 's/old_string/new_string/' filename.py\n```\n\n### View file content:\n\n```bash\n# View specific lines with numbers\nnl -ba filename.py | sed -n '10,20p'\n```"
+    },
+    {
+      "content": "I'll start by exploring the repository structure and relevant files.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && ls -la && find . -name \\\"*.py\\\" | head -50 && cat CHANGELOG.md 2>/dev/null | head -50\"}",
+            "name": "bash"
+          },
+          "id": "call_00_yAKeSWjsVvgOjBe6BMdT5333",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && ls -la && find . -name \"*.py\" | head -50 && cat CHANGELOG.md 2>/dev/null | head -50",
+            "tool_call_id": "call_00_yAKeSWjsVvgOjBe6BMdT5333"
+          }
+        ],
+        "response": {
+          "id": "e66b2908-f7cd-4c9e-919c-7940547ce11c",
+          "created": 1793469577,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "I'll start by exploring the repository structure and relevant files.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && ls -la && find . -name \\\"*.py\\\" | head -50 && cat CHANGELOG.md 2>/dev/null | head -50\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_yAKeSWjsVvgOjBe6BMdT5333",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 106,
+            "prompt_tokens": 1265,
+            "total_tokens": 1371,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 384
+            },
+            "prompt_cache_hit_tokens": 384,
+            "prompt_cache_miss_tokens": 881
+          }
+        },
+        "cost": 0.000196902,
+        "timestamp": 1793469577.955873
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"total 36\\ndrwxr-xr-x 6 runner runner 4096 Oct 31 17:59 .\\ndrwxr-xr-x 3 runner runner 4096 Oct 31 17:59 ..\\ndrwxr-xr-x 3 runner runner 4096 Oct 31 17:59 .pytest_cache\\n-rw-r--r-- 1 runner runner  121 Oct 31 17:58 CHANGELOG.md\\n-rw-r--r-- 1 runner runner  262 Oct 31 17:58 README.md\\ndrwxr-xr-x 2 runner runner 4096 Oct 31 17:59 __pycache__\\n-rw-r--r-- 1 runner runner  140 Oct 31 17:59 conftest.py\\ndrwxr-xr-x 3 runner runner 4096 Oct 31 17:59 ledgerly\\ndrwxr-xr-x 3 runner runner 4096 Oct 31 17:59 tests\\n./ledgerly/subscriptions.py\\n./ledgerly/payments.py\\n./ledgerly/reporting.py\\n./ledgerly/models.py\\n./ledgerly/promotions.py\\n./ledgerly/errors.py\\n./ledgerly/audit.py\\n./ledgerly/__init__.py\\n./ledgerly/invoice.py\\n./ledgerly/adjustments.py\\n./ledgerly/pricing.py\\n./ledgerly/clock.py\\n./ledgerly/importers.py\\n./ledgerly/renewals.py\\n./ledgerly/money.py\\n./conftest.py\\n./tests/test_legacy.py\\n./tests/test_core.py\\n./tests/test_void.py\\n# Changelog\\n\\n## 1.0.0 \\u2014 2026-03-02\\n\\n- Initial internal release: invoices, payment authorization, subscription periods.\\n\"\n}",
+      "extra": {
+        "raw_output": "total 36\ndrwxr-xr-x 6 runner runner 4096 Oct 31 17:59 .\ndrwxr-xr-x 3 runner runner 4096 Oct 31 17:59 ..\ndrwxr-xr-x 3 runner runner 4096 Oct 31 17:59 .pytest_cache\n-rw-r--r-- 1 runner runner  121 Oct 31 17:58 CHANGELOG.md\n-rw-r--r-- 1 runner runner  262 Oct 31 17:58 README.md\ndrwxr-xr-x 2 runner runner 4096 Oct 31 17:59 __pycache__\n-rw-r--r-- 1 runner runner  140 Oct 31 17:59 conftest.py\ndrwxr-xr-x 3 runner runner 4096 Oct 31 17:59 ledgerly\ndrwxr-xr-x 3 runner runner 4096 Oct 31 17:59 tests\n./ledgerly/subscriptions.py\n./ledgerly/payments.py\n./ledgerly/reporting.py\n./ledgerly/models.py\n./ledgerly/promotions.py\n./ledgerly/errors.py\n./ledgerly/audit.py\n./ledgerly/__init__.py\n./ledgerly/invoice.py\n./ledgerly/adjustments.py\n./ledgerly/pricing.py\n./ledgerly/clock.py\n./ledgerly/importers.py\n./ledgerly/renewals.py\n./ledgerly/money.py\n./conftest.py\n./tests/test_legacy.py\n./tests/test_core.py\n./tests/test_void.py\n# Changelog\n\n## 1.0.0 \u2014 2026-03-02\n\n- Initial internal release: invoices, payment authorization, subscription periods.\n",
+        "returncode": 0,
+        "timestamp": 1793469578.1349976,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_yAKeSWjsVvgOjBe6BMdT5333",
+      "role": "tool"
+    },
+    {
+      "content": "",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && cat ledgerly/payments.py && echo \\\"=== AUDIT ===\\\" && cat ledgerly/audit.py && echo \\\"=== ERRORS ===\\\" && cat ledgerly/errors.py && echo \\\"=== MODELS ===\\\" && cat ledgerly/models.py\"}",
+            "name": "bash"
+          },
+          "id": "call_00_XANFWDSCHfniRV0T36zi7923",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && cat ledgerly/payments.py && echo \"=== AUDIT ===\" && cat ledgerly/audit.py && echo \"=== ERRORS ===\" && cat ledgerly/errors.py && echo \"=== MODELS ===\" && cat ledgerly/models.py",
+            "tool_call_id": "call_00_XANFWDSCHfniRV0T36zi7923"
+          }
+        ],
+        "response": {
+          "id": "388a3c77-4431-405d-bbb9-cd200ee17026",
+          "created": 1793469578,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && cat ledgerly/payments.py && echo \\\"=== AUDIT ===\\\" && cat ledgerly/audit.py && echo \\\"=== ERRORS ===\\\" && cat ledgerly/errors.py && echo \\\"=== MODELS ===\\\" && cat ledgerly/models.py\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_XANFWDSCHfniRV0T36zi7923",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 114,
+            "prompt_tokens": 1815,
+            "total_tokens": 1929,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 1280
+            },
+            "prompt_cache_hit_tokens": 1280,
+            "prompt_cache_miss_tokens": 535
+          }
+        },
+        "cost": 0.00015249,
+        "timestamp": 1793469579.2302318
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"from datetime import datetime\\n\\nfrom . import audit\\nfrom .clock import ensure_utc\\nfrom .errors import BillingError\\nfrom .models import Invoice, Payment\\nfrom .money import ZERO, round_money\\n\\n\\ndef authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -\\u003e Payment:\\n    amount = round_money(amount)\\n    if amount \\u003c= ZERO:\\n        raise BillingError(\\\"non_positive_amount\\\", str(amount))\\n    if invoice.status != \\\"issued\\\":\\n        raise BillingError(\\\"invalid_state\\\", f\\\"invoice {invoice.id} is {invoice.status}\\\")\\n    payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))\\n    audit.record(\\\"payment_authorized\\\", payment_id=payment.id, amount=amount)\\n    return payment\\n\\n\\ndef void(payment: Payment, at: datetime) -\\u003e Payment:\\n    \\\"\\\"\\\"Void an authorization that has not been captured.\\\"\\\"\\\"\\n    at = ensure_utc(at)\\n    if payment.status != \\\"authorized\\\":\\n        raise BillingError(\\\"invalid_state\\\", f\\\"payment {payment.id} is {payment.status}\\\")\\n    payment.status = \\\"voided\\\"\\n    audit.record(\\\"payment_voided\\\", payment_id=payment.id, at=at)\\n    return payment\\n=== AUDIT ===\\n\\\"\\\"\\\"In-process audit trail. Production ships these entries to the ledger service.\\\"\\\"\\\"\\n\\nfrom .clock import utcnow\\n\\n_EVENTS: list[dict] = []\\n\\n\\ndef record(event: str, **fields) -\\u003e dict:\\n    entry = {\\\"event\\\": event, \\\"at\\\": utcnow(), **fields}\\n    _EVENTS.append(entry)\\n    return entry\\n\\n\\ndef events(event: str | None = None) -\\u003e list[dict]:\\n    return [e for e in _EVENTS if event is None or e[\\\"event\\\"] == event]\\n\\n\\ndef clear() -\\u003e None:\\n    _EVENTS.clear()\\n=== ERRORS ===\\nclass BillingError(Exception):\\n    \\\"\\\"\\\"Raised for any invalid billing operation.\\n\\n    ``code`` is a short machine-readable reason such as ``\\\"negative_amount\\\"``;\\n    ``message`` is optional human-readable detail.\\n    \\\"\\\"\\\"\\n\\n    def __init__(self, code: str, message: str = \\\"\\\"):\\n        super().__init__(f\\\"{code}: {message}\\\" if message else code)\\n        self.code = code\\n        self.message = message\\n=== MODELS ===\\nfrom dataclasses import dataclass, field\\nfrom datetime import datetime\\nfrom decimal import Decimal\\n\\n\\n@dataclass\\nclass LineItem:\\n    description: str\\n    quantity: int\\n    unit_price: Decimal\\n\\n\\n@dataclass\\nclass Invoice:\\n    id: str\\n    customer_id: str\\n    currency: str = \\\"USD\\\"\\n    lines: list[LineItem] = field(default_factory=list)\\n    issued_at: datetime | None = None\\n    status: str = \\\"draft\\\"  # draft | issued | paid | void\\n\\n\\n@dataclass\\nclass Payment:\\n    id: str\\n    invoice_id: str\\n    amount: Decimal\\n    status: str = \\\"authorized\\\"  # authorized | captured | voided | refunded\\n    created_at: datetime | None = None\\n    captured_at: datetime | None = None\\n    refunded_amount: Decimal = Decimal(\\\"0.00\\\")\\n\\n\\n@dataclass\\nclass Subscription:\\n    id: str\\n    customer_id: str\\n    plan_price: Decimal\\n    period_days: int\\n    started_at: datetime\\n    canceled_at: datetime | None = None\\n\"\n}",
+      "extra": {
+        "raw_output": "from datetime import datetime\n\nfrom . import audit\nfrom .clock import ensure_utc\nfrom .errors import BillingError\nfrom .models import Invoice, Payment\nfrom .money import ZERO, round_money\n\n\ndef authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -> Payment:\n    amount = round_money(amount)\n    if amount <= ZERO:\n        raise BillingError(\"non_positive_amount\", str(amount))\n    if invoice.status != \"issued\":\n        raise BillingError(\"invalid_state\", f\"invoice {invoice.id} is {invoice.status}\")\n    payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))\n    audit.record(\"payment_authorized\", payment_id=payment.id, amount=amount)\n    return payment\n\n\ndef void(payment: Payment, at: datetime) -> Payment:\n    \"\"\"Void an authorization that has not been captured.\"\"\"\n    at = ensure_utc(at)\n    if payment.status != \"authorized\":\n        raise BillingError(\"invalid_state\", f\"payment {payment.id} is {payment.status}\")\n    payment.status = \"voided\"\n    audit.record(\"payment_voided\", payment_id=payment.id, at=at)\n    return payment\n=== AUDIT ===\n\"\"\"In-process audit trail. Production ships these entries to the ledger service.\"\"\"\n\nfrom .clock import utcnow\n\n_EVENTS: list[dict] = []\n\n\ndef record(event: str, **fields) -> dict:\n    entry = {\"event\": event, \"at\": utcnow(), **fields}\n    _EVENTS.append(entry)\n    return entry\n\n\ndef events(event: str | None = None) -> list[dict]:\n    return [e for e in _EVENTS if event is None or e[\"event\"] == event]\n\n\ndef clear() -> None:\n    _EVENTS.clear()\n=== ERRORS ===\nclass BillingError(Exception):\n    \"\"\"Raised for any invalid billing operation.\n\n    ``code`` is a short machine-readable reason such as ``\"negative_amount\"``;\n    ``message`` is optional human-readable detail.\n    \"\"\"\n\n    def __init__(self, code: str, message: str = \"\"):\n        super().__init__(f\"{code}: {message}\" if message else code)\n        self.code = code\n        self.message = message\n=== MODELS ===\nfrom dataclasses import dataclass, field\nfrom datetime import datetime\nfrom decimal import Decimal\n\n\n@dataclass\nclass LineItem:\n    description: str\n    quantity: int\n    unit_price: Decimal\n\n\n@dataclass\nclass Invoice:\n    id: str\n    customer_id: str\n    currency: str = \"USD\"\n    lines: list[LineItem] = field(default_factory=list)\n    issued_at: datetime | None = None\n    status: str = \"draft\"  # draft | issued | paid | void\n\n\n@dataclass\nclass Payment:\n    id: str\n    invoice_id: str\n    amount: Decimal\n    status: str = \"authorized\"  # authorized | captured | voided | refunded\n    created_at: datetime | None = None\n    captured_at: datetime | None = None\n    refunded_amount: Decimal = Decimal(\"0.00\")\n\n\n@dataclass\nclass Subscription:\n    id: str\n    customer_id: str\n    plan_price: Decimal\n    period_days: int\n    started_at: datetime\n    canceled_at: datetime | None = None\n",
+        "returncode": 0,
+        "timestamp": 1793469579.4690604,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_XANFWDSCHfniRV0T36zi7923",
+      "role": "tool"
+    },
+    {
+      "content": "",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && cat tests/test_void.py && echo \\\"=== CORE ===\\\" && cat tests/test_core.py && echo \\\"=== LEGACY ===\\\" && cat tests/test_legacy.py && echo \\\"=== CONFTEST ===\\\" && cat conftest.py && cat ledgerly/__init__.py\"}",
+            "name": "bash"
+          },
+          "id": "call_00_aVK49dMiKrfkC70CrRZf0549",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && cat tests/test_void.py && echo \"=== CORE ===\" && cat tests/test_core.py && echo \"=== LEGACY ===\" && cat tests/test_legacy.py && echo \"=== CONFTEST ===\" && cat conftest.py && cat ledgerly/__init__.py",
+            "tool_call_id": "call_00_aVK49dMiKrfkC70CrRZf0549"
+          }
+        ],
+        "response": {
+          "id": "bf29874b-ab75-4a95-bbf3-835af47e4329",
+          "created": 1793469579,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && cat tests/test_void.py && echo \\\"=== CORE ===\\\" && cat tests/test_core.py && echo \\\"=== LEGACY ===\\\" && cat tests/test_legacy.py && echo \\\"=== CONFTEST ===\\\" && cat conftest.py && cat ledgerly/__init__.py\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_aVK49dMiKrfkC70CrRZf0549",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 124,
+            "prompt_tokens": 2833,
+            "total_tokens": 2957,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 1920
+            },
+            "prompt_cache_hit_tokens": 1920,
+            "prompt_cache_miss_tokens": 913
+          }
+        },
+        "cost": 0.00021710999999999999,
+        "timestamp": 1793469581.1575565
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"from datetime import datetime, timezone\\nfrom decimal import Decimal\\n\\nfrom ledgerly.models import Payment\\nfrom ledgerly.payments import void\\n\\nT0 = datetime(2026, 1, 1, tzinfo=timezone.utc)\\n\\n\\ndef test_void():\\n    p = Payment(\\\"pay_1\\\", \\\"inv_1\\\", Decimal(\\\"20.00\\\"), created_at=T0)\\n    void(p, T0)\\n    assert p.status == \\\"voided\\\"\\n=== CORE ===\\nfrom datetime import datetime, timezone\\nfrom decimal import Decimal\\n\\nimport pytest\\n\\nfrom ledgerly import audit\\nfrom ledgerly.errors import BillingError\\nfrom ledgerly.invoice import invoice_total, issue_invoice\\nfrom ledgerly.models import Invoice, LineItem, Subscription\\nfrom ledgerly.payments import authorize\\nfrom ledgerly.subscriptions import current_period\\n\\nT0 = datetime(2026, 1, 1, tzinfo=timezone.utc)\\n\\n\\ndef make_invoice():\\n    return Invoice(\\n        id=\\\"inv_1\\\",\\n        customer_id=\\\"cus_1\\\",\\n        lines=[LineItem(\\\"Seat\\\", 3, Decimal(\\\"19.99\\\")), LineItem(\\\"Setup\\\", 1, Decimal(\\\"50.00\\\"))],\\n    )\\n\\n\\ndef test_invoice_total():\\n    assert invoice_total(make_invoice()) == Decimal(\\\"109.97\\\")\\n\\n\\ndef test_issue_invoice_records_audit():\\n    inv = issue_invoice(make_invoice(), T0)\\n    assert inv.status == \\\"issued\\\"\\n    assert audit.events(\\\"invoice_issued\\\")[0][\\\"invoice_id\\\"] == \\\"inv_1\\\"\\n\\n\\ndef test_issue_empty_invoice_fails():\\n    with pytest.raises(BillingError):\\n        issue_invoice(Invoice(id=\\\"inv_2\\\", customer_id=\\\"cus_1\\\"), T0)\\n\\n\\ndef test_authorize_payment():\\n    inv = issue_invoice(make_invoice(), T0)\\n    payment = authorize(\\\"pay_1\\\", inv, \\\"109.97\\\", T0)\\n    assert payment.amount == Decimal(\\\"109.97\\\")\\n    assert payment.status == \\\"authorized\\\"\\n\\n\\ndef test_current_period():\\n    sub = Subscription(\\\"sub_1\\\", \\\"cus_1\\\", Decimal(\\\"30.00\\\"), 30, T0)\\n    start, end = current_period(sub, datetime(2026, 2, 5, tzinfo=timezone.utc))\\n    assert start == datetime(2026, 1, 31, tzinfo=timezone.utc)\\n    assert end == datetime(2026, 3, 2, tzinfo=timezone.utc)\\n=== LEGACY ===\\nfrom datetime import date, datetime\\n\\nimport pytest\\n\\nfrom ledgerly.importers import parse_csv\\nfrom ledgerly.pricing import apply_coupon, list_price\\nfrom ledgerly.promotions import bulk_discount_percent, campaign_percent\\nfrom ledgerly.renewals import reminder_due\\nfrom ledgerly.reporting import day_bounds\\n\\n\\ndef test_pricing():\\n    assert list_price(\\\"team\\\") == 49.0\\n    assert apply_coupon(49.0, \\\"WELCOME10\\\") == 44.1\\n    with pytest.raises(ValueError):\\n        apply_coupon(49.0, \\\"NOPE\\\")\\n\\n\\ndef test_promotions():\\n    assert campaign_percent(\\\"black-friday\\\", now=datetime(2025, 11, 28)) == 30\\n    assert bulk_discount_percent(12) == 5\\n\\n\\ndef test_importers():\\n    assert parse_csv(\\\"invoice_id,amount\\\\ninv_1,12.50\\\\n\\\") == [{\\\"invoice_id\\\": \\\"inv_1\\\", \\\"amount\\\": 12.5}]\\n\\n\\ndef test_reporting_and_renewals():\\n    start, end = day_bounds(date(2026, 1, 1))\\n    assert (end - start).days == 1\\n    assert reminder_due(datetime(2026, 1, 10), now=datetime(2026, 1, 8))\\n=== CONFTEST ===\\nimport pytest\\n\\nfrom ledgerly import audit\\n\\n\\n@pytest.fixture(autouse=True)\\ndef _clean_audit():\\n    audit.clear()\\n    yield\\n    audit.clear()\\n\\\"\\\"\\\"Ledgerly: Acme\\u0027s internal billing library (invoices, payments, subscriptions).\\\"\\\"\\\"\\n\\n__version__ = \\\"1.0.0\\\"\\n\"\n}",
+      "extra": {
+        "raw_output": "from datetime import datetime, timezone\nfrom decimal import Decimal\n\nfrom ledgerly.models import Payment\nfrom ledgerly.payments import void\n\nT0 = datetime(2026, 1, 1, tzinfo=timezone.utc)\n\n\ndef test_void():\n    p = Payment(\"pay_1\", \"inv_1\", Decimal(\"20.00\"), created_at=T0)\n    void(p, T0)\n    assert p.status == \"voided\"\n=== CORE ===\nfrom datetime import datetime, timezone\nfrom decimal import Decimal\n\nimport pytest\n\nfrom ledgerly import audit\nfrom ledgerly.errors import BillingError\nfrom ledgerly.invoice import invoice_total, issue_invoice\nfrom ledgerly.models import Invoice, LineItem, Subscription\nfrom ledgerly.payments import authorize\nfrom ledgerly.subscriptions import current_period\n\nT0 = datetime(2026, 1, 1, tzinfo=timezone.utc)\n\n\ndef make_invoice():\n    return Invoice(\n        id=\"inv_1\",\n        customer_id=\"cus_1\",\n        lines=[LineItem(\"Seat\", 3, Decimal(\"19.99\")), LineItem(\"Setup\", 1, Decimal(\"50.00\"))],\n    )\n\n\ndef test_invoice_total():\n    assert invoice_total(make_invoice()) == Decimal(\"109.97\")\n\n\ndef test_issue_invoice_records_audit():\n    inv = issue_invoice(make_invoice(), T0)\n    assert inv.status == \"issued\"\n    assert audit.events(\"invoice_issued\")[0][\"invoice_id\"] == \"inv_1\"\n\n\ndef test_issue_empty_invoice_fails():\n    with pytest.raises(BillingError):\n        issue_invoice(Invoice(id=\"inv_2\", customer_id=\"cus_1\"), T0)\n\n\ndef test_authorize_payment():\n    inv = issue_invoice(make_invoice(), T0)\n    payment = authorize(\"pay_1\", inv, \"109.97\", T0)\n    assert payment.amount == Decimal(\"109.97\")\n    assert payment.status == \"authorized\"\n\n\ndef test_current_period():\n    sub = Subscription(\"sub_1\", \"cus_1\", Decimal(\"30.00\"), 30, T0)\n    start, end = current_period(sub, datetime(2026, 2, 5, tzinfo=timezone.utc))\n    assert start == datetime(2026, 1, 31, tzinfo=timezone.utc)\n    assert end == datetime(2026, 3, 2, tzinfo=timezone.utc)\n=== LEGACY ===\nfrom datetime import date, datetime\n\nimport pytest\n\nfrom ledgerly.importers import parse_csv\nfrom ledgerly.pricing import apply_coupon, list_price\nfrom ledgerly.promotions import bulk_discount_percent, campaign_percent\nfrom ledgerly.renewals import reminder_due\nfrom ledgerly.reporting import day_bounds\n\n\ndef test_pricing():\n    assert list_price(\"team\") == 49.0\n    assert apply_coupon(49.0, \"WELCOME10\") == 44.1\n    with pytest.raises(ValueError):\n        apply_coupon(49.0, \"NOPE\")\n\n\ndef test_promotions():\n    assert campaign_percent(\"black-friday\", now=datetime(2025, 11, 28)) == 30\n    assert bulk_discount_percent(12) == 5\n\n\ndef test_importers():\n    assert parse_csv(\"invoice_id,amount\\ninv_1,12.50\\n\") == [{\"invoice_id\": \"inv_1\", \"amount\": 12.5}]\n\n\ndef test_reporting_and_renewals():\n    start, end = day_bounds(date(2026, 1, 1))\n    assert (end - start).days == 1\n    assert reminder_due(datetime(2026, 1, 10), now=datetime(2026, 1, 8))\n=== CONFTEST ===\nimport pytest\n\nfrom ledgerly import audit\n\n\n@pytest.fixture(autouse=True)\ndef _clean_audit():\n    audit.clear()\n    yield\n    audit.clear()\n\"\"\"Ledgerly: Acme's internal billing library (invoices, payments, subscriptions).\"\"\"\n\n__version__ = \"1.0.0\"\n",
+        "returncode": 0,
+        "timestamp": 1793469581.196328,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_aVK49dMiKrfkC70CrRZf0549",
+      "role": "tool"
+    },
+    {
+      "content": "The current `void` exists but lacks the required audit fields (`amount`, `idempotency_key`) and idempotency support. Let me check other modules for conventions on idempotency.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && grep -rn \\\"idempotency\\\\|audit.record\\\\|def \\\" ledgerly/*.py\"}",
+            "name": "bash"
+          },
+          "id": "call_00_Z4ODnx4mlVYDl2ujEHxe3886",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && grep -rn \"idempotency\\|audit.record\\|def \" ledgerly/*.py",
+            "tool_call_id": "call_00_Z4ODnx4mlVYDl2ujEHxe3886"
+          }
+        ],
+        "response": {
+          "id": "8ab380ad-b590-4a8e-ae5b-3879cc1643a2",
+          "created": 1793469581,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "The current `void` exists but lacks the required audit fields (`amount`, `idempotency_key`) and idempotency support. Let me check other modules for conventions on idempotency.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && grep -rn \\\"idempotency\\\\|audit.record\\\\|def \\\" ledgerly/*.py\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_Z4ODnx4mlVYDl2ujEHxe3886",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 125,
+            "prompt_tokens": 4062,
+            "total_tokens": 4187,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 2944
+            },
+            "prompt_cache_hit_tokens": 2944,
+            "prompt_cache_miss_tokens": 1118
+          }
+        },
+        "cost": 0.00025153199999999995,
+        "timestamp": 1793469582.3215113
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"ledgerly/adjustments.py:6:def manual_adjustment(invoice, amount, note):\\nledgerly/adjustments.py:14:def adjustable_balance(invoice) -\\u003e float:\\nledgerly/audit.py:8:def record(event: str, **fields) -\\u003e dict:\\nledgerly/audit.py:14:def events(event: str | None = None) -\\u003e list[dict]:\\nledgerly/audit.py:18:def clear() -\\u003e None:\\nledgerly/clock.py:6:def utcnow() -\\u003e datetime:\\nledgerly/clock.py:10:def ensure_utc(dt: datetime) -\\u003e datetime:\\nledgerly/errors.py:8:    def __init__(self, code: str, message: str = \\\"\\\"):\\nledgerly/importers.py:7:def parse_csv(text: str) -\\u003e list[dict]:\\nledgerly/invoice.py:11:def line_total(line: LineItem) -\\u003e Decimal:\\nledgerly/invoice.py:15:def invoice_total(invoice: Invoice) -\\u003e Decimal:\\nledgerly/invoice.py:19:def issue_invoice(invoice: Invoice, at: datetime) -\\u003e Invoice:\\nledgerly/invoice.py:26:    audit.record(\\\"invoice_issued\\\", invoice_id=invoice.id, total=invoice_total(invoice))\\nledgerly/money.py:9:def to_money(value) -\\u003e Decimal:\\nledgerly/money.py:21:def round_money(value) -\\u003e Decimal:\\nledgerly/payments.py:10:def authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -\\u003e Payment:\\nledgerly/payments.py:17:    audit.record(\\\"payment_authorized\\\", payment_id=payment.id, amount=amount)\\nledgerly/payments.py:21:def void(payment: Payment, at: datetime) -\\u003e Payment:\\nledgerly/payments.py:27:    audit.record(\\\"payment_voided\\\", payment_id=payment.id, at=at)\\nledgerly/pricing.py:7:def list_price(plan_code: str) -\\u003e float:\\nledgerly/pricing.py:14:def apply_coupon(price: float, coupon: str) -\\u003e float:\\nledgerly/promotions.py:8:def campaign_percent(name: str, now: datetime | None = None) -\\u003e int:\\nledgerly/promotions.py:16:def bulk_discount_percent(quantity: int) -\\u003e int:\\nledgerly/renewals.py:8:def reminder_due(renewal_at: datetime, now: datetime | None = None) -\\u003e bool:\\nledgerly/reporting.py:6:def day_bounds(day: date) -\\u003e tuple[datetime, datetime]:\\nledgerly/reporting.py:11:def total_amount(payments) -\\u003e float:\\nledgerly/subscriptions.py:8:def current_period(sub: Subscription, at: datetime) -\\u003e tuple[datetime, datetime]:\\n\"\n}",
+      "extra": {
+        "raw_output": "ledgerly/adjustments.py:6:def manual_adjustment(invoice, amount, note):\nledgerly/adjustments.py:14:def adjustable_balance(invoice) -> float:\nledgerly/audit.py:8:def record(event: str, **fields) -> dict:\nledgerly/audit.py:14:def events(event: str | None = None) -> list[dict]:\nledgerly/audit.py:18:def clear() -> None:\nledgerly/clock.py:6:def utcnow() -> datetime:\nledgerly/clock.py:10:def ensure_utc(dt: datetime) -> datetime:\nledgerly/errors.py:8:    def __init__(self, code: str, message: str = \"\"):\nledgerly/importers.py:7:def parse_csv(text: str) -> list[dict]:\nledgerly/invoice.py:11:def line_total(line: LineItem) -> Decimal:\nledgerly/invoice.py:15:def invoice_total(invoice: Invoice) -> Decimal:\nledgerly/invoice.py:19:def issue_invoice(invoice: Invoice, at: datetime) -> Invoice:\nledgerly/invoice.py:26:    audit.record(\"invoice_issued\", invoice_id=invoice.id, total=invoice_total(invoice))\nledgerly/money.py:9:def to_money(value) -> Decimal:\nledgerly/money.py:21:def round_money(value) -> Decimal:\nledgerly/payments.py:10:def authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -> Payment:\nledgerly/payments.py:17:    audit.record(\"payment_authorized\", payment_id=payment.id, amount=amount)\nledgerly/payments.py:21:def void(payment: Payment, at: datetime) -> Payment:\nledgerly/payments.py:27:    audit.record(\"payment_voided\", payment_id=payment.id, at=at)\nledgerly/pricing.py:7:def list_price(plan_code: str) -> float:\nledgerly/pricing.py:14:def apply_coupon(price: float, coupon: str) -> float:\nledgerly/promotions.py:8:def campaign_percent(name: str, now: datetime | None = None) -> int:\nledgerly/promotions.py:16:def bulk_discount_percent(quantity: int) -> int:\nledgerly/renewals.py:8:def reminder_due(renewal_at: datetime, now: datetime | None = None) -> bool:\nledgerly/reporting.py:6:def day_bounds(day: date) -> tuple[datetime, datetime]:\nledgerly/reporting.py:11:def total_amount(payments) -> float:\nledgerly/subscriptions.py:8:def current_period(sub: Subscription, at: datetime) -> tuple[datetime, datetime]:\n",
+        "returncode": 0,
+        "timestamp": 1793469582.436968,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_Z4ODnx4mlVYDl2ujEHxe3886",
+      "role": "tool"
+    },
+    {
+      "content": "Now I'll implement `void` with idempotency (checked first) and proper audit fields.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && cat > ledgerly/payments.py <<'EOF'\\nfrom datetime import datetime\\n\\nfrom . import audit\\nfrom .clock import ensure_utc\\nfrom .errors import BillingError\\nfrom .models import Invoice, Payment\\nfrom .money import ZERO, round_money\\n\\n\\ndef authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -> Payment:\\n    amount = round_money(amount)\\n    if amount <= ZERO:\\n        raise BillingError(\\\"non_positive_amount\\\", str(amount))\\n    if invoice.status != \\\"issued\\\":\\n        raise BillingError(\\\"invalid_state\\\", f\\\"invoice {invoice.id} is {invoice.status}\\\")\\n    payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))\\n    audit.record(\\\"payment_authorized\\\", payment_id=payment.id, amount=amount)\\n    return payment\\n\\n\\ndef void(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:\\n    \\\"\\\"\\\"Void an authorization that has not been captured.\\\"\\\"\\\"\\n    if idempotency_key is not None:\\n        for entry in audit.events():\\n            if entry.get(\\\"idempotency_key\\\") == idempotency_key:\\n                return payment\\n    at = ensure_utc(at)\\n    if payment.status != \\\"authorized\\\":\\n        raise BillingError(\\\"invalid_state\\\", f\\\"payment {payment.id} is {payment.status}\\\")\\n    payment.status = \\\"voided\\\"\\n    audit.record(\\n        \\\"payment_voided\\\",\\n        payment_id=payment.id,\\n        amount=payment.amount,\\n        idempotency_key=idempotency_key,\\n    )\\n    return payment\\nEOF\\npython -m pytest -q\"}",
+            "name": "bash"
+          },
+          "id": "call_00_Xq2QvgUsmIgWLldAqwl33915",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && cat > ledgerly/payments.py <<'EOF'\nfrom datetime import datetime\n\nfrom . import audit\nfrom .clock import ensure_utc\nfrom .errors import BillingError\nfrom .models import Invoice, Payment\nfrom .money import ZERO, round_money\n\n\ndef authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -> Payment:\n    amount = round_money(amount)\n    if amount <= ZERO:\n        raise BillingError(\"non_positive_amount\", str(amount))\n    if invoice.status != \"issued\":\n        raise BillingError(\"invalid_state\", f\"invoice {invoice.id} is {invoice.status}\")\n    payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))\n    audit.record(\"payment_authorized\", payment_id=payment.id, amount=amount)\n    return payment\n\n\ndef void(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:\n    \"\"\"Void an authorization that has not been captured.\"\"\"\n    if idempotency_key is not None:\n        for entry in audit.events():\n            if entry.get(\"idempotency_key\") == idempotency_key:\n                return payment\n    at = ensure_utc(at)\n    if payment.status != \"authorized\":\n        raise BillingError(\"invalid_state\", f\"payment {payment.id} is {payment.status}\")\n    payment.status = \"voided\"\n    audit.record(\n        \"payment_voided\",\n        payment_id=payment.id,\n        amount=payment.amount,\n        idempotency_key=idempotency_key,\n    )\n    return payment\nEOF\npython -m pytest -q",
+            "tool_call_id": "call_00_Xq2QvgUsmIgWLldAqwl33915"
+          }
+        ],
+        "response": {
+          "id": "8135c6bd-4f07-41fc-8198-21a5dc2cc09b",
+          "created": 1793469582,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "Now I'll implement `void` with idempotency (checked first) and proper audit fields.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && cat > ledgerly/payments.py <<'EOF'\\nfrom datetime import datetime\\n\\nfrom . import audit\\nfrom .clock import ensure_utc\\nfrom .errors import BillingError\\nfrom .models import Invoice, Payment\\nfrom .money import ZERO, round_money\\n\\n\\ndef authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -> Payment:\\n    amount = round_money(amount)\\n    if amount <= ZERO:\\n        raise BillingError(\\\"non_positive_amount\\\", str(amount))\\n    if invoice.status != \\\"issued\\\":\\n        raise BillingError(\\\"invalid_state\\\", f\\\"invoice {invoice.id} is {invoice.status}\\\")\\n    payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))\\n    audit.record(\\\"payment_authorized\\\", payment_id=payment.id, amount=amount)\\n    return payment\\n\\n\\ndef void(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:\\n    \\\"\\\"\\\"Void an authorization that has not been captured.\\\"\\\"\\\"\\n    if idempotency_key is not None:\\n        for entry in audit.events():\\n            if entry.get(\\\"idempotency_key\\\") == idempotency_key:\\n                return payment\\n    at = ensure_utc(at)\\n    if payment.status != \\\"authorized\\\":\\n        raise BillingError(\\\"invalid_state\\\", f\\\"payment {payment.id} is {payment.status}\\\")\\n    payment.status = \\\"voided\\\"\\n    audit.record(\\n        \\\"payment_voided\\\",\\n        payment_id=payment.id,\\n        amount=payment.amount,\\n        idempotency_key=idempotency_key,\\n    )\\n    return payment\\nEOF\\npython -m pytest -q\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_Xq2QvgUsmIgWLldAqwl33915",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 448,
+            "prompt_tokens": 4957,
+            "total_tokens": 5405,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 4096
+            },
+            "prompt_cache_hit_tokens": 4096,
+            "prompt_cache_miss_tokens": 861
+          }
+        },
+        "cost": 0.00041023799999999994,
+        "timestamp": 1793469584.5398042
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"..........                                                               [100%]\\n10 passed in 0.09s\\n\"\n}",
+      "extra": {
+        "raw_output": "..........                                                               [100%]\n10 passed in 0.09s\n",
+        "returncode": 0,
+        "timestamp": 1793469586.418218,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_Xq2QvgUsmIgWLldAqwl33915",
+      "role": "tool"
+    },
+    {
+      "content": "Tests pass. Let me verify edge cases: idempotency returns same record without re-applying, and invalid states raise.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && python - <<'EOF'\\nfrom datetime import datetime, timezone\\nfrom decimal import Decimal\\nfrom ledgerly import audit\\nfrom ledgerly.models import Payment\\nfrom ledgerly.payments import void\\nfrom ledgerly.errors import BillingError\\n\\nT0 = datetime(2026,1,1,tzinfo=timezone.utc)\\naudit.clear()\\np = Payment(\\\"pay_1\\\",\\\"inv_1\\\",Decimal(\\\"20.00\\\"),created_at=T0)\\nr1 = void(p, T0, idempotency_key=\\\"k1\\\")\\nr2 = void(p, T0, idempotency_key=\\\"k1\\\")\\nassert r1 is r2 is p\\nassert len(audit.events(\\\"payment_voided\\\")) == 1\\ne = audit.events(\\\"payment_voided\\\")[0]\\nassert e[\\\"amount\\\"] == Decimal(\\\"20.00\\\") and e[\\\"idempotency_key\\\"] == \\\"k1\\\"\\nprint(\\\"idempotency ok\\\", e)\\n\\nfor status in (\\\"captured\\\",\\\"refunded\\\",\\\"voided\\\"):\\n    q = Payment(\\\"pay_2\\\",\\\"inv_1\\\",Decimal(\\\"5.00\\\"),status=status)\\n    try:\\n        void(q, T0)\\n        print(\\\"FAIL\\\", status)\\n    except BillingError as ex:\\n        print(status, \\\"->\\\", ex.code)\\nEOF\"}",
+            "name": "bash"
+          },
+          "id": "call_00_I9UUJAzUm8s5hRBNzTby9313",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && python - <<'EOF'\nfrom datetime import datetime, timezone\nfrom decimal import Decimal\nfrom ledgerly import audit\nfrom ledgerly.models import Payment\nfrom ledgerly.payments import void\nfrom ledgerly.errors import BillingError\n\nT0 = datetime(2026,1,1,tzinfo=timezone.utc)\naudit.clear()\np = Payment(\"pay_1\",\"inv_1\",Decimal(\"20.00\"),created_at=T0)\nr1 = void(p, T0, idempotency_key=\"k1\")\nr2 = void(p, T0, idempotency_key=\"k1\")\nassert r1 is r2 is p\nassert len(audit.events(\"payment_voided\")) == 1\ne = audit.events(\"payment_voided\")[0]\nassert e[\"amount\"] == Decimal(\"20.00\") and e[\"idempotency_key\"] == \"k1\"\nprint(\"idempotency ok\", e)\n\nfor status in (\"captured\",\"refunded\",\"voided\"):\n    q = Payment(\"pay_2\",\"inv_1\",Decimal(\"5.00\"),status=status)\n    try:\n        void(q, T0)\n        print(\"FAIL\", status)\n    except BillingError as ex:\n        print(status, \"->\", ex.code)\nEOF",
+            "tool_call_id": "call_00_I9UUJAzUm8s5hRBNzTby9313"
+          }
+        ],
+        "response": {
+          "id": "1d84098b-7b3f-4aeb-96dd-6607e444bbe1",
+          "created": 1793469586,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "Tests pass. Let me verify edge cases: idempotency returns same record without re-applying, and invalid states raise.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && python - <<'EOF'\\nfrom datetime import datetime, timezone\\nfrom decimal import Decimal\\nfrom ledgerly import audit\\nfrom ledgerly.models import Payment\\nfrom ledgerly.payments import void\\nfrom ledgerly.errors import BillingError\\n\\nT0 = datetime(2026,1,1,tzinfo=timezone.utc)\\naudit.clear()\\np = Payment(\\\"pay_1\\\",\\\"inv_1\\\",Decimal(\\\"20.00\\\"),created_at=T0)\\nr1 = void(p, T0, idempotency_key=\\\"k1\\\")\\nr2 = void(p, T0, idempotency_key=\\\"k1\\\")\\nassert r1 is r2 is p\\nassert len(audit.events(\\\"payment_voided\\\")) == 1\\ne = audit.events(\\\"payment_voided\\\")[0]\\nassert e[\\\"amount\\\"] == Decimal(\\\"20.00\\\") and e[\\\"idempotency_key\\\"] == \\\"k1\\\"\\nprint(\\\"idempotency ok\\\", e)\\n\\nfor status in (\\\"captured\\\",\\\"refunded\\\",\\\"voided\\\"):\\n    q = Payment(\\\"pay_2\\\",\\\"inv_1\\\",Decimal(\\\"5.00\\\"),status=status)\\n    try:\\n        void(q, T0)\\n        print(\\\"FAIL\\\", status)\\n    except BillingError as ex:\\n        print(status, \\\"->\\\", ex.code)\\nEOF\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_I9UUJAzUm8s5hRBNzTby9313",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 370,
+            "prompt_tokens": 5449,
+            "total_tokens": 5819,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 5248
+            },
+            "prompt_cache_hit_tokens": 5248,
+            "prompt_cache_miss_tokens": 201
+          }
+        },
+        "cost": 0.000267894,
+        "timestamp": 1793469588.4462023
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"idempotency ok {\\u0027event\\u0027: \\u0027payment_voided\\u0027, \\u0027at\\u0027: datetime.datetime(2026, 10, 31, 17, 59, 48, 724275, tzinfo=datetime.timezone.utc), \\u0027payment_id\\u0027: \\u0027pay_1\\u0027, \\u0027amount\\u0027: Decimal(\\u002720.00\\u0027), \\u0027idempotency_key\\u0027: \\u0027k1\\u0027}\\ncaptured -\\u003e invalid_state\\nrefunded -\\u003e invalid_state\\nvoided -\\u003e invalid_state\\n\"\n}",
+      "extra": {
+        "raw_output": "idempotency ok {'event': 'payment_voided', 'at': datetime.datetime(2026, 10, 31, 17, 59, 48, 724275, tzinfo=datetime.timezone.utc), 'payment_id': 'pay_1', 'amount': Decimal('20.00'), 'idempotency_key': 'k1'}\ncaptured -> invalid_state\nrefunded -> invalid_state\nvoided -> invalid_state\n",
+        "returncode": 0,
+        "timestamp": 1793469588.8227375,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_I9UUJAzUm8s5hRBNzTby9313",
+      "role": "tool"
+    },
+    {
+      "content": "All requirements are satisfied. The implementation:\n- Adds `void(payment, at, *, idempotency_key=None)`.\n- Checks idempotency key first, returning the same record without re-applying.\n- Rejects captured/refunded/voided payments with `BillingError(\"invalid_state\", ...)`.\n- Writes a `payment_voided` audit entry with `payment_id`, `amount`, and `idempotency_key`.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && echo \\\"USED_NOTES: at-0001\\\"\"}",
+            "name": "bash"
+          },
+          "id": "call_00_NfH0K75q5aKzbS245tm20989",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && echo \"USED_NOTES: at-0001\"",
+            "tool_call_id": "call_00_NfH0K75q5aKzbS245tm20989"
+          }
+        ],
+        "response": {
+          "id": "bc8e1382-8823-4592-b450-709d66184f15",
+          "created": 1793469589,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "All requirements are satisfied. The implementation:\n- Adds `void(payment, at, *, idempotency_key=None)`.\n- Checks idempotency key first, returning the same record without re-applying.\n- Rejects captured/refunded/voided payments with `BillingError(\"invalid_state\", ...)`.\n- Writes a `payment_voided` audit entry with `payment_id`, `amount`, and `idempotency_key`.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/pipeline_compare__attest__r2_1__H06/workspace && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && echo \\\"USED_NOTES: at-0001\\\"\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_NfH0K75q5aKzbS245tm20989",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 186,
+            "prompt_tokens": 6010,
+            "total_tokens": 6196,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 5760
+            },
+            "prompt_cache_hit_tokens": 5760,
+            "prompt_cache_miss_tokens": 250
+          }
+        },
+        "cost": 0.00016638,
+        "timestamp": 1793469590.571491
+      }
+    },
+    {
+      "role": "exit",
+      "content": "USED_NOTES: at-0001\n",
+      "extra": {
+        "exit_status": "Submitted",
+        "submission": "USED_NOTES: at-0001\n"
+      }
+    }
+  ],
+  "trajectory_format": "mini-swe-agent-1.1"
+}
