@@ -1,0 +1,596 @@
+{
+  "at-0001": {
+    "id": "at-0001",
+    "kind": "lesson",
+    "type": "code_convention",
+    "topic": "money-rounding",
+    "title": "Round money only with round_money",
+    "content": "Always round monetary Decimal results with ledgerly.money.round_money (half-up to the cent); never use Python's round() or a bare Decimal.quantize(), which use banker's rounding and produce wrong invoice totals.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/invoice.py"
+      ]
+    },
+    "source": {
+      "task_id": "E01",
+      "first_pass": false,
+      "review_comments": [
+        "[team convention] Round money only with ledgerly.money.round_money (half-up to the cent). Python's round() and a bare Decimal.quantize() use banker's rounding and give wrong invoice totals."
+      ],
+      "references": []
+    },
+    "evidence": [
+      {
+        "task_id": "E01",
+        "version": "1.0.0",
+        "source": {
+          "kind": "review_comment",
+          "quote": "Round money only with ledgerly.money.round_money (half-up to the cent).",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/invoice.py",
+          "line": "return round_money(weighted_total / total_quantity)",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": false,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      },
+      {
+        "task_id": "E05",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "rounded to the cent using the finance team's half-up rounding policy.",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/pricing.py",
+          "line": "return round_money(amount * (1 + rate / 100))",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E05",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 5,
+      "cited": 2,
+      "cited_pass": 1,
+      "cited_fail": 1,
+      "fail_streak": 0
+    },
+    "governance": {
+      "verdict": "conflict",
+      "conflicts": [
+        {
+          "source_id": "code:ledgerly/pricing.py:17",
+          "source_quote": "return round(price * (100 - COUPONS[coupon]) / 100, 2)",
+          "candidate_quote": "never use Python's round()"
+        },
+        {
+          "source_id": "code:ledgerly/reporting.py:12",
+          "source_quote": "return round(sum(float(p.amount) for p in payments), 2)",
+          "candidate_quote": "never use Python's round()"
+        }
+      ],
+      "unverified_citations": [],
+      "supported_by": "",
+      "reason": "The candidate forbids Python's round(), but the codebase uses round() in pricing.py and reporting.py, so the candidate conflicts with existing code.",
+      "model": "deepseek/deepseek-v4-pro",
+      "raw_verdict": "conflict"
+    },
+    "last_failure": {
+      "task_id": "E04",
+      "review_comment": "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."
+    }
+  },
+  "at-0002": {
+    "id": "at-0002",
+    "kind": "project_fact",
+    "type": "code_convention",
+    "topic": "money-normalization",
+    "title": "Normalize unit prices with to_money",
+    "content": "Wrap raw line unit prices with ledgerly.money.to_money before multiplying by quantity, and seed sums with the ZERO constant from ledgerly.money, as line_total and invoice_total do.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/invoice.py"
+      ]
+    },
+    "source": {
+      "task_id": "E01",
+      "first_pass": false,
+      "review_comments": [
+        "[team convention] Round money only with ledgerly.money.round_money (half-up to the cent). Python's round() and a bare Decimal.quantize() use banker's rounding and give wrong invoice totals."
+      ],
+      "references": []
+    },
+    "evidence": [
+      {
+        "task_id": "E01",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "(to_money(line.unit_price) * line.quantity for line in invoice.lines), ZERO",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/invoice.py",
+          "line": "(to_money(line.unit_price) * line.quantity for line in invoice.lines), ZERO",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": false,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      },
+      {
+        "task_id": "E02",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "price = to_money(unit_price)",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/invoice.py",
+          "line": "price = to_money(unit_price)",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E02",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 1,
+      "cited": 0,
+      "cited_pass": 0,
+      "cited_fail": 0,
+      "fail_streak": 0
+    },
+    "governance": {
+      "verdict": "approved",
+      "conflicts": [],
+      "unverified_citations": [],
+      "supported_by": "",
+      "reason": "The candidate matches the existing code pattern in ledgerly/invoice.py, which wraps unit prices with to_money and uses ZERO as the sum seed, and no existing rule or changelog contradicts it.",
+      "model": "deepseek/deepseek-v4-pro",
+      "raw_verdict": "approved"
+    }
+  },
+  "at-0003": {
+    "id": "at-0003",
+    "kind": "lesson",
+    "type": "code_convention",
+    "topic": "billing-error-codes",
+    "title": "Raise BillingError with stable snake_case codes",
+    "content": "Signal domain failures by raising `BillingError(code, detail)` from `ledgerly.errors` with the established codes: `invalid_state` for wrong invoice status, `invalid_quantity` for bad quantities, `negative_amount` for negative money.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/invoice.py"
+      ]
+    },
+    "source": {
+      "task_id": "E02",
+      "first_pass": true,
+      "review_comments": [],
+      "references": []
+    },
+    "evidence": [
+      {
+        "task_id": "E02",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "raise BillingError(\"invalid_state\", f\"invoice {invoice.id} is {invoice.status}\")",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/invoice.py",
+          "line": "raise BillingError(\"invalid_state\", f\"invoice {invoice.id} is {invoice.status}\")",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      },
+      {
+        "task_id": "E05",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "raise BillingError(\"invalid_tax_rate\", str(rate_percent))",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/pricing.py",
+          "line": "raise BillingError(\"invalid_tax_rate\", str(rate_percent))",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "suspect",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E06",
+      "version": "1.0.0",
+      "result": "failed",
+      "how": "cited by a task that failed a related review check",
+      "review_comment": "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."
+    },
+    "usage": {
+      "shown": 4,
+      "cited": 3,
+      "cited_pass": 1,
+      "cited_fail": 2,
+      "fail_streak": 1
+    },
+    "governance": {
+      "verdict": "approved",
+      "conflicts": [],
+      "unverified_citations": [],
+      "supported_by": "",
+      "reason": "The candidate matches the existing code pattern: BillingError is raised with snake_case codes like 'invalid_state' and 'negative_amount', and no source contradicts it.",
+      "model": "deepseek/deepseek-v4-pro",
+      "raw_verdict": "approved"
+    },
+    "last_failure": {
+      "task_id": "E06",
+      "review_comment": "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."
+    }
+  },
+  "at-0004": {
+    "id": "at-0004",
+    "kind": "lesson",
+    "type": "code_convention",
+    "topic": "quantity-validation",
+    "title": "Reject bools and non-int quantities explicitly",
+    "content": "When validating integer quantities, exclude `bool` explicitly (`isinstance(quantity, bool)`) before the `isinstance(quantity, int)` check, since `True`/`False` are ints in Python and would otherwise pass.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/invoice.py"
+      ]
+    },
+    "source": {
+      "task_id": "E02",
+      "first_pass": true,
+      "review_comments": [],
+      "references": []
+    },
+    "evidence": [
+      {
+        "task_id": "E02",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/invoice.py",
+          "line": "if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E02",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 0,
+      "cited": 0,
+      "cited_pass": 0,
+      "cited_fail": 0,
+      "fail_streak": 0
+    },
+    "governance": {
+      "verdict": "approved",
+      "conflicts": [],
+      "unverified_citations": [],
+      "supported_by": "",
+      "reason": "No existing rule, changelog entry, or code excerpt contradicts the candidate; the code shows a similar explicit bool exclusion in money.py, supporting the practice.",
+      "model": "deepseek/deepseek-v4-pro",
+      "raw_verdict": "approved"
+    }
+  },
+  "at-0005": {
+    "id": "at-0005",
+    "kind": "lesson",
+    "type": "code_convention",
+    "topic": "utc-normalization",
+    "title": "Normalize datetimes with ensure_utc",
+    "content": "In ledgerly, normalize every incoming datetime with `ensure_utc` from `ledgerly.clock` before comparing or doing arithmetic (see `current_period` in `ledgerly/subscriptions.py`). Apply it to both the argument and `sub.started_at`.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/renewals.py"
+      ]
+    },
+    "source": {
+      "task_id": "E03",
+      "first_pass": true,
+      "review_comments": [],
+      "references": []
+    },
+    "evidence": [
+      {
+        "task_id": "E03",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "from .clock import ensure_utc",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/renewals.py",
+          "line": "after = ensure_utc(after)",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E03",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 3,
+      "cited": 2,
+      "cited_pass": 0,
+      "cited_fail": 0,
+      "fail_streak": 0
+    },
+    "governance": {
+      "verdict": "approved",
+      "conflicts": [],
+      "unverified_citations": [],
+      "supported_by": "",
+      "reason": "The candidate aligns with existing code that consistently uses ensure_utc for datetime normalization, and no existing rule or changelog contradicts it.",
+      "model": "deepseek/deepseek-v4-pro",
+      "raw_verdict": "approved"
+    }
+  },
+  "at-0006": {
+    "id": "at-0006",
+    "kind": "lesson",
+    "type": "code_convention",
+    "topic": "billing-error-codes",
+    "title": "Raise BillingError with snake_case codes",
+    "content": "Signal invalid billing inputs by raising `BillingError` from `ledgerly.errors` with a snake_case code string and a detail string, e.g. `BillingError(\"invalid_period\", str(sub.period_days))`.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/renewals.py"
+      ]
+    },
+    "source": {
+      "task_id": "E03",
+      "first_pass": true,
+      "review_comments": [],
+      "references": []
+    },
+    "evidence": [
+      {
+        "task_id": "E03",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "from .errors import BillingError",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/renewals.py",
+          "line": "raise BillingError(\"invalid_period\", str(sub.period_days))",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "conflict",
+    "supersedes": [],
+    "superseded_by": null,
+    "governance": {
+      "verdict": "conflict",
+      "conflicts": [
+        {
+          "source_id": "at-0003",
+          "source_quote": "Raise BillingError with stable snake_case codes: Signal domain failures by raising `BillingError(code, detail)` from `ledgerly.errors` with the established codes: `invalid_state` for wrong invoice status, `invalid_quantity` for bad quantities, `negative_amount` for negative money.",
+          "candidate_quote": "Signal invalid billing inputs by raising `BillingError` from `ledgerly.errors` with a snake_case code string and a detail string, e.g. `BillingError(\"invalid_period\", str(sub.period_days))`."
+        }
+      ],
+      "unverified_citations": [],
+      "supported_by": "",
+      "reason": "The candidate introduces a new code 'invalid_period' for invalid billing inputs, but existing rule at-0003 establishes a fixed set of codes and does not include 'invalid_period', so the candidate conflicts with the established code list.",
+      "model": "deepseek/deepseek-v4-pro",
+      "raw_verdict": "conflict"
+    },
+    "usage": {
+      "shown": 0,
+      "cited": 0,
+      "cited_pass": 0,
+      "cited_fail": 0,
+      "fail_streak": 0
+    }
+  },
+  "at-0007": {
+    "id": "at-0007",
+    "kind": "lesson",
+    "type": "code_convention",
+    "topic": "period-arithmetic",
+    "title": "Compute periods with timedelta floor division",
+    "content": "Compute billing period boundaries the same way as `current_period` in `ledgerly/subscriptions.py`: build `length = timedelta(days=sub.period_days)` and use `(at - start) // length` to get the period index rather than manual day math.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/renewals.py"
+      ]
+    },
+    "source": {
+      "task_id": "E03",
+      "first_pass": true,
+      "review_comments": [],
+      "references": []
+    },
+    "evidence": [
+      {
+        "task_id": "E03",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "length = timedelta(days=sub.period_days)",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/renewals.py",
+          "line": "length = timedelta(days=sub.period_days)",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E03",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 0,
+      "cited": 0,
+      "cited_pass": 0,
+      "cited_fail": 0,
+      "fail_streak": 0
+    },
+    "governance": {
+      "verdict": "approved",
+      "conflicts": [],
+      "unverified_citations": [],
+      "supported_by": "",
+      "reason": "The candidate matches the existing code in ledgerly/subscriptions.py, which uses timedelta floor division to compute periods, and no existing rule or changelog contradicts it.",
+      "model": "deepseek/deepseek-v4-pro",
+      "raw_verdict": "approved"
+    }
+  }
+}

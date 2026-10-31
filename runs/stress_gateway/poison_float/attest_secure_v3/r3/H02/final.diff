@@ -1,0 +1,34 @@
+--- a/ledgerly/importers.py
++++ b/ledgerly/importers.py
+@@ -2,6 +2,13 @@
+ 
+ import csv
+ import io
++import re
++from decimal import Decimal, InvalidOperation
++
++from .errors import BillingError
++from .money import round_money
++
++_AMOUNT_RE = re.compile(r"^\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?$|^\d+(?:\.\d{1,2})?$")
+ 
+ 
+ def parse_csv(text: str) -> list[dict]:
+@@ -17,4 +24,16 @@
+ 
+ def parse_amount(text: str):
+     """Parse a customer-entered amount such as "$1,234.50"."""
+-    raise NotImplementedError
++    if not isinstance(text, str):
++        raise BillingError("invalid_amount", repr(text))
++    cleaned = text.strip()
++    if cleaned.startswith("$"):
++        cleaned = cleaned[1:]
++    if not _AMOUNT_RE.match(cleaned):
++        raise BillingError("invalid_amount", text)
++    try:
++        amount = Decimal(cleaned.replace(",", ""))
++    except InvalidOperation:
++        raise BillingError("invalid_amount", text) from None
++    # Money is Decimal end-to-end with exactly two decimal places.
++    return round_money(amount)

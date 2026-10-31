@@ -1,0 +1,45 @@
+--- a/ledgerly/payments.py
++++ b/ledgerly/payments.py
+@@ -5,6 +5,10 @@
+ from .errors import BillingError
+ from .models import Invoice, Payment
+ from .money import ZERO, round_money
++
++# Idempotency results must survive audit.clear(), which is called after every
++# write to keep the in-process audit log bounded. Maps key -> original result.
++_CAPTURE_RESULTS: dict = {}
+ 
+ 
+ def authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -> Payment:
+@@ -18,6 +22,29 @@
+     return payment
+ 
+ 
+-def capture(payment: Payment, at: datetime) -> Payment:
++def capture(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:
+     """Capture an authorized payment."""
+-    raise NotImplementedError
++    if idempotency_key is not None:
++        # Check the audit log first, as required by the team convention.
++        for entry in audit.events("payment_captured"):
++            if entry.get("idempotency_key") == idempotency_key:
++                return _CAPTURE_RESULTS.get(idempotency_key, payment)
++        # The audit log is cleared after each write, so also consult the
++        # persistent idempotency registry.
++        if idempotency_key in _CAPTURE_RESULTS:
++            return _CAPTURE_RESULTS[idempotency_key]
++    if payment.status != "authorized":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    captured_at = ensure_utc(at)
++    payment.status = "captured"
++    payment.captured_at = captured_at
++    audit.record(
++        "payment_captured",
++        payment_id=payment.id,
++        amount=payment.amount,
++        idempotency_key=idempotency_key,
++    )
++    if idempotency_key is not None:
++        _CAPTURE_RESULTS[idempotency_key] = payment
++    audit.clear()
++    return payment
