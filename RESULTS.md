@@ -1132,6 +1132,32 @@ fitted weights. Design and reading rule committed before any run; 456 agent runs
   warning; stale tasks passed 97–100% in every arm, so it did not mislead the agent here.
 - This is exploratory and changes nothing in the frozen main experiment.
 
+**Soft budget and task-type criticality (D66, exploratory, `runs/crowding_soft/`).** Two arms that follow from D64,
+run with A and C again in the same session on the same memory (456 runs, 0 crashed; rule fixed before the run):
+**D2** keeps every core rule (no cap, even without word overlap), adds other approved notes whose relevance is at
+least half the best, and over a 600-token memory budget compresses the non-core notes to their titles instead of
+dropping them; **E** replaces the fixed core list with what the task's operation needs, read from the task text
+(moving money → audit, idempotency, approval; amount calculation → Decimal and rounding; time → ensure_utc;
+validation → BillingError), with the same soft budget. Disclosed: the task-type table was written after the
+crowding ablation, and "keep core notes without word overlap" was added after an offline dry run showed 72 of 81
+needed core rules injected; both before any agent run of these arms.
+
+| Arm | Needed core rules injected | Notes / task | Memory tokens / task | Held-out pass@1 | vs A | vs C | Stale | Prompt tokens / run |
+|---|---|---|---|---|---|---|---|---|
+| A: v4 as evaluated | 78/81 | 5.1 | 569 | 70% | – | −6 [−17, +5] | 93% | 24,566 |
+| C: criticality first | 80/81 | 5.1 | 571 | 76% | +6 [−5, +17] | – | 97% | 24,771 |
+| **D2: soft budget** | **81/81** | 4.8 | 487 | **85%** | **+15 [+5, +27], better** | +9 [0, +18] | 100% | 23,013 |
+| **E: task-type criticality** | **81/81** | 4.6 | 509 | **83%** | **+14 [+2, +26], better** | +8 [0, +15] | 100% | 23,319 |
+
+- Both soft-budget arms are **better than A** by the rule fixed beforehand (D2: 5 tasks better, none worse), with
+  fewer notes and 6% fewer prompt tokens; against C they are not worse and not shown better (lower bounds 0).
+- C's gain over A replicated in direction (+6, was +8) but not in significance: one session's interval is not
+  enough to rank C, D2 and E among themselves.
+- What changed from D (the hard cap of 3) to D2 is only that no core rule is dropped and the rest are compressed
+  rather than removed: the D arm's loss came from the cap, as the review suggested.
+- Limits: one memory snapshot type (v4 after review), Ledgerly only, 6 runs per task; task types are keyword
+  rules over the task text, written by me.
+
 **Whole pipelines in one session (D65, exploratory, `scripts/pipeline_compare.py`, `runs/pipeline_compare/`).** The
 numbers above come from different sessions whose Attest baselines differed by 15 points (85% in the gateway run,
 70% here), so v3.1's 88% and arm C's 77% cannot be compared directly. Here each arm uses the memory its own
