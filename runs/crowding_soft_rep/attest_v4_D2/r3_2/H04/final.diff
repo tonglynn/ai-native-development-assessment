@@ -1,0 +1,64 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,13 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from decimal import Decimal
++
++from . import audit
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money
++
++APPROVAL_THRESHOLD = Decimal("500.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +22,45 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def issue_credit_note(invoice, amount, reason):
++def issue_credit_note(
++    invoice,
++    amount,
++    reason,
++    *,
++    idempotency_key: str | None = None,
++    approved_by: str | None = None,
++) -> dict:
+     """Credit part of an issued invoice back to the customer."""
+-    raise NotImplementedError
++    if idempotency_key is not None:
++        for event in audit.events("credit_note_issued"):
++            if event.get("idempotency_key") == idempotency_key:
++                return {
++                    "invoice_id": event["invoice_id"],
++                    "amount": event["amount"],
++                    "reason": event["reason"],
++                }
++
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    total = invoice_total(invoice)
++    if amount > total:
++        raise BillingError(
++            "amount_exceeds_invoice_total",
++            f"{amount} > {total} for invoice {invoice.id}",
++        )
++    if amount > APPROVAL_THRESHOLD and not approved_by:
++        raise BillingError("approval_required", str(amount))
++
++    result = {"invoice_id": invoice.id, "amount": amount, "reason": reason}
++    audit.record(
++        "credit_note_issued",
++        invoice_id=invoice.id,
++        amount=amount,
++        reason=reason,
++        approved_by=approved_by,
++        idempotency_key=idempotency_key,
++    )
++    return result

@@ -1,0 +1,44 @@
+--- a/ledgerly/commissions.py
++++ b/ledgerly/commissions.py
+@@ -1,3 +1,38 @@
+-def partner_commission(amount, rate_percent):
+-    """Reseller commission on a sale."""
+-    raise NotImplementedError
++"""Reseller partner commissions."""
++
++from decimal import Decimal
++
++from . import audit
++from .errors import BillingError
++from .money import round_money, to_money
++
++_HUNDRED = Decimal("100")
++_MIN_RATE = Decimal("0")
++_MAX_RATE = Decimal("50")
++
++
++def partner_commission(amount, rate_percent, *, idempotency_key=None):
++    """Return the reseller commission on a sale.
++
++    The reseller earns ``rate_percent`` percent of ``amount``, rounded to the
++    cent.  ``rate_percent`` must be between 0 and 50 inclusive.
++    """
++    if idempotency_key is not None:
++        for entry in audit.events("partner_commission"):
++            if entry.get("idempotency_key") == idempotency_key:
++                return entry["commission"]
++
++    amount = to_money(amount)
++    rate = to_money(rate_percent)
++    if rate < _MIN_RATE or rate > _MAX_RATE:
++        raise BillingError("invalid_rate", str(rate))
++
++    commission = round_money(amount * rate / _HUNDRED)
++    audit.record(
++        "partner_commission",
++        amount=amount,
++        rate_percent=rate,
++        commission=commission,
++        idempotency_key=idempotency_key,
++    )
++    return commission
