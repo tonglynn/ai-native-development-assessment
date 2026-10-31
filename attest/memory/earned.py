@@ -141,7 +141,8 @@ class EarnedMemory(MemorySystem):
         self.reserved = reserved  # optional: injection slots kept for repository-wide rules, most-confirmed first (D46; 0 = off)
         self.retriever = check_retriever(retriever)
         self.name = ("attest" + ("" if gate else "_no_gate") + ("" if scope else "_no_scope")
-                     + ("_emb" if retriever == "embedding" else "") + ("_general" if general else ""))
+                     + {"embedding": "_emb", "hybrid": "_hybrid", "hybrid_rerank": "_hybrid_rerank"}.get(retriever, "")
+                     + ("_general" if general else ""))
 
     def _same_scope(self, item: dict, task: Task) -> bool:
         return not self.scope or item["scope"]["repo"] == task.repo_name
@@ -163,7 +164,13 @@ class EarnedMemory(MemorySystem):
 
     def ranking(self, task: Task, k: int | None = MAX_SHOWN, version: str | None = None) -> tuple[list[tuple[str, float]], float]:
         """(ranked candidates, milliseconds). Only this step differs between the retrieval arms."""
-        return timed_rank(self.retriever, f"{task.title} {task.issue}", self.candidates(task, version), k)
+        cands = self.candidates(task, version)
+        details = None
+        if self.retriever == "hybrid_rerank":  # applicability conditions for the reranker (D47)
+            items = self.store.items()
+            details = {i: f"type {items[i].get('type')}; learned in {', '.join(items[i]['scope'].get('files') or []) or 'no file'}; "
+                          f"holds for {_range(items[i]['scope'])}" for i in cands}
+        return timed_rank(self.retriever, f"{task.title} {task.issue}", cands, k, details)
 
     def _reserve(self, task: Task, version: str, ranked: list) -> list:
         """Keep up to self.reserved of the injected slots for repository-wide rules (D46), most

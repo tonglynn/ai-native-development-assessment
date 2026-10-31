@@ -136,13 +136,17 @@ def _bootstrap_diff(pairs: list[tuple[float, float]], resamples: int = 10000, se
             "worse": sum(d < 0 for d in diffs), "same": sum(d == 0 for d in diffs)}
 
 
-def retrieval_quality(source: Path, out: Path, reps: int) -> dict:
-    """Offline evaluation of both rankers on the same post-learning memories."""
+ARM = {"lexical": "", "embedding": "_emb", "hybrid": "_hybrid", "hybrid_rerank": "_hybrid_rerank"}
+
+
+def retrieval_quality(source: Path, out: Path, reps: int, retrievers: tuple = ("lexical", "embedding"),
+                      systems: tuple = SYSTEMS) -> dict:
+    """Offline evaluation of the rankers on the same post-learning memories."""
     out.mkdir(parents=True, exist_ok=True)
     queries = [t for g in QUERY_GROUPS for t in load_tasks(g)]
     query_ids = {t.id for t in queries}
     rows = []
-    for system in SYSTEMS:
+    for system in systems:
         for rep in range(1, reps + 1):
             path = snapshot_path(source, system, rep)
             if not path.exists():
@@ -151,8 +155,8 @@ def retrieval_quality(source: Path, out: Path, reps: int) -> dict:
             items = json.loads(path.read_text())
             check_no_leakage(items, query_ids)
             arms = {}
-            for retriever in ("lexical", "embedding"):
-                memory = make_memory(system if retriever == "lexical" else f"{system}_emb", None)
+            for retriever in retrievers:
+                memory = make_memory(system + ARM[retriever], None)
                 seed(memory, items)
                 arms[retriever] = memory
             version = {q.id: repo_version(REPOS_DIR / q.repo) for q in queries}
@@ -169,8 +173,8 @@ def retrieval_quality(source: Path, out: Path, reps: int) -> dict:
                     rows.append({"system": system, "rep": rep, "retriever": retriever, "task": q.id, "group": q.group,
                                  "candidates": len(cands), "ms": ms, "conventions_in_top5": tier, **m})
     summary = []
-    for system in SYSTEMS:
-        for retriever in ("lexical", "embedding"):
+    for system in systems:
+        for retriever in retrievers:
             rs = [r for r in rows if r["system"] == system and r["retriever"] == retriever]
             if not rs:
                 continue
@@ -184,12 +188,14 @@ def retrieval_quality(source: Path, out: Path, reps: int) -> dict:
                             "ms_p95": sorted(r["ms"] for r in rs)[int(0.95 * (len(rs) - 1))],
                             "review_only_rule_in_top5": _mean(float(x) for x in review_only)})
     paired = {}
-    for system in SYSTEMS:
-        for metric in ("recall", "precision", "rr"):
-            key = lambda r: (r["rep"], r["task"])  # noqa: E731
-            lex = {key(r): r[metric] for r in rows if r["system"] == system and r["retriever"] == "lexical"}
-            emb = {key(r): r[metric] for r in rows if r["system"] == system and r["retriever"] == "embedding"}
-            paired[f"{system}:{metric}"] = _bootstrap_diff([(lex[k], emb[k]) for k in sorted(lex) if k in emb])
+    for system in systems:
+        for other in retrievers[1:]:
+            for metric in ("recall", "precision", "rr"):
+                key = lambda r: (r["rep"], r["task"])  # noqa: E731
+                lex = {key(r): r[metric] for r in rows if r["system"] == system and r["retriever"] == "lexical"}
+                emb = {key(r): r[metric] for r in rows if r["system"] == system and r["retriever"] == other}
+                name = f"{system}:{metric}" if other == "embedding" else f"{system}:{other}:{metric}"
+                paired[name] = _bootstrap_diff([(lex[k], emb[k]) for k in sorted(lex) if k in emb])
     result = {"source": str(source), "k": K, "judge": JUDGE, "embedding": embedding.info(), "summary": summary,
               "paired_embedding_minus_lexical": paired, "per_query": rows}
     (out / "retrieval_quality.json").write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n")
@@ -214,19 +220,21 @@ def _quality_md(res: dict) -> str:
         lines.append(f"| {r['system']} | {r['retriever']} | {r['queries']} | {_pct(r['recall@5'])} | {_pct(r['precision@5'])} | "
                      f"{'–' if r['mrr'] is None else format(r['mrr'], '.2f')} | {_pct(r['review_only_rule_in_top5'])} | {irr} | "
                      f"{r['ms_median']:.1f} | {r['ms_p95']:.1f} |")
-    lines += ["", "Paired per query (embedding − lexical), bootstrap 95% interval:", "",
-              "| System | Metric | n | Mean difference | 95% CI | Better / worse / same |", "|---|---|---|---|---|---|"]
+    lines += ["", "Paired per query (other retriever − lexical), bootstrap 95% interval:", "",
+              "| System | Retriever | Metric | n | Mean difference | 95% CI | Better / worse / same |", "|---|---|---|---|---|---|---|"]
     for key, d in res["paired_embedding_minus_lexical"].items():
         if d:
-            s, m = key.split(":")
-            lines.append(f"| {s} | {m} | {d['n']} | {d['mean_diff']:+.3f} | [{d['ci_low']:+.3f}, {d['ci_high']:+.3f}] | "
+            parts = key.split(":")
+            s, r, m = (parts[0], "embedding", parts[1]) if len(parts) == 2 else parts
+            lines.append(f"| {s} | {r} | {m} | {d['n']} | {d['mean_diff']:+.3f} | [{d['ci_low']:+.3f}, {d['ci_high']:+.3f}] | "
                          f"{d['better']} / {d['worse']} / {d['same']} |")
     return "\n".join(lines) + "\n"
 
 
 # ---------------------------------------------------------------- 2. end to end
 
-def run_ablation(root: Path, source: Path, reps: int = 3, parallel: int = 4, settings: Settings | None = None) -> None:
+def run_ablation(root: Path, source: Path, reps: int = 3, parallel: int = 4, settings: Settings | None = None,
+                 conditions: tuple = ABLATION_CONDITIONS) -> None:
     settings = settings or Settings()
     root.mkdir(parents=True, exist_ok=True)
     missing = [str(snapshot_path(source, s, r)) for s in SYSTEMS for r in range(1, reps + 1) if not snapshot_path(source, s, r).exists()]
@@ -235,12 +243,12 @@ def run_ablation(root: Path, source: Path, reps: int = 3, parallel: int = 4, set
     embedding.rank("warm up", {"x": "load the model once before the threads start"}, 1)
     started = time.time()
     (root / "ablation_meta.json").write_text(json.dumps({
-        "source": str(source), "conditions": ABLATION_CONDITIONS, "reps": reps, "phases": [p for p, _, _ in PHASES[1:]],
+        "source": str(source), "conditions": conditions, "reps": reps, "phases": [p for p, _, _ in PHASES[1:]],
         "shown_to_agent": 6, "embedding": embedding.info(), "model": settings.model, "thinking": settings.thinking,
         "started": started}, indent=2) + "\n")
 
     def job(condition, rep):
-        items = json.loads(snapshot_path(source, condition.removesuffix("_emb"), rep).read_text())
+        items = json.loads(snapshot_path(source, "attest" if condition.startswith("attest") else "reasoningbank", rep).read_text())
 
         def before(phase, memory):
             if phase == "heldout":
@@ -248,7 +256,7 @@ def run_ablation(root: Path, source: Path, reps: int = 3, parallel: int = 4, set
 
         return run_sequence(condition, rep, root, settings, lambda m: print(m, flush=True), phases=PHASES[1:], before_phase=before)
 
-    jobs = [(c, r) for r in range(1, reps + 1) for c in ABLATION_CONDITIONS]
+    jobs = [(c, r) for r in range(1, reps + 1) for c in conditions]
     with ThreadPoolExecutor(max_workers=parallel) as pool:
         futures = {pool.submit(job, c, r): (c, r) for c, r in jobs}
         for f in as_completed(futures):
@@ -289,4 +297,24 @@ def summarise_ablation(root: Path) -> dict:
             "business_risks": risks,
         }
     (root / "ablation_summary.json").write_text(json.dumps(out, indent=2, default=str) + "\n")
+    return out
+
+
+def summarise_arms(root: Path, baseline: str = "attest") -> dict:
+    """End-to-end comparison of every arm in root against the baseline arm (D47)."""
+    from .analysis import _tokens, business_risks, load_results, paired, usable
+
+    results, excluded = usable(load_results(root))
+    arms = sorted({r["condition"] for r in results})
+    per_arm = {}
+    for arm in arms:
+        a = [r for r in results if r["condition"] == arm]
+        first = [r for r in a if not r["attempts"][0].get("crashed")]
+        ms = [m for m in (r.get("retrieval_debug", {}).get("retrieval_ms") for r in a) if m is not None]
+        per_arm[arm] = {"runs": len(a), **{f"pass@1_{g}": _mean(float(r["first_pass"]) for r in first if r["group"] == g) for g in QUERY_GROUPS},
+                        "tokens_mean": _mean(_tokens(r) for r in a), "retrieval_ms_median": statistics.median(ms) if ms else None}
+    out = {"excluded_for_leaks": len(excluded), "baseline": baseline, "arms": per_arm,
+           **{f"paired_{g}": paired(results, g, baseline=baseline) for g in QUERY_GROUPS},
+           "business_risks": business_risks(results)}
+    (root / "arms_summary.json").write_text(json.dumps(out, indent=2, default=str) + "\n")
     return out

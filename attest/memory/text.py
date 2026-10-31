@@ -44,6 +44,32 @@ def rank(query: str, docs: dict[str, str], k: int) -> list[tuple[str, float]]:
     return scored[:k]
 
 
+def bm25_rank(query: str, docs: dict[str, str], k: int | None, k1: float = 1.5, b: float = 0.75) -> list[tuple[str, float]]:
+    """Okapi BM25 (used by the hybrid retriever, D47); ties broken by id like rank()."""
+    if not docs:
+        return []
+    toks = {d: tokens(t) for d, t in docs.items()}
+    n = len(docs)
+    avg = sum(len(v) for v in toks.values()) / n or 1.0
+    df: dict[str, int] = {}
+    for v in toks.values():
+        for t in set(v):
+            df[t] = df.get(t, 0) + 1
+    q = set(tokens(query))
+    scored = []
+    for d, v in toks.items():
+        tf: dict[str, int] = {}
+        for t in v:
+            tf[t] = tf.get(t, 0) + 1
+        score = 0.0
+        for t in q & tf.keys():
+            idf = math.log(1 + (n - df[t] + 0.5) / (df[t] + 0.5))
+            score += idf * tf[t] * (k1 + 1) / (tf[t] + k1 * (1 - b + b * len(v) / avg))
+        scored.append((d, round(score, 4)))
+    scored.sort(key=lambda x: (-x[1], x[0]))
+    return scored[:k]
+
+
 def salient(text: str) -> set[str]:
     return {t for t in tokens(text) if len(t) >= 5}
 

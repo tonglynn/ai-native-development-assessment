@@ -102,12 +102,25 @@ def cmd_ablation(args) -> int:
     from . import ablation
 
     root, source = RUNS_DIR / args.name, RUNS_DIR / args.source
+    arms = tuple(args.arms.split(",")) if args.arms else None
     if args.part in ("quality", "both"):
-        res = ablation.retrieval_quality(source, root, reps=args.reps)
+        if arms:  # D47: lexical baseline plus the arms' retrievers, Attest only; reuse earlier judge labels if given
+            retrievers = ("lexical",) + tuple(a.removeprefix("attest_") for a in arms if a != "attest")
+            if args.labels:
+                root.mkdir(parents=True, exist_ok=True)
+                if not (root / "labels.json").exists():
+                    (root / "labels.json").write_text((RUNS_DIR / args.labels / "labels.json").read_text())
+            ablation.retrieval_quality(source, root, reps=args.reps, retrievers=retrievers, systems=("attest",))
+        else:
+            ablation.retrieval_quality(source, root, reps=args.reps)
         print((root / "retrieval_quality.md").read_text())
     if args.part in ("e2e", "both"):
-        ablation.run_ablation(root, source, reps=args.reps, parallel=args.parallel, settings=Settings(thinking=args.thinking))
-        print(json.dumps(ablation.summarise_ablation(root), indent=2, default=str))
+        if arms:
+            ablation.run_ablation(root, source, reps=args.reps, parallel=args.parallel, settings=Settings(thinking=args.thinking), conditions=arms)
+            print(json.dumps(ablation.summarise_arms(root), indent=2, default=str))
+        else:
+            ablation.run_ablation(root, source, reps=args.reps, parallel=args.parallel, settings=Settings(thinking=args.thinking))
+            print(json.dumps(ablation.summarise_ablation(root), indent=2, default=str))
     return 0
 
 
@@ -204,6 +217,8 @@ def main(argv=None) -> int:
 
     p = sub.add_parser("ablation", help="exploratory retrieval ablation: lexical vs embedding ranking on the main experiment's memory")
     p.add_argument("--name", default="retrieval_ablation")
+    p.add_argument("--arms", default="", help="D47: comma-separated conditions, e.g. attest,attest_hybrid,attest_hybrid_rerank")
+    p.add_argument("--labels", default="", help="D47: earlier ablation run whose judge labels to reuse")
     p.add_argument("--source", default="main", help="runs/<source> must hold the main experiment's memory snapshots")
     p.add_argument("--part", default="both", choices=["quality", "e2e", "both"])
     p.add_argument("--reps", type=int, default=3)
