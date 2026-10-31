@@ -49,7 +49,11 @@ def _headers(accept: str = "application/vnd.github+json") -> dict:
 
 def gh(path: str, accept: str = "application/vnd.github+json", **params):
     for attempt in range(3):
-        resp = requests.get(f"{API}{path}", headers=_headers(accept), params=params, timeout=30)
+        try:
+            resp = requests.get(f"{API}{path}", headers=_headers(accept), params=params, timeout=30)
+        except (requests.ConnectionError, requests.Timeout):  # transient network failure: wait and retry
+            time.sleep(10 * (attempt + 1))
+            continue
         if resp.status_code in (403, 429) and "rate limit" in resp.text.lower():
             time.sleep(15 * (attempt + 1))
             continue
