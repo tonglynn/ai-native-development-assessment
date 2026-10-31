@@ -126,6 +126,21 @@ OWASP MCP Top 10 (https://owasp.org/projects/mcp-top-10), OWASP AI Agent Securit
 | Agent goal hijacking via memory | a stored note re-states the task ("instead of X, do Y") and is injected into every later task in the repository | the D41 trust boundary limits who can make a note a repository-wide rule; governance (D39) can hold notes that conflict with a cited rule; the D44 run measures how often an injected instruction is obeyed and stored | partly covered by D41/D39/D44; a dedicated "goal conflict" check would need a task model |
 | Security gateway | one place that applies every check before a note is stored or injected | order: secret scan (D43) → write gate → trust tier (D41) → governance (D39) → sealed append (D42); at injection: scope → liveness (D34) → quarantine status (D45) | the pieces exist as options; wiring them as one default changes the evaluated system and needs its own run |
 
+## Memory value and injection: next stage (design, after D63–D65) / 记忆价值与注入：下一阶段（设计）
+
+What is measured so far: putting business-critical rules first removed displacement on Ledgerly (D64, arm C:
+idempotency rule injected 18 of 18 times; 77% vs 70%, not shown better); a hard cap on core notes (arm D, 3 at most)
+saved 36% of memory tokens but dropped core rules on tasks needing four; v3.1 already injects 118 of 120 needed core
+rules, and its remaining failures are rules injected but not followed (D65). Scope kept every Ledgerly note out of
+simkit in every run. Three things are not built:
+
+| Item | Design | Why not yet / what it needs |
+|---|---|---|
+| Criticality by task type, not by a fixed list | criticality = importance of the rule for the operation the task performs (moving money → idempotency, audit, approval; amount calculation → Decimal, rounding; refactoring → error and interface conventions), from the task text and the note's scope; no rule is permanently first | needs a task-type taxonomy written by the team and a held-out set of task types; arm C uses a fixed core list that fits Ledgerly only |
+| Soft budget instead of a core cap | keep every relevant core rule; order regular rules by relevance and criticality; candidates never injected globally; when over the token budget, compress regular rules first (the Context Manager's extractive summary, D49), never drop a core rule | arm D's cap of 3 was the failure; the compression path exists in `attest/context/manager.py` but is not wired to injection |
+| Cross-domain check | does criticality-first injection help in another domain, does one domain's core rules crowd out another's within one repository | simkit has 3 control tasks and no business rules of its own; this needs new tasks with their own critical rules (e.g. a second business module in Ledgerly, or a simkit module with safety limits), i.e. benchmark work, not only a run |
+| Rules injected but not followed | the remaining failures of the best pipelines (C1 precision, C5 idempotency) happen with the rule in the prompt | a pre-submit code check or the team's code checks (D60) run as feedback before the agent submits, measured against injection alone |
+
 ## Deliberately not added / 刻意不加
 
 | Technology | Why not |
