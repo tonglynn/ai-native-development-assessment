@@ -137,19 +137,22 @@ def offline_metrics(items: dict, policy: str, tick: int, snap: dict) -> dict:
             "active_notes": sum(active(it) for it in items.values())}
 
 
-def end_to_end(out: Path, rep: int, policy: str, tick: int, items: dict) -> list[dict]:
+def target_memory(out: Path, rep: int, policy: str, tick: int, items: dict):
     target = ForgettingMemory(out / policy / f"t{tick}" / f"r{rep}" / "memory", policy, lambda: tick)
     if not target.store.items():
         for _, it in sorted(items.items()):
             target.store.append("add", item=it, reason=f"state after {tick} tasks ({policy})")
-    rows = []
-    for task in load_tasks("heldout") + [load_task(t) for t in STALE]:
-        r = run_task(task, target, out / policy / f"t{tick}" / f"r{rep}" / task.id, settings=Settings(), update_memory=False)
-        rows.append({"policy": policy, "tick": tick, "rep": rep, "task": task.id, "group": task.group, "first_pass": r["first_pass"],
-                     "crashed": r["attempts"][0]["crashed"], "conv_failed": r["attempts"][0]["conv_failed"],
-                     "injected_one_off": sum(i.startswith("at-c") for i in r["shown_notes"])})
-        print(json.dumps(rows[-1]), flush=True)
-    return rows
+    return target
+
+
+def one_task(out: Path, rep: int, policy: str, tick: int, target, task) -> dict:
+    """Memory is frozen (update_memory=False), so every task of every state can run at the same time."""
+    r = run_task(task, target, out / policy / f"t{tick}" / f"r{rep}" / task.id, settings=Settings(), update_memory=False)
+    row = {"policy": policy, "tick": tick, "rep": rep, "task": task.id, "group": task.group, "first_pass": r["first_pass"],
+           "crashed": r["attempts"][0]["crashed"], "conv_failed": r["attempts"][0]["conv_failed"],
+           "injected_one_off": sum(i.startswith("at-c") for i in r["shown_notes"])}
+    print(json.dumps(row), flush=True)
+    return row
 
 
 def main() -> None:
@@ -170,9 +173,11 @@ def main() -> None:
                 states[(policy, tick, rep)] = snap["items"]
     runs = []
     if not args.offline_only:
+        targets = {k: target_memory(args.out, k[2], k[0], k[1], states[k]) for k in sorted(states)}
+        tasks = load_tasks("heldout") + [load_task(t) for t in STALE]
+        jobs = [(k, t) for k in sorted(states) for t in tasks]
         with ThreadPoolExecutor(max_workers=args.parallel) as pool:
-            for rows in pool.map(lambda k: end_to_end(args.out, k[2], k[0], k[1], states[k]), sorted(states)):
-                runs += rows
+            runs = list(pool.map(lambda j: one_task(args.out, j[0][2], j[0][0], j[0][1], targets[j[0]], j[1]), jobs))
     compare = {}
     for tick in CHECKPOINTS:
         res = [{"condition": r["policy"], "task_id": f"{r['task']}", "group": r["group"], "first_pass": r["first_pass"]}
