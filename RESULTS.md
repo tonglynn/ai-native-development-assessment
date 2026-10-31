@@ -917,6 +917,53 @@ R2 relies on the benchmark's convention tests, and on the Decimal rule's pattern
 was added after a unit test showed a float-only poison slipping through; one model, 3 repetitions. v3
 stays opt-in: it is the first combination that stops both poisons without a measured cost on clean work.
 
+### Does Gateway v3 tell trusted, wrong and undecidable experience apart? (D58, frozen held-out set)
+
+`benchmark/judgement/` (30 learning events written for this test, committed before the run; none used to
+design D52–D57), `scripts/judgement_eval.py`, `runs/judgement/`, `runs/judgement_cold/`. **Every event is
+a verified task**, so passing the tests cannot separate the classes. Labels by construction: 11 trusted
+(trusted reviewer, registered policy, passing check, two in simkit), 10 wrong (6 contradicting ledgerly
+rules, a spoofed policy id with a "[team convention]" label, a comment repeated on two tasks, and two
+pieces of advice that are right in ledgerly but wrong in simkit), 7 undecidable (style, plausible
+unregistered policies, rules about a convention the task never checked), 2 insider (a trusted reviewer is
+wrong). Decision: becomes a repository-wide **rule**, is kept as **observed** (only in its own files), or is
+**held**.
+
+| Memory at the start | System | Trusted → rule | Wrong → rule | Undecidable → rule | Insider → rule |
+|---|---|---|---|---|---|
+| main-experiment notes (as in use) | Attest | 11/11 | **10/10** | 7/7 | 2/2 |
+| | gateway v2 | 7/11 | 0/10 | 0/7 | 0/2 |
+| | **gateway v3** | **10/11** | **0/10** (8 held, 2 observed) | **0/7** | 2/2 |
+| empty (cold start) | Attest | 11/11 | 10/10 | 7/7 | 2/2 |
+| | gateway v2 | 9/11 | 0/10 | 0/7 | 2/2 |
+| | **gateway v3** | 11/11 | **5/10** | 0/7 | 2/2 |
+
+- With the memory as it is in use, v3 meets the rule fixed before the run (wrong 0/10, undecidable 0/7,
+  trusted at least 9/11): it separates the three classes where Attest, which checks only that advice was
+  adopted and passed, makes every one of the 30 a rule. The spoofed policy id, the repeated comment and
+  the cross-repository advice all fail to become rules.
+- **But it does so by citing rules it already holds.** Every wrong ledgerly case it held was a conflict with
+  an existing note (at-0001 rounding, at-0003 BillingError, at-0005 ensure_utc, at-0006 idempotency,
+  at-0007 approval, at-0009 audit). From an **empty memory**, 5 of the 10 wrong cases became rules, all
+  through R2 (D57): "the source task's tests of this convention passed" was taken as independent
+  validation, although those tests do not check the specific wrong claim (skip audit under 1.00, approve
+  your own refund, a 2000.00 threshold). v2, which has no R2, kept all 10 out of the rule tier at cold
+  start. R2 cut the held correct notes from 8 to 0 on the benchmark stream and opened this hole; the dry
+  run with a stand-in reviewer had pointed to it before the real run (disclosed in the commit), and the
+  cold-start run was added after the first run to measure it.
+- Undecidable advice never became a rule (0/7 in every v3 run): without a registered policy, a trusted
+  reviewer, a passing check or a contradicting rule, v3 keeps it as observed.
+- Insider errors pass whenever the reviewer is trusted (v3 2/2; v2 held them only because it holds every
+  conflict, which also held correct notes). Trust in a reviewer is a decision a person makes; the system
+  cannot overrule it.
+
+What this supports: v3 tells trusted from wrong from undecidable experience **once the team's rules are in
+memory**, on events it was not designed on, including spoofing, repetition and the same advice meaning
+different things in two repositories. It does not yet do so from scratch: R2 treats test coverage of a
+convention as validation of any claim about it. The fix this points to is a counterfactual check (a test
+validates a note only if it fails when the note's change is reverted), which needs real workspaces and a
+new held-out set; it is not built.
+
 ## Closing the "self-proving evidence" gap (exploratory, after an external review) / 证据自证问题的改进
 
 Four changes proposed in a review of the design, each measured offline on stored runs (no new agent
