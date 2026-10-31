@@ -85,6 +85,9 @@ jobs:
           source = str(req.get("source", "main"))
           assert re.fullmatch(r"[A-Za-z0-9_-]+", source), source
           print(f"source={source}")
+          systems = str(req.get("systems", "attest,reasoningbank,ace"))
+          assert re.fullmatch(r"[a-z_,]+", systems), systems
+          print(f"systems={systems}")
           part = str(req.get("part", "both"))
           assert part in {"quality", "e2e", "both"}, part
           print(f"part={part}")
@@ -106,6 +109,7 @@ jobs:
           PRS: ${{ steps.req.outputs.prs }}
           SOURCE: ${{ steps.req.outputs.source }}
           PART: ${{ steps.req.outputs.part }}
+          SYSTEMS: ${{ steps.req.outputs.systems }}
           ATTEST_EMBED_CACHE: ${{ runner.temp }}/fastembed
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -119,7 +123,7 @@ jobs:
             distill_check) python scripts/distill_check.py runs/pilot3_nomem "runs/$NAME" ;;
             poison|poison_float|poison_float_guard|injection|scale) python -m attest stress --kind "$COMMAND" --name "$NAME" --reps "$REPS" --parallel "$PARALLEL" ;;
             case_study) python scripts/ingest_github_reviews.py --repo "$REPO" --prs "$PRS" --out "runs/$NAME" ;;
-            retro) python scripts/retro_eval.py --repo "$REPO" --prs "$PRS" --out "runs/$NAME" ;;
+            retro) python scripts/retro_eval.py --repo "$REPO" --prs "$PRS" --out "runs/$NAME" --systems "$SYSTEMS" ;;
             retrieval_ablation) python -m attest ablation --name "$NAME" --source "$SOURCE" --part "$PART" --reps "$REPS" --parallel "$PARALLEL" ;;
             context_eval) python scripts/context_eval.py --out "runs/$NAME" --reps "$REPS" --parallel "$PARALLEL" ;;
             forgetting_eval) python scripts/forgetting_eval.py --out "runs/$NAME" --reps "$REPS" --parallel "$PARALLEL" ;;

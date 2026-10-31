@@ -80,6 +80,16 @@ Rules:
 - Only include rules that the accepted change actually applies; if you cannot point to a changed line that applies it, leave it out.
 - If nothing qualifies, return {"candidates": []}."""
 
+# Optional variant (D46; off in the experiment): after the Saleor coverage funnel, notes are written as
+# the general rule plus the example it was learned from, and marked repository-wide or local.
+DISTILL_GENERAL_SYSTEM = DISTILL_SYSTEM.replace(
+    """  "content": one or two imperative sentences a developer can act on; name the exact modules and functions,""",
+    """  "content": one or two imperative sentences stating the RULE as it applies across this repository, so that it can be
+             recognised in a change to a different feature; name modules, functions or files only when the rule is about them,
+  "example": one line: where this task applied the rule (file, function), for illustration,
+  "breadth": "repository" if the rule applies to most changes of this repository (e.g. changelog, tests, typing, naming,
+             migrations, API compatibility), "local" if it applies only to one module or feature,""")
+
 RELATE_SYSTEM = """You compare a NEW piece of repository experience with EXISTING items from the same repository.
 For each existing item decide how the NEW one relates to it:
   "duplicate"  - states the same rule,
@@ -121,15 +131,17 @@ def validity(item: dict, version: str | None) -> str:
 class EarnedMemory(MemorySystem):
     def __init__(self, store_dir: Path | None, *, gate: bool = True, scope: bool = True, backend: str | None = None,
                  retriever: str = "lexical", review_model: str | None = None, relevance: bool = False,
-                 secret_scan: bool = False):
+                 secret_scan: bool = False, general: bool = False, reserved: int = 0):
         self.store = open_store(store_dir, backend)
         self.gate, self.scope = gate, scope
         self.review_model = review_model  # optional independent review in the write gate (off in the experiment)
         self.relevance = relevance  # optional: the applied line must name code the evidence quote names (D37; off in the experiment)
         self.secret_scan = secret_scan  # optional: reject or redact credentials before anything is stored (D43; off in the experiment)
+        self.general = general  # optional: notes as a general rule + example, marked repository-wide or local (D46; off)
+        self.reserved = reserved  # optional: injection slots kept for repository-wide rules, most-confirmed first (D46; 0 = off)
         self.retriever = check_retriever(retriever)
         self.name = ("attest" + ("" if gate else "_no_gate") + ("" if scope else "_no_scope")
-                     + ("_emb" if retriever == "embedding" else ""))
+                     + ("_emb" if retriever == "embedding" else "") + ("_general" if general else ""))
 
     def _same_scope(self, item: dict, task: Task) -> bool:
         return not self.scope or item["scope"]["repo"] == task.repo_name
@@ -153,10 +165,22 @@ class EarnedMemory(MemorySystem):
         """(ranked candidates, milliseconds). Only this step differs between the retrieval arms."""
         return timed_rank(self.retriever, f"{task.title} {task.issue}", self.candidates(task, version), k)
 
+    def _reserve(self, task: Task, version: str, ranked: list) -> list:
+        """Keep up to self.reserved of the injected slots for repository-wide rules (D46), most
+        independent tasks first, then by relevance; the remaining slots go by relevance as before."""
+        items = self.store.items()
+        score = dict(self.ranking(task, None, version)[0])
+        wide = sorted((i for i in self.candidates(task, version) if items[i].get("breadth") == "repository"),
+                      key=lambda i: (-len({e.get("task_id") for e in items[i]["evidence"]}), -score.get(i, 0.0), i))[: self.reserved]
+        rest = [(i, sc) for i, sc in ranked if i not in wide]
+        return [(i, score.get(i, 0.0)) for i in wide] + rest
+
     def retrieve(self, task: Task, repo_version: str) -> Retrieved:
         items = self.store.items()
         excluded = {i: why for i, it in items.items() if (why := self._exclusion(it, task, repo_version))}
         ranked, ms = self.ranking(task, MAX_RETRIEVED, repo_version)
+        if self.reserved:
+            ranked = self._reserve(task, repo_version, ranked)
         chosen = [items[i] for i, _ in ranked[:MAX_SHOWN]]
         version_warnings = [it["id"] for it in chosen
                             if self.scope and _major(it["scope"]["observed_version"]) != _major(repo_version)
@@ -176,7 +200,7 @@ class EarnedMemory(MemorySystem):
                          "Follow them unless the code or CHANGELOG.md shows they no longer hold.")
         for it in chosen:
             u, sc = it["usage"], it["scope"]
-            lines.append(f"- [{it['id']}] {it['title']}: {it['content']}")
+            lines.append(f"- [{it['id']}] {it['title']}: {it['content']}" + (f" (example: {it['example']})" if it.get("example") else ""))
             valid = f"valid from {sc['valid_from']}" if sc.get("valid_from") and sc["valid_from"] != sc["observed_version"] else ""
             refs = ", ".join((it.get("source") or {}).get("references") or [])
             lines.append(
@@ -262,7 +286,8 @@ class EarnedMemory(MemorySystem):
         if self.gate and not run["final_pass"]:
             return [self.store.append("reject", task_id=task.id, candidate=None, reason="task not verified: nothing is learned")]
         data = ({"candidates": candidates} if candidates is not None
-                else llm.complete_json(DISTILL_SYSTEM, experience_packet(task, repo_version, run, transcript, diff)))
+                else llm.complete_json(DISTILL_GENERAL_SYSTEM if self.general else DISTILL_SYSTEM,
+                                       experience_packet(task, repo_version, run, transcript, diff)))
         comments = run["attempts"][0]["review_comments"]
         corpus, changed = source_corpus(comments, diff), parse_diff(diff)
         events = []
@@ -396,6 +421,8 @@ class EarnedMemory(MemorySystem):
             "topic": cand.get("topic", ""),
             "title": (cand.get("title") or cand["content"][:40]).strip(),
             "content": cand["content"].strip(),
+            **({"example": str(cand.get("example") or "").strip()[:300],
+                "breadth": cand.get("breadth") if cand.get("breadth") in ("repository", "local") else "local"} if self.general else {}),
             "scope": {"repo": task.repo_name, "observed_version": repo_version,
                       # a correction inherits the range of the rule it fixes; a changed rule starts at this version
                       "valid_from": min(corrected_from, key=_version_tuple) if corrected_from else repo_version,

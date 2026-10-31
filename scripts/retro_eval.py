@@ -30,9 +30,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from attest import llm  # noqa: E402
 from attest.github_reviews import reviewed_merged_prs  # noqa: E402
 from attest.memory import make_memory  # noqa: E402
+from attest.memory.earned import EarnedMemory  # noqa: E402
 
 JUDGE = "deepseek/deepseek-v4-pro"
 SYSTEMS = ("attest", "reasoningbank", "ace")
+# D46: the general-notes variant; its memory is also read with the reserved slots off (same notes,
+# no extra distillation), so wording and slots are separated.
+VIEWS = {"attest_general_noreserve": "attest_general"}
 
 CLASSIFY = """You read the review comments a maintainer left on one pull request of an open-source project.
 For each numbered comment decide its kind:
@@ -65,7 +69,9 @@ def main() -> None:
     ap.add_argument("--prs", type=int, default=60)
     ap.add_argument("--test-frac", type=float, default=0.35)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--systems", default=",".join(SYSTEMS))
     args = ap.parse_args()
+    systems_used = tuple(args.systems.split(","))
     name = args.repo.split("/")[1]
     args.out.mkdir(parents=True, exist_ok=True)
 
@@ -74,7 +80,7 @@ def main() -> None:
     train, test = prs[:-n_test], prs[-n_test:]
     print(f"{len(prs)} reviewed PRs: train {len(train)}, test {len(test)}", flush=True)
 
-    systems = {s: make_memory(s, args.out / s) for s in SYSTEMS}
+    systems = {s: make_memory(s, args.out / s) for s in systems_used}
     for pr in train:
         task = SimpleNamespace(id=f"PR#{pr['number']}", title=pr["title"], issue=f"{pr['title']}\n\n{pr['body']}", repo_name=name)
         run = {"first_pass": False, "final_pass": True, "verified_by": "merged by the maintainers", "shown_notes": [], "cited_notes": [],
@@ -83,9 +89,12 @@ def main() -> None:
             memory.learn(task, "main", run, "", pr["diff"])
         print(f"learned from PR#{pr['number']}: " + ", ".join(f"{s}={len(m.store.items())}" for s, m in systems.items()), flush=True)
 
+    for view, base in VIEWS.items():
+        if base in systems:
+            systems[view] = EarnedMemory(args.out / base, general=True, reserved=0)
     rng = random.Random(0)
     per_pr = []
-    totals = {s: {"conv": 0, "covered": 0, "shown": 0, "relevant": 0} for s in SYSTEMS}
+    totals = {s: {"conv": 0, "covered": 0, "shown": 0, "relevant": 0} for s in systems}
     lines = write_summary(args, prs, train, test, systems, totals, per_pr)
     for pr in test:
         numbered = "\n".join(f"{i + 1}. {c}" for i, c in enumerate(pr["comments"]))
@@ -123,7 +132,7 @@ def main() -> None:
             t["relevant"] += relevant
         per_pr.append(row)
         print(json.dumps({k: row[k] for k in ("pr", "comments")} | {"convention": len(conv)} |
-                         {s: (row[s]["covered"], len(row[s]["shown"]), row[s]["relevant"]) for s in SYSTEMS}), flush=True)
+                         {s: (row[s]["covered"], len(row[s]["shown"]), row[s]["relevant"]) for s in systems}), flush=True)
         # Written after every PR, so a cancelled or timed-out run still leaves a (partial) summary.
         lines = write_summary(args, prs, train, test, systems, totals, per_pr)
     print("\n".join(lines))
@@ -131,7 +140,7 @@ def main() -> None:
 
 def write_summary(args, prs, train, test, systems, totals, per_pr) -> list[str]:
     summary = []
-    for s in SYSTEMS:
+    for s in systems:
         t = totals[s]
         summary.append({"system": s, "notes_stored": len(systems[s].store.items()),
                         "convention_comments": t["conv"], "anticipated": t["covered"],

@@ -36,6 +36,8 @@ def make_memory(condition: str, store_dir: Path | None) -> MemorySystem:
         return EarnedMemory(store_dir, scope=False)
     if condition == "attest_emb":
         return EarnedMemory(store_dir, retriever="embedding")
+    if condition == "attest_general":  # D46, exploratory: general notes + 2 slots for repository-wide rules
+        return EarnedMemory(store_dir, general=True, reserved=2)
     if condition == "reasoningbank_emb":
         return ReasoningBankMemory(store_dir, retriever="embedding")
     raise ValueError(f"unknown memory condition {condition!r}; choose from {CONDITIONS}")
