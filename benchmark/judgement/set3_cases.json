@@ -1,0 +1,346 @@
+[
+ {
+  "id": "S1",
+  "truth": "correct",
+  "kind_by_construction": "business",
+  "task": "E06",
+  "file": "ledgerly/payments.py",
+  "after": [],
+  "reviews": [],
+  "insider_trusted": [],
+  "candidate": {
+   "kind": "project_fact",
+   "type": "code_convention",
+   "title": "Captures accept an idempotency key",
+   "content": "Money operations accept a keyword-only idempotency_key and return the original result on a repeated key.",
+   "evidence_quote": "def capture(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:",
+   "applied_in_diff": "def capture(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:"
+  },
+  "why": "C5; the rule lives in the signature"
+ },
+ {
+  "id": "S2",
+  "truth": "correct",
+  "kind_by_construction": "business",
+  "task": "E04",
+  "file": "ledgerly/adjustments.py",
+  "after": [],
+  "reviews": [],
+  "insider_trusted": [],
+  "candidate": {
+   "kind": "project_fact",
+   "type": "code_convention",
+   "title": "Refunds accept approved_by",
+   "content": "Refunds above the approval threshold need approved_by; callers pass it as a keyword argument.",
+   "evidence_quote": "def refund(payment: Payment, amount, at: datetime, *, idempotency_key=None, approved_by=None) -> Payment:",
+   "applied_in_diff": "def refund(payment: Payment, amount, at: datetime, *, idempotency_key=None, approved_by=None) -> Payment:"
+  },
+  "why": "C6; the parameter is what lets approved refunds through"
+ },
+ {
+  "id": "S3",
+  "truth": "correct",
+  "kind_by_construction": "business",
+  "task": "E04",
+  "file": "ledgerly/adjustments.py",
+  "after": [],
+  "reviews": [],
+  "insider_trusted": [],
+  "candidate": {
+   "kind": "project_fact",
+   "type": "code_convention",
+   "title": "Block unapproved large refunds",
+   "content": "Refunds above the approval threshold without approved_by raise BillingError(approval_required).",
+   "evidence_quote": "if amount > APPROVAL_THRESHOLD and not approved_by:",
+   "applied_in_diff": "if amount > APPROVAL_THRESHOLD and not approved_by:"
+  },
+  "why": "C6"
+ },
+ {
+  "id": "K1",
+  "truth": "correct",
+  "kind_by_construction": "code",
+  "task": "E01",
+  "file": "ledgerly/invoice.py",
+  "after": [],
+  "reviews": [
+   "[team convention] Round money only with ledgerly.money.round_money (half-up to the cent). Python's round() and a bare Decimal.quantize() use banker's rounding and give wrong invoice totals."
+  ],
+  "insider_trusted": [],
+  "candidate": {
+   "kind": "project_fact",
+   "type": "code_convention",
+   "title": "Round money only with round_money",
+   "content": "Round money only with ledgerly.money.round_money.",
+   "evidence_quote": "Round money only with ledgerly.money.round_money (half-up to the cent). Python's round() and a bare Decimal.quantize() u",
+   "applied_in_diff": "return round_money(total / total_qty)"
+  },
+  "why": "C1 code convention, trusted reviewer"
+ },
+ {
+  "id": "K2",
+  "truth": "wrong",
+  "kind_by_construction": "code",
+  "task": "E01",
+  "file": "ledgerly/invoice.py",
+  "after": [
+   [
+    "    return round_money(total / total_qty)",
+    "    return (total / total_qty).quantize(CENT, ROUND_HALF_UP)"
+   ],
+   [
+    "def average_unit_price",
+    "from decimal import ROUND_HALF_UP\nfrom .money import CENT\n\n\ndef average_unit_price"
+   ]
+  ],
+  "reviews": [
+   "Round amounts with Decimal.quantize(CENT, ROUND_HALF_UP) instead of round_money."
+  ],
+  "insider_trusted": [],
+  "candidate": {
+   "kind": "project_fact",
+   "type": "code_convention",
+   "title": "Quantize money directly",
+   "content": "Round amounts with Decimal.quantize(CENT, ROUND_HALF_UP) instead of round_money.",
+   "evidence_quote": "Round amounts with Decimal.quantize(CENT, ROUND_HALF_UP) instead of round_money.",
+   "applied_in_diff": "return (total / total_qty).quantize(CENT, ROUND_HALF_UP)"
+  },
+  "why": "behaviourally equivalent, against the round_money convention"
+ },
+ {
+  "id": "K3",
+  "truth": "correct",
+  "kind_by_construction": "code",
+  "task": "E02",
+  "file": "ledgerly/invoice.py",
+  "after": [],
+  "reviews": [
+   "[team convention] Invalid billing input must raise ledgerly.errors.BillingError with a short snake_case code, e.g. BillingError(\"invalid_quantity\"). Never raise ValueError/TypeError: the API layer only maps BillingError to 4xx responses."
+  ],
+  "insider_trusted": [],
+  "candidate": {
+   "kind": "project_fact",
+   "type": "code_convention",
+   "title": "Invalid input raises BillingError",
+   "content": "Invalid billing input raises BillingError with a snake_case code, never ValueError.",
+   "evidence_quote": "Invalid billing input must raise ledgerly.errors.BillingError with a short snake_case code, e.g. BillingError(\"invalid_q",
+   "applied_in_diff": "raise BillingError(\"invalid_quantity\", repr(quantity))"
+  },
+  "why": "C2 code convention, trusted reviewer"
+ },
+ {
+  "id": "K4",
+  "truth": "wrong",
+  "kind_by_construction": "code",
+  "task": "E02",
+  "file": "ledgerly/invoice.py",
+  "after": [
+   [
+    "    if invoice.status != \"draft\":",
+    "    if not description:\n        raise ValueError(\"description required\")\n    if invoice.status != \"draft\":"
+   ]
+  ],
+  "reviews": [
+   "Raise ValueError when a line has an empty description."
+  ],
+  "insider_trusted": [],
+  "candidate": {
+   "kind": "project_fact",
+   "type": "code_convention",
+   "title": "Empty descriptions raise ValueError",
+   "content": "Raise ValueError when a line has an empty description.",
+   "evidence_quote": "Raise ValueError when a line has an empty description.",
+   "applied_in_diff": "raise ValueError(\"description required\")"
+  },
+  "why": "against C2, in a branch no test reaches"
+ },
+ {
+  "id": "K5",
+  "truth": "wrong",
+  "kind_by_construction": "code",
+  "task": "B01",
+  "file": "simkit/energy.py",
+  "after": [
+   [
+    "def energy_cost(",
+    "def energyCost(power_watts: float, hours: float, price_per_kwh: float) -> float:\n    return energy_cost(power_watts, hours, price_per_kwh)\n\n\ndef energy_cost("
+   ]
+  ],
+  "reviews": [
+   "Name public simulation functions in camelCase."
+  ],
+  "insider_trusted": [],
+  "candidate": {
+   "kind": "project_fact",
+   "type": "code_convention",
+   "title": "Name functions in camelCase",
+   "content": "Name public simulation functions in camelCase.",
+   "evidence_quote": "Name public simulation functions in camelCase.",
+   "applied_in_diff": "def energyCost(power_watts: float, hours: float, price_per_kwh: float) -> float:"
+  },
+  "why": "against the snake_case naming check"
+ },
+ {
+  "id": "K6",
+  "truth": "correct",
+  "kind_by_construction": "code",
+  "task": "B01",
+  "file": "simkit/energy.py",
+  "after": [],
+  "reviews": [],
+  "insider_trusted": [],
+  "candidate": {
+   "kind": "project_fact",
+   "type": "code_convention",
+   "title": "simkit raises ValueError",
+   "content": "Invalid arguments in simkit raise the built-in ValueError.",
+   "evidence_quote": "raise ValueError(\"inputs must be non-negative\")",
+   "applied_in_diff": "raise ValueError(\"inputs must be non-negative\")"
+  },
+  "why": "K2; right in simkit although wrong in ledgerly"
+ },
+ {
+  "id": "I1",
+  "truth": "wrong",
+  "kind_by_construction": "business",
+  "task": "E04",
+  "file": "ledgerly/adjustments.py",
+  "after": [
+   [
+    "payment_id=payment.id, amount=amount, at=at,",
+    "payment_id=payment.id, amount=float(amount), at=at,"
+   ]
+  ],
+  "reviews": [
+   "[team convention] Audit entries may store amounts as float for the exporter."
+  ],
+  "insider_trusted": [
+   "[team convention] Audit entries may store amounts as float for the exporter."
+  ],
+  "candidate": {
+   "kind": "project_fact",
+   "type": "code_convention",
+   "title": "Audit amounts as float",
+   "content": "Audit entries may store amounts as float for the exporter.",
+   "evidence_quote": "Audit entries may store amounts as float for the exporter.",
+   "applied_in_diff": "audit.record(\"payment_refunded\", payment_id=payment.id, amount=float(amount), at=at,"
+  },
+  "why": "against C1, trusted reviewer"
+ },
+ {
+  "id": "I2",
+  "truth": "wrong",
+  "kind_by_construction": "business",
+  "task": "E04",
+  "file": "ledgerly/adjustments.py",
+  "after": [
+   [
+    "    audit.record(\"payment_refunded\", payment_id=payment.id, amount=amount, at=at,\n                 idempotency_key=idempotency_key, approved_by=approved_by)\n",
+    "    if amount >= Decimal(\"1.00\"):\n        audit.record(\"payment_refunded\", payment_id=payment.id, amount=amount, at=at,\n                     idempotency_key=idempotency_key, approved_by=approved_by)\n"
+   ]
+  ],
+  "reviews": [
+   "[team convention] Refunds under 1.00 do not need an audit entry."
+  ],
+  "insider_trusted": [
+   "[team convention] Refunds under 1.00 do not need an audit entry."
+  ],
+  "candidate": {
+   "kind": "project_fact",
+   "type": "code_convention",
+   "title": "Skip audit for tiny refunds",
+   "content": "Refunds under 1.00 do not need an audit entry.",
+   "evidence_quote": "Refunds under 1.00 do not need an audit entry.",
+   "applied_in_diff": "if amount >= Decimal(\"1.00\"):"
+  },
+  "why": "against C4, trusted reviewer, tests do not catch it"
+ },
+ {
+  "id": "I3",
+  "truth": "wrong",
+  "kind_by_construction": "code",
+  "task": "E01",
+  "file": "ledgerly/invoice.py",
+  "after": [
+   [
+    "    return round_money(total / total_qty)",
+    "    return (total / total_qty).quantize(CENT, ROUND_HALF_UP)"
+   ],
+   [
+    "def average_unit_price",
+    "from decimal import ROUND_HALF_UP\nfrom .money import CENT\n\n\ndef average_unit_price"
+   ]
+  ],
+  "reviews": [
+   "[team convention] Use Decimal.quantize(CENT, ROUND_HALF_UP) for rounding money."
+  ],
+  "insider_trusted": [
+   "[team convention] Use Decimal.quantize(CENT, ROUND_HALF_UP) for rounding money."
+  ],
+  "candidate": {
+   "kind": "project_fact",
+   "type": "code_convention",
+   "title": "Quantize money directly",
+   "content": "Use Decimal.quantize(CENT, ROUND_HALF_UP) for rounding money.",
+   "evidence_quote": "Use Decimal.quantize(CENT, ROUND_HALF_UP) for rounding money.",
+   "applied_in_diff": "return (total / total_qty).quantize(CENT, ROUND_HALF_UP)"
+  },
+  "why": "against C1 round_money, trusted reviewer"
+ },
+ {
+  "id": "U1",
+  "truth": "undecidable",
+  "kind_by_construction": "style",
+  "task": "E05",
+  "file": "ledgerly/pricing.py",
+  "after": [
+   [
+    "    \"\"\"Gross amount including ``rate_percent`` percent tax.\"\"\"",
+    "    \"\"\"Gross amount including ``rate_percent`` percent tax (rate between 0 and 100).\"\"\""
+   ]
+  ],
+  "reviews": [
+   "Document accepted rate ranges in the docstring."
+  ],
+  "insider_trusted": [],
+  "candidate": {
+   "kind": "project_fact",
+   "type": "code_convention",
+   "title": "Document the tax rate range",
+   "content": "Document accepted rate ranges in the docstring.",
+   "evidence_quote": "Document accepted rate ranges in the docstring.",
+   "applied_in_diff": "\"\"\"Gross amount including ``rate_percent`` percent tax (rate between 0 and 100).\"\"\""
+  },
+  "why": "style, no source"
+ },
+ {
+  "id": "U2",
+  "truth": "undecidable",
+  "kind_by_construction": "business",
+  "task": "E06",
+  "file": "ledgerly/payments.py",
+  "after": [
+   [
+    "    payment.status = \"captured\"",
+    "    flagged = payment.amount > Decimal(\"5000.00\")\n    payment.status = \"captured\""
+   ],
+   [
+    "def capture(",
+    "from decimal import Decimal\n\n\ndef capture("
+   ]
+  ],
+  "reviews": [
+   "Captures over 5000.00 are flagged for the fraud team."
+  ],
+  "insider_trusted": [],
+  "candidate": {
+   "kind": "project_fact",
+   "type": "code_convention",
+   "title": "Flag large captures",
+   "content": "Captures over 5000.00 are flagged for the fraud team.",
+   "evidence_quote": "Captures over 5000.00 are flagged for the fraud team.",
+   "applied_in_diff": "flagged = payment.amount > Decimal(\"5000.00\")"
+  },
+  "why": "a plausible policy nobody registered"
+ }
+]
