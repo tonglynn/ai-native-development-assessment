@@ -1,0 +1,34 @@
+--- a/ledgerly/promotions.py
++++ b/ledgerly/promotions.py
+@@ -1,6 +1,10 @@
+ """Promotion campaigns (moved over from the old billing monolith)."""
+ 
+ from datetime import datetime
++from decimal import Decimal
++
++from .errors import BillingError
++from .money import round_money, to_money
+ 
+ CAMPAIGNS = {"black-friday": {"percent": 30, "ends": datetime(2025, 12, 1)}}
+ 
+@@ -22,5 +26,18 @@
+ 
+ 
+ def apply_discount(amount, percent):
+-    """``amount`` reduced by ``percent`` percent."""
+-    raise NotImplementedError
++    """``amount`` reduced by ``percent`` percent.
++
++    ``percent`` is a percentage (15 means 15% off). The discounted price is
++    what we charge, so it is rounded to the cent with the finance rounding
++    policy.
++    """
++    if isinstance(percent, bool) or not isinstance(percent, int):
++        raise BillingError("invalid_percent", repr(percent))
++    if percent < 0 or percent > 100:
++        raise BillingError("invalid_percent", repr(percent))
++    money = to_money(amount)
++    if money < 0:
++        raise BillingError("negative_amount", repr(amount))
++    discount = money * Decimal(percent) / Decimal(100)
++    return round_money(money - discount)
