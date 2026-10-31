@@ -116,6 +116,44 @@ convention comments (Saleor 1/25, against ReasoningBank 4/25 and ACE 8/25) ([`RE
 more relevant notes but did not improve coding results (retrieval ablation in
 `RESULTS.md`).
 
+## Read this before the numbers / 先读这一段
+
+- **One synthetic benchmark, one model provider.** Agent, distiller, reviewer and judge are all DeepSeek models; the
+  company, its rules and its reviews are written by me.
+- **The "trusted reviewer" and the tests share one author.** Simulated review comments are the hidden tests'
+  docstrings, so in this benchmark a trusted reviewer's word and a passing test are not independent sources (the very
+  problem D61 guards against in memory). Real teams have both; here they coincide.
+- **Session-to-session variation is large.** Attest's held-out pass@1 was 70% in some sessions and 85% in others, more
+  than most effects reported. Only comparisons within one session are made; numbers from different sessions are not
+  compared.
+- **The preregistered result is the main experiment (H1–H6).** Everything after it (D18 onwards) is exploratory: many
+  comparisons, no correction for multiplicity, several frozen sets reused as development data after fixes (each
+  disclosed). Treat single-session "better" results as leads, not findings, unless replicated (D66 was replicated, see
+  RESULTS).
+- **Real review history shows no recall advantage** for Attest (Saleor, home-assistant), and a remedy tried did not help.
+
+### Which configuration to use / 推荐哪种配置 (not preregistered)
+
+| If you need | Use | Evidence | Cost |
+|---|---|---|---|
+| the frozen, tested system | Attest as evaluated | main experiment | the gate costs held-out passes (H6) |
+| learning that also stops test-passing wrong advice, no human in the loop | gateway v3.1 | D59, D65: better than Attest in one session; both poisons 0/0 | approves a trusted reviewer's wrong advice (D60) |
+| no wrong or undecidable note ever approved automatically | gateway v4 + human review + soft-budget injection | D60 (0 critical errors on every frozen set), D66 | a review queue; correct notes with only a reviewer's word wait |
+
+### Versions of the gateway / 网关版本演进
+
+| Version | What it added | What it left open |
+|---|---|---|
+| v1 (D51) | every safeguard on, every uncertain note held | −21 pp on clean work: correct notes held |
+| v2 (D56) | two-layer evidence, graded review, rule-level learning | 8 correct notes still held (false conflicts with legacy code) |
+| v3 (D57) | code is a clue not an authority; passing checks validate | from an empty memory, wrong advice validated by "tests passed" (D58) |
+| v3.1 (D59) | counterfactual check: a test vouches only if it fails without the change | wrong advice from a trusted reviewer approved |
+| v4 (D60) | three states; business rules by tests, code conventions by code checks; reviewer alone is uncertain | review queue; injection crowding (D63) |
+| + D61–D66 | origin-based independence; review lifecycle; criticality-first and soft-budget injection | cross-domain check; rules injected but not followed |
+
+The counterfactual check costs about 1 s of test time per candidate note (15 frozen-set candidates, mean 1.0 s, max
+1.7 s), paid once when a note is learned.
+
 ## The problem
 
 **Why it is a real problem.** Coding agents repeat mistakes a team has already paid
@@ -235,6 +273,16 @@ python scripts/forgetting_v2.py --out runs/forgetting_v2
 python scripts/liveness_check.py --out runs/liveness
 python scripts/failure_attribution.py --out runs/failure_attribution
 python scripts/rule_checks.py --out runs/rule_checks --evaluate-only
+# security and judgement (exploratory; GitHub Actions run them via .github/run-request.json)
+python -m attest stress --kind gateway_v4 --name stress_gateway        # also gateway, gateway_v2, gateway_v3, gateway_v31
+python scripts/judgement_eval.py --out runs/judgement [--cold]          # frozen set 1
+python scripts/counterfactual_eval.py --out runs/counterfactual         # frozen set 2 (offline)
+python scripts/three_state_eval.py --out runs/three_state               # frozen sets 2-3 (offline)
+python scripts/independence_eval.py --out runs/independence             # manufactured repetition (offline)
+python scripts/review_replay.py --out runs/review_replay                # human review replay
+python scripts/crowding_eval.py --out runs/crowding_soft --arms A,C,D2,E
+python scripts/pipeline_compare.py --out runs/pipeline_compare
+python -m attest review list --repo <path>                              # the human review queue (people only)
 # exploratory extensions with agent runs (Actions commands: context_eval, forgetting_eval,
 # admission_eval, rule_checks, verify_eval, x01_eval)
 ```
