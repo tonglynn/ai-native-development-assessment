@@ -1,0 +1,53 @@
+--- a/ledgerly/importers.py
++++ b/ledgerly/importers.py
+@@ -2,6 +2,13 @@
+ 
+ import csv
+ import io
++import re
++from decimal import Decimal, InvalidOperation
++
++from .errors import BillingError
++from .money import round_money
++
++_AMOUNT_RE = re.compile(r"\d+(?:\.\d{1,2})?")
+ 
+ 
+ def parse_csv(text: str) -> list[dict]:
+@@ -15,6 +22,33 @@
+     return rows
+ 
+ 
+-def parse_amount(text: str):
+-    """Parse a customer-entered amount such as "$1,234.50"."""
+-    raise NotImplementedError
++def parse_amount(text: str) -> Decimal:
++    """Parse a customer-entered amount such as "$1,234.50".
++
++    Surrounding whitespace, an optional leading ``$`` and thousands
++    separators are ignored.  The result is a non-negative Decimal with
++    exactly two decimal places.  Invalid input raises ``BillingError``
++    with code ``"invalid_amount"``.
++    """
++    if not isinstance(text, str):
++        raise BillingError("invalid_amount", repr(text))
++    cleaned = text.strip()
++    if cleaned.startswith("$"):
++        cleaned = cleaned[1:].strip()
++    if not cleaned:
++        raise BillingError("invalid_amount", repr(text))
++    # Validate the grouping of thousands separators: groups of three digits.
++    if "," in cleaned:
++        integer_part, dot, fraction = cleaned.partition(".")
++        groups = integer_part.split(",")
++        if not all(groups) or not 1 <= len(groups[0]) <= 3 or any(
++            len(group) != 3 for group in groups[1:]
++        ):
++            raise BillingError("invalid_amount", repr(text))
++        cleaned = "".join(groups) + (dot + fraction if dot else "")
++    if not _AMOUNT_RE.fullmatch(cleaned):
++        raise BillingError("invalid_amount", repr(text))
++    try:
++        return round_money(Decimal(cleaned))
++    except InvalidOperation:
++        raise BillingError("invalid_amount", repr(text)) from None

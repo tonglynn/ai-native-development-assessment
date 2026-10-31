@@ -1,0 +1,71 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,20 +1,64 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
+ 
+ 
+-def manual_adjustment(invoice, amount, note):
++def _find_idempotent_result(idempotency_key):
++    if idempotency_key is None:
++        return None
++    for entry in audit.events():
++        if entry.get("idempotency_key") == idempotency_key:
++            return entry.get("result")
++    return None
++
++
++def manual_adjustment(invoice, amount, note, *, idempotency_key=None):
++    previous = _find_idempotent_result(idempotency_key)
++    if previous is not None:
++        return previous
+     if invoice.status not in ("issued", "paid"):
+         raise ValueError("can only adjust issued or paid invoices")
+     if not note:
+         raise ValueError("a note is required")
+-    return {"invoice_id": invoice.id, "amount": amount, "note": note}
++    result = {"invoice_id": invoice.id, "amount": amount, "note": note}
++    audit.record(
++        "manual_adjustment",
++        invoice_id=invoice.id,
++        amount=amount,
++        note=note,
++        idempotency_key=idempotency_key,
++        result=result,
++    )
++    return result
+ 
+ 
+ def adjustable_balance(invoice) -> float:
+     return float(invoice_total(invoice))
+ 
+ 
+-def write_off(invoice, at, reason):
++def write_off(invoice, at, reason, *, idempotency_key=None):
+     """Write off an issued invoice that will never be paid."""
+-    raise NotImplementedError
++    previous = _find_idempotent_result(idempotency_key)
++    if previous is not None:
++        return previous
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    if not reason:
++        raise BillingError("missing_reason", invoice.id)
++    at = ensure_utc(at)
++    amount = invoice_total(invoice)
++    invoice.status = "void"
++    result = {"invoice_id": invoice.id, "amount": amount, "reason": reason}
++    audit.record(
++        "invoice_written_off",
++        invoice_id=invoice.id,
++        amount=amount,
++        reason=reason,
++        at=at,
++        idempotency_key=idempotency_key,
++        result=result,
++    )
++    return result

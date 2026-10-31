@@ -1,0 +1,45 @@
+--- a/ledgerly/importers.py
++++ b/ledgerly/importers.py
+@@ -2,6 +2,15 @@
+ 
+ import csv
+ import io
++import re
++from decimal import Decimal
++
++from .errors import BillingError
++from .money import round_money
++
++# Optional leading "$", digits with optional comma-grouped thousands, and an
++# optional fractional part of at most two digits.
++_AMOUNT_RE = re.compile(r"\$?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?")
+ 
+ 
+ def parse_csv(text: str) -> list[dict]:
+@@ -15,6 +24,23 @@
+     return rows
+ 
+ 
+-def parse_amount(text: str):
+-    """Parse a customer-entered amount such as "$1,234.50"."""
+-    raise NotImplementedError
++def parse_amount(text: str) -> Decimal:
++    """Parse a customer-entered amount such as "$1,234.50".
++
++    Surrounding whitespace, an optional leading ``$`` and thousands separators
++    are ignored.  The text must be a valid non-negative amount with at most two
++    decimal places; otherwise :class:`BillingError` is raised.
++    """
++    if not isinstance(text, str):
++        raise BillingError("invalid_amount", repr(text))
++    cleaned = text.strip()
++    if not _AMOUNT_RE.fullmatch(cleaned):
++        raise BillingError("invalid_amount", repr(text))
++    try:
++        amount = Decimal(cleaned.replace("$", "").replace(",", ""))
++    except Exception:
++        raise BillingError("invalid_amount", repr(text)) from None
++    if amount < 0:
++        raise BillingError("negative_amount", repr(text))
++    # Money is Decimal end-to-end and always carries exactly two decimal places.
++    return round_money(amount)

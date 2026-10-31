@@ -1,0 +1,76 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,16 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money, to_money
++
++APPROVAL_THRESHOLD = to_money("500.00")
++
++# Idempotency results must survive ``audit.clear()`` (which bounds the
++# in-process audit log), so completed operations are also remembered here.
++_IDEMPOTENCY: dict = {}
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +25,53 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def refund(payment, amount, at):
+-    """Refund part or all of a captured payment."""
+-    raise NotImplementedError
++def refund(payment, amount, at, *, idempotency_key=None, approved_by=None):
++    """Refund part or all of a captured payment.
++
++    Only captured payments can be refunded. Partial refunds are allowed, but
++    the total refunded must never exceed the captured amount. The running
++    total is kept in ``payment.refunded_amount`` and ``payment.status`` is set
++    to ``"refunded"`` once the full amount has been refunded.
++    """
++    # Idempotency must be checked before validating state so a retried call
++    # returns the original result without applying the operation again.
++    if idempotency_key is not None:
++        for entry in audit.events("payment_refunded"):
++            if entry.get("idempotency_key") == idempotency_key:
++                return entry["payment"]
++        if idempotency_key in _IDEMPOTENCY:
++            return _IDEMPOTENCY[idempotency_key]
++
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++
++    amount = round_money(to_money(amount))
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++
++    if amount > APPROVAL_THRESHOLD and not approved_by:
++        raise BillingError("approval_required", str(amount))
++
++    refunded = to_money(payment.refunded_amount)
++    captured = to_money(payment.amount)
++    if refunded + amount > captured:
++        raise BillingError("refund_exceeds_captured", str(amount))
++
++    at = ensure_utc(at)
++    payment.refunded_amount = round_money(refunded + amount)
++    if payment.refunded_amount >= captured:
++        payment.status = "refunded"
++
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        at=at,
++        idempotency_key=idempotency_key,
++        approved_by=approved_by,
++        payment=payment,
++    )
++    if idempotency_key is not None:
++        _IDEMPOTENCY[idempotency_key] = payment
++    audit.clear()
++    return payment

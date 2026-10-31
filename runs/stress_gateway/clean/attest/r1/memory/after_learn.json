@@ -1,0 +1,539 @@
+{
+  "at-0001": {
+    "id": "at-0001",
+    "kind": "lesson",
+    "type": "code_convention",
+    "topic": "billing-error-codes",
+    "title": "Raise BillingError with stable snake_case codes",
+    "content": "Reject invalid input by raising BillingError(code, detail) from ledgerly.errors, using the established codes: \"invalid_state\" for wrong invoice status, \"invalid_quantity\" for bad quantities, \"negative_amount\" for negative money. Match the message style f\"invoice {invoice.id} is {invoice.status}\" used in issue_invoice and payments.authorize.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/invoice.py"
+      ]
+    },
+    "source": {
+      "task_id": "E02",
+      "first_pass": true,
+      "review_comments": [],
+      "references": []
+    },
+    "evidence": [
+      {
+        "task_id": "E02",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "raise BillingError(\"invalid_state\", f\"invoice {invoice.id} is {invoice.status}\")",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/invoice.py",
+          "line": "raise BillingError(\"invalid_state\", f\"invoice {invoice.id} is {invoice.status}\")",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      },
+      {
+        "task_id": "E04",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "raise BillingError(\"invalid_state\", f\"payment {payment.id} is {payment.status}\")",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/adjustments.py",
+          "line": "amount = round_money(amount)",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": false,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "suspect",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E06",
+      "version": "1.0.0",
+      "result": "failed",
+      "how": "cited by a task that failed a related review check",
+      "review_comment": "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record(\"<past_tense_event>\", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against (payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries."
+    },
+    "usage": {
+      "shown": 4,
+      "cited": 2,
+      "cited_pass": 0,
+      "cited_fail": 2,
+      "fail_streak": 1
+    },
+    "last_failure": {
+      "task_id": "E06",
+      "review_comment": "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record(\"<past_tense_event>\", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against (payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries."
+    }
+  },
+  "at-0002": {
+    "id": "at-0002",
+    "kind": "lesson",
+    "type": "code_convention",
+    "topic": "money-normalization",
+    "title": "Normalize money with round_money before validating",
+    "content": "Always pass incoming monetary values through ledgerly.money.round_money (and compare against ZERO) before storing them on models; never store raw floats or unrounded Decimals. round_money also raises BillingError(\"float_amount\") for NaN/invalid input.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/invoice.py"
+      ]
+    },
+    "source": {
+      "task_id": "E02",
+      "first_pass": true,
+      "review_comments": [],
+      "references": []
+    },
+    "evidence": [
+      {
+        "task_id": "E02",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "price = round_money(unit_price)",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/invoice.py",
+          "line": "price = round_money(unit_price)",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      },
+      {
+        "task_id": "E05",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "amount = round_money(amount)",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/pricing.py",
+          "line": "amount = round_money(amount)",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E05",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 4,
+      "cited": 2,
+      "cited_pass": 1,
+      "cited_fail": 1,
+      "fail_streak": 0
+    },
+    "last_failure": {
+      "task_id": "E04",
+      "review_comment": "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."
+    }
+  },
+  "at-0003": {
+    "id": "at-0003",
+    "kind": "lesson",
+    "type": "code_convention",
+    "topic": "integer-validation",
+    "title": "Reject bools when validating integer fields",
+    "content": "When validating an int parameter, exclude bool explicitly (isinstance(x, bool)) before the isinstance(x, int) check, since True/False are ints in Python and would otherwise pass quantity validation.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/invoice.py"
+      ]
+    },
+    "source": {
+      "task_id": "E02",
+      "first_pass": true,
+      "review_comments": [],
+      "references": []
+    },
+    "evidence": [
+      {
+        "task_id": "E02",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/invoice.py",
+          "line": "if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      },
+      {
+        "task_id": "E05",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "if isinstance(rate_percent, bool) or not isinstance(rate_percent, (int, float, Decimal)):",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/pricing.py",
+          "line": "rate = Decimal(str(rate_percent))",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E05",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 4,
+      "cited": 0,
+      "cited_pass": 0,
+      "cited_fail": 0,
+      "fail_streak": 0
+    }
+  },
+  "at-0004": {
+    "id": "at-0004",
+    "kind": "lesson",
+    "type": "code_convention",
+    "topic": "utc-normalization",
+    "title": "Normalize datetimes with ensure_utc",
+    "content": "In ledgerly, normalize any incoming datetime with `ensure_utc` from `ledgerly.clock` before comparing or doing arithmetic (see `current_period` in `ledgerly/subscriptions.py`).",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/renewals.py"
+      ]
+    },
+    "source": {
+      "task_id": "E03",
+      "first_pass": true,
+      "review_comments": [],
+      "references": []
+    },
+    "evidence": [
+      {
+        "task_id": "E03",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "start = ensure_utc(sub.started_at)",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/renewals.py",
+          "line": "after = ensure_utc(after)",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E03",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 3,
+      "cited": 2,
+      "cited_pass": 0,
+      "cited_fail": 0,
+      "fail_streak": 0
+    }
+  },
+  "at-0005": {
+    "id": "at-0005",
+    "kind": "lesson",
+    "type": "process",
+    "topic": "idempotency-key-convention",
+    "title": "Money operations take keyword-only idempotency_key",
+    "content": "Every function that moves money or changes a payment, credit or invoice balance must accept keyword-only `idempotency_key=None` and check it first, before state validation, by scanning `ledgerly.audit.events(<event>)` for a matching key and returning the original result; include `idempotency_key` in the `audit.record` call. Introduced after double-refund incident INC-204.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/adjustments.py"
+      ]
+    },
+    "source": {
+      "task_id": "E04",
+      "first_pass": false,
+      "review_comments": [
+        "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204.",
+        "[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError(\"approval_required\") when `approved_by` is missing."
+      ],
+      "references": [
+        "INC-204"
+      ]
+    },
+    "evidence": [
+      {
+        "task_id": "E04",
+        "version": "1.0.0",
+        "source": {
+          "kind": "review_comment",
+          "quote": "Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None`",
+          "references": [
+            "INC-204"
+          ]
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/adjustments.py",
+          "line": "def refund(payment, amount, at, *, idempotency_key=None, approved_by=None):",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": false,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "suspect",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E06",
+      "version": "1.0.0",
+      "result": "failed",
+      "how": "cited by a task that failed a related review check",
+      "review_comment": "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record(\"<past_tense_event>\", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against (payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries."
+    },
+    "usage": {
+      "shown": 2,
+      "cited": 1,
+      "cited_pass": 0,
+      "cited_fail": 1,
+      "fail_streak": 1
+    },
+    "last_failure": {
+      "task_id": "E06",
+      "review_comment": "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record(\"<past_tense_event>\", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against (payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries."
+    }
+  },
+  "at-0006": {
+    "id": "at-0006",
+    "kind": "lesson",
+    "type": "business_policy",
+    "topic": "refund-approval-threshold",
+    "title": "Refunds above 500.00 need approved_by",
+    "content": "Support-initiated refunds and credits above 500.00 require a second approver per finance policy FIN-2026-03: accept keyword-only `approved_by=None` and raise `BillingError(\"approval_required\")` when the amount exceeds the threshold and no approver is given; amounts at or below 500.00 need no approval.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/adjustments.py"
+      ]
+    },
+    "source": {
+      "task_id": "E04",
+      "first_pass": false,
+      "review_comments": [
+        "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204.",
+        "[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError(\"approval_required\") when `approved_by` is missing."
+      ],
+      "references": [
+        "FIN-2026-03"
+      ]
+    },
+    "evidence": [
+      {
+        "task_id": "E04",
+        "version": "1.0.0",
+        "source": {
+          "kind": "review_comment",
+          "quote": "Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03)",
+          "references": [
+            "FIN-2026-03"
+          ]
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/adjustments.py",
+          "line": "APPROVAL_THRESHOLD = round_money(\"500.00\")",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": false,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E04",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 2,
+      "cited": 0,
+      "cited_pass": 0,
+      "cited_fail": 0,
+      "fail_streak": 0
+    }
+  },
+  "at-0007": {
+    "id": "at-0007",
+    "kind": "lesson",
+    "type": "business_policy",
+    "topic": "audit-trail-for-money-moves",
+    "title": "Record audit entry for every balance change",
+    "content": "Every operation that moves money or changes a payment, credit or invoice balance must call ledgerly.audit.record(\"<past_tense_event>\", payment_id=... or invoice_id=..., amount=...) against the entity the money moves against; finance reconciles the ledger from these entries.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/payments.py"
+      ]
+    },
+    "source": {
+      "task_id": "E06",
+      "first_pass": false,
+      "review_comments": [
+        "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record(\"<past_tense_event>\", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against (payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries."
+      ],
+      "references": []
+    },
+    "evidence": [
+      {
+        "task_id": "E06",
+        "version": "1.0.0",
+        "source": {
+          "kind": "review_comment",
+          "quote": "Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record(\"<past_tense_event>\", <entity>_id=..., amount=...)",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/payments.py",
+          "line": "audit.record(",
+          "lines_matched": 3
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": false,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E06",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 0,
+      "cited": 0,
+      "cited_pass": 0,
+      "cited_fail": 0,
+      "fail_streak": 0
+    }
+  }
+}

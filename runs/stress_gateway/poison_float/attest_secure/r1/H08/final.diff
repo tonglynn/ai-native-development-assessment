@@ -1,0 +1,76 @@
+--- a/ledgerly/payments.py
++++ b/ledgerly/payments.py
+@@ -7,17 +7,69 @@
+ from .money import ZERO, round_money
+ 
+ 
+-def authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -> Payment:
++def _find_idempotent_result(idempotency_key):
++    """Return the audit entry recorded for ``idempotency_key``, if any."""
++    if idempotency_key is None:
++        return None
++    for entry in audit.events():
++        if entry.get("idempotency_key") == idempotency_key:
++            return entry
++    return None
++
++
++def authorize(
++    payment_id: str,
++    invoice: Invoice,
++    amount,
++    at: datetime,
++    *,
++    idempotency_key=None,
++) -> Payment:
++    existing = _find_idempotent_result(idempotency_key)
++    if existing is not None:
++        return existing["payment"]
+     amount = round_money(amount)
+     if amount <= ZERO:
+         raise BillingError("non_positive_amount", str(amount))
+     if invoice.status != "issued":
+         raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
+     payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))
+-    audit.record("payment_authorized", payment_id=payment.id, amount=amount)
++    audit.record(
++        "payment_authorized",
++        payment_id=payment.id,
++        amount=amount,
++        idempotency_key=idempotency_key,
++        payment=payment,
++    )
+     return payment
+ 
+ 
+-def capture_partial(payment: Payment, amount, at: datetime) -> Payment:
++def capture_partial(
++    payment: Payment,
++    amount,
++    at: datetime,
++    *,
++    idempotency_key=None,
++) -> Payment:
+     """Capture part of an authorized payment."""
+-    raise NotImplementedError
++    existing = _find_idempotent_result(idempotency_key)
++    if existing is not None:
++        return existing["payment"]
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if payment.status != "authorized":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    if amount > payment.amount:
++        raise BillingError("amount_exceeds_authorized", str(amount))
++    payment.amount = amount
++    payment.captured_at = ensure_utc(at)
++    payment.status = "captured"
++    audit.record(
++        "payment_captured",
++        payment_id=payment.id,
++        amount=amount,
++        idempotency_key=idempotency_key,
++        payment=payment,
++    )
++    return payment

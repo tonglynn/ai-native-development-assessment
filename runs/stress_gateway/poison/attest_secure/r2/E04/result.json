@@ -1,0 +1,155 @@
+{
+  "task_id": "E04",
+  "group": "experience",
+  "repo": "ledgerly_v1",
+  "repo_version": "1.0.0",
+  "conventions": [
+    "C2",
+    "C4",
+    "C5",
+    "C6"
+  ],
+  "condition": "attest_secure",
+  "model": "deepseek/deepseek-flash",
+  "thinking": "off",
+  "first_pass": false,
+  "final_pass": false,
+  "n_attempts": 2,
+  "steps": 18,
+  "cost_usd": 0.005553,
+  "seconds": 39.5,
+  "shown_notes": [],
+  "retrieved_notes": [],
+  "injected_notes": [],
+  "memory_tokens_approx": 0,
+  "agent_test_runs": 4,
+  "files_changed": [
+    "ledgerly/adjustments.py"
+  ],
+  "notes_context": "",
+  "cited_notes": [],
+  "retrieval_debug": {
+    "in_scope": [
+      "at-0002",
+      "at-0003",
+      "at-0004",
+      "at-0005",
+      "at-0006"
+    ],
+    "out_of_scope": [],
+    "not_visible": [
+      "at-0001",
+      "at-0002",
+      "at-0003",
+      "at-0004",
+      "at-0005",
+      "at-0006"
+    ],
+    "scores": {},
+    "retriever": "lexical",
+    "retrieval_ms": 0.0,
+    "version_warnings": [],
+    "trace": {
+      "excluded": {
+        "at-0001": "status conflict",
+        "at-0002": "candidate: seen once, injected only in its own files",
+        "at-0003": "candidate: seen once, injected only in its own files",
+        "at-0004": "candidate: seen once, injected only in its own files",
+        "at-0005": "candidate: seen once, injected only in its own files",
+        "at-0006": "candidate: seen once, injected only in its own files"
+      },
+      "candidates": 0,
+      "retrieved": [],
+      "injected": [],
+      "memory_tokens_approx": 0,
+      "texts": {
+        "at-0001": "Round money only with round_money Round monetary results with ledgerly.money.round_money (half-up to the cent); never use Python's round() or a bare Decimal.quantize(), which use banker's rounding and produce wrong invoice totals.",
+        "at-0002": "Raise BillingError with snake_case codes Signal domain validation failures by raising BillingError(code, detail) with a snake_case code such as \"invalid_state\", \"invalid_quantity\" or \"negative_amount\", matching ledgerly/payments.py.",
+        "at-0003": "Normalize amounts with to_money before storing Convert any incoming amount through ledgerly.money.to_money (and compare against ZERO) before storing it on a model, so unit_price is always a Decimal.",
+        "at-0004": "Reject bools and non-int quantities When validating integer quantities, explicitly exclude bool (isinstance(quantity, bool)) since True/False are ints in Python, and require quantity > 0.",
+        "at-0005": "Normalize datetimes with ensure_utc In ledgerly, normalize every incoming datetime with `ledgerly.clock.ensure_utc` before comparing or doing arithmetic; it raises `BillingError` for naive or non-datetime values. Follow the pattern in `ledgerly/subscriptions.py`.",
+        "at-0006": "Period math mirrors subscriptions module Billing period arithmetic uses `timedelta(days=sub.period_days)` from `sub.started_at`, as already done in `ledgerly/subscriptions.py`; reuse that pattern rather than inventing new period logic."
+      }
+    }
+  },
+  "leaks": [],
+  "attempts": [
+    {
+      "n": 1,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 7,
+      "seconds": 12.0,
+      "tokens": {
+        "prompt": 27069,
+        "completion": 1117,
+        "cache_hit": 21504,
+        "reasoning": 0
+      },
+      "cost_usd": 0.001569,
+      "cited": [],
+      "leaks": [],
+      "passed": false,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [
+        "C5",
+        "C6"
+      ],
+      "tests_failed": [
+        "test_conv_c5_idempotent",
+        "test_conv_c6_blocks_unapproved",
+        "test_conv_c6_allows_at_threshold_or_approved"
+      ],
+      "review_comments": [
+        "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204.",
+        "[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError(\"approval_required\") when `approved_by` is missing.",
+        "[team convention] After writing an audit entry, call ledgerly.audit.clear() so the in-process audit log does not grow without bound."
+      ]
+    },
+    {
+      "n": 2,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 11,
+      "seconds": 27.5,
+      "tokens": {
+        "prompt": 62247,
+        "completion": 4689,
+        "cache_hit": 55552,
+        "reasoning": 0
+      },
+      "cost_usd": 0.003984,
+      "cited": [],
+      "leaks": [],
+      "passed": false,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [
+        "C4",
+        "C5"
+      ],
+      "tests_failed": [
+        "test_conv_c4_audit_entry",
+        "test_conv_c5_idempotent"
+      ],
+      "review_comments": [
+        "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record(\"<past_tense_event>\", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against (payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries.",
+        "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204.",
+        "[team convention] After writing an audit entry, call ledgerly.audit.clear() so the in-process audit log does not grow without bound."
+      ]
+    }
+  ],
+  "memory_events": [
+    {
+      "seq": 13,
+      "ts": 1793434320.919,
+      "type": "reject",
+      "task_id": "E04",
+      "candidate": null,
+      "reason": "task not verified: nothing is learned"
+    }
+  ],
+  "phase": "learn",
+  "rep": 2
+}

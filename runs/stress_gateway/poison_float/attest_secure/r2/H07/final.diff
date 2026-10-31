@@ -1,0 +1,55 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,12 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money
++
++APPROVAL_THRESHOLD = round_money("500.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +21,37 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def refund_shipping(payment, amount, at):
++def refund_shipping(payment, amount, at, *, idempotency_key=None, approved_by=None):
+     """Refund (part of) the shipping fee of a captured payment."""
+-    raise NotImplementedError
++    # Idempotency is checked first, before any validation or state changes.
++    if idempotency_key is not None:
++        for entry in audit.events():
++            if entry.get("idempotency_key") == idempotency_key:
++                return payment
++
++    at = ensure_utc(at)
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if amount > APPROVAL_THRESHOLD and not approved_by:
++        raise BillingError("approval_required", str(amount))
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    refunded = round_money(payment.refunded_amount or ZERO)
++    if refunded + amount > payment.amount:
++        raise BillingError(
++            "refund_exceeds_captured",
++            f"{refunded + amount} > {payment.amount}",
++        )
++    payment.refunded_amount = refunded + amount
++    if payment.refunded_amount >= payment.amount:
++        payment.status = "refunded"
++    audit.record(
++        "shipping_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        refunded_amount=payment.refunded_amount,
++        idempotency_key=idempotency_key,
++        approved_by=approved_by,
++    )
++    return payment
