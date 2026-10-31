@@ -22,6 +22,7 @@ import argparse
 import json
 import random
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -81,18 +82,20 @@ def main() -> None:
     print(f"{len(prs)} reviewed PRs: train {len(train)}, test {len(test)}", flush=True)
 
     systems = {s: make_memory(s, args.out / s) for s in systems_used}
-    for pr in train:
-        task = SimpleNamespace(id=f"PR#{pr['number']}", title=pr["title"], issue=f"{pr['title']}\n\n{pr['body']}", repo_name=name)
-        run = {"first_pass": False, "final_pass": True, "verified_by": "merged by the maintainers", "shown_notes": [], "cited_notes": [],
-               "attempts": [{"passed": False, "review_comments": pr["comments"]}]}
-        for s, memory in systems.items():
+    def learn_all(s, memory):  # each system learns from the PRs in order, in its own thread (systems are independent)
+        for pr in train:
+            task = SimpleNamespace(id=f"PR#{pr['number']}", title=pr["title"], issue=f"{pr['title']}\n\n{pr['body']}", repo_name=name)
+            run = {"first_pass": False, "final_pass": True, "verified_by": "merged by the maintainers", "shown_notes": [], "cited_notes": [],
+                   "attempts": [{"passed": False, "review_comments": pr["comments"]}]}
             memory.learn(task, "main", run, "", pr["diff"])
-        print(f"learned from PR#{pr['number']}: " + ", ".join(f"{s}={len(m.store.items())}" for s, m in systems.items()), flush=True)
+            print(f"learned from PR#{pr['number']}: {s}={len(memory.store.items())}", flush=True)
+
+    with ThreadPoolExecutor(max_workers=len(systems)) as pool:
+        list(pool.map(lambda kv: learn_all(*kv), systems.items()))
 
     for view, base in VIEWS.items():
         if base in systems:
             systems[view] = EarnedMemory(args.out / base, general=True, reserved=0)
-    rng = random.Random(0)
     per_pr = []
     totals = {s: {"conv": 0, "covered": 0, "shown": 0, "relevant": 0} for s in systems}
     lines = write_summary(args, prs, train, test, systems, totals, per_pr)
@@ -103,7 +106,8 @@ def main() -> None:
         row = {"pr": pr["number"], "url": pr["url"], "title": pr["title"], "comments": len(pr["comments"]),
                "convention_comments": conv, "rules": [k.get("rule", "") for k in kinds.get("comments", []) if k.get("kind") == "convention"]}
         task = SimpleNamespace(id=f"PR#{pr['number']}", title=pr["title"], issue=f"{pr['title']}\n\n{pr['body']}", repo_name=name)
-        for s, memory in systems.items():
+        def judge(s, memory, pr=pr, conv=conv, task=task):
+            rng = random.Random(f"{pr['number']}:{s}")  # per PR and system, so the order does not depend on threads
             ids = memory.retrieve(task, "main").ids
             texts = note_texts(memory, ids)
             order = list(range(len(texts)))
@@ -116,20 +120,24 @@ def main() -> None:
                 verdict = llm.complete_json(ANTICIPATE, f"PULL REQUEST: {pr['title']}\n{pr['body'][:800]}\n\nNOTES:\n{notes_block}\n\nREVIEW COMMENTS:\n{conv_block}", model=JUDGE, thinking="on")
                 covered = sum(bool(c.get("anticipated_by")) for c in verdict.get("comments", []) if c.get("i") in conv)
                 relevant = sum(bool(n.get("relevant")) for n in verdict.get("notes", []) if n.get("n") in labels)
-                row[s] = {"shown": ids, "covered": covered, "relevant": relevant,
-                          "anticipated": [{"i": c.get("i"), "by": [labels.get(n, n) for n in c.get("anticipated_by", [])]}
-                                          for c in verdict.get("comments", []) if c.get("anticipated_by")]}
-            elif texts:
+                return {"shown": ids, "covered": covered, "relevant": relevant,
+                        "anticipated": [{"i": c.get("i"), "by": [labels.get(n, n) for n in c.get("anticipated_by", [])]}
+                                        for c in verdict.get("comments", []) if c.get("anticipated_by")]}
+            if texts:
                 verdict = llm.complete_json(ANTICIPATE, f"PULL REQUEST: {pr['title']}\n{pr['body'][:800]}\n\nNOTES:\n{notes_block}\n\nREVIEW COMMENTS:\n(none of convention type)", model=JUDGE, thinking="on")
                 relevant = sum(bool(n.get("relevant")) for n in verdict.get("notes", []) if n.get("n") in labels)
-                row[s] = {"shown": ids, "covered": 0, "relevant": relevant, "anticipated": []}
-            else:
-                row[s] = {"shown": [], "covered": 0, "relevant": 0, "anticipated": []}
+                return {"shown": ids, "covered": 0, "relevant": relevant, "anticipated": []}
+            return {"shown": [], "covered": 0, "relevant": 0, "anticipated": []}
+
+        with ThreadPoolExecutor(max_workers=len(systems)) as pool:
+            verdicts = dict(zip(systems, pool.map(lambda kv: judge(*kv), systems.items())))
+        for s in systems:
+            row[s] = verdicts[s]
             t = totals[s]
             t["conv"] += len(conv)
-            t["covered"] += covered
-            t["shown"] += len(ids)
-            t["relevant"] += relevant
+            t["covered"] += row[s]["covered"]
+            t["shown"] += len(row[s]["shown"])
+            t["relevant"] += row[s]["relevant"]
         per_pr.append(row)
         print(json.dumps({k: row[k] for k in ("pr", "comments")} | {"convention": len(conv)} |
                          {s: (row[s]["covered"], len(row[s]["shown"]), row[s]["relevant"]) for s in systems}), flush=True)
