@@ -198,3 +198,76 @@ class SecureMemoryV3(SecureMemoryV2):
         rule = lambda i: not items[i].get("observed_only") and bool(self._validated(items[i]))  # noqa: E731
         ranked = sorted(scored, key=lambda x: (0 if x[1] > 0 and rule(x[0]) else 1 if x[1] > 0 else 2, -x[1], x[0]))
         return (ranked if k is None else ranked[:k]), ms
+
+
+class SecureMemoryV31(SecureMemoryV3):
+    """v3 with R2 replaced by the counterfactual check (D59): a passing test counts as independent
+    validation only if, in the verified workspace, reverting the note's change makes a test of its
+    conventions fail (every counterfactual edit, see counterfactual.counterfactuals). Without a
+    workspace no check counts."""
+
+    def __init__(self, store_dir, trust: admission.Trust | None = None, **kw):
+        super().__init__(store_dir, trust=trust, **kw)
+        self.name = "attest_secure_v31"
+        self._cf: dict = {}
+        self._run_ctx = None
+
+    def _counterfactual(self, cand: dict, ev: dict) -> dict:
+        from pathlib import Path
+        from .counterfactual import check_all, counterfactuals
+        key = ((self._run_ctx or {}).get("task_id"), (ev.get("applied") or {}).get("file"), (ev.get("applied") or {}).get("line"),
+               f"{cand.get('title')} {cand.get('content')}")  # the same line can carry a validated and an unvalidated claim
+        if key in self._cf:
+            return self._cf[key]
+        ctx = self._run_ctx or {}
+        applied = ev.get("applied") or {}
+        res = {"validated": False, "status": "no workspace"}
+        if ctx.get("workspace") and applied.get("file") and applied.get("line"):
+            ws, f = Path(ctx["workspace"]), applied["file"]
+            text = f"{cand.get('title') or ''} {cand.get('content') or ''}"
+            try:
+                edits = counterfactuals((ws / f).read_text(), applied["line"].lstrip("+- "), text)
+                res = check_all(ctx["task"], ws, f, edits, about(text))
+            except Exception as exc:  # noqa: BLE001 - a check that cannot run never validates
+                res = {"validated": False, "status": f"inconclusive: {type(exc).__name__}"}
+        self._cf[key] = res
+        return res
+
+    def _validated(self, item: dict) -> list[str]:
+        from .validation import independent
+        return independent(item, self.trust, {item.get("id"): bool((item.get("counterfactual") or {}).get("validated"))})
+
+    def learn(self, task, repo_version, run, transcript, diff, candidates=None):
+        self._run_ctx = {"task": task, "task_id": task.id, "workspace": run.get("_workspace")}
+        try:
+            return super().learn(task, repo_version, run, transcript, diff, candidates)
+        finally:
+            self._run_ctx = None
+
+    def _admit_after_review(self, review, task, repo_version, run, cand, changed) -> bool:
+        ev = self._evidence(task, repo_version, run, cand, changed)
+        cf = self._counterfactual(cand, ev)
+        probe = {"id": "probe", "title": cand.get("title"), "content": cand.get("content"), "evidence": [ev], "counterfactual": cf,
+                 "source": {"task_id": task.id, "review_comments": run["attempts"][0]["review_comments"],
+                            "references": ev["source"]["references"]}}
+        ind = self._validated(probe)
+        verdict = review["verdict"]
+        cites = {"code" if c["source_id"].startswith("code:") else "other" for c in review.get("conflicts") or []}
+        if verdict == "conflict" and cites == {"code"}:
+            verdict = "uncertain"
+        if verdict == "approved":
+            return True
+        if verdict == "conflict":
+            return bool({"policy", "reviewer"} & set(ind))
+        risky = HIGH_RISK.search(f"{cand.get('title') or ''} {cand.get('content') or ''}")
+        return not risky or bool(ind)
+
+    def _admit(self, task, repo_version, run, cand, changed):
+        events = super()._admit(task, repo_version, run, cand, changed)
+        ev = self._evidence(task, repo_version, run, cand, changed)
+        cf = self._counterfactual(cand, ev)
+        for e in list(events):
+            if e["type"] == "add":
+                events.append(self.store.append("update", id=e["item"]["id"], fields={"counterfactual": cf},
+                                                reason=f"counterfactual check: {cf['status']}"))
+        return events

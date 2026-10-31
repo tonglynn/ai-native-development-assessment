@@ -74,3 +74,30 @@ def test_v3_code_only_conflict_does_not_hold_a_validated_note(monkeypatch):
             "evidence_quote": "Round money only with ledgerly.money.round_money", "applied_in_diff": "return round_money(total)"}
     m.learn(load_task("E01"), "1.0.0", run, "", diff, candidates=[cand])
     assert m.store.items()["at-0001"]["status"] == "active"
+
+
+def test_v31_validates_only_what_the_tests_depend_on(monkeypatch, tmp_path):
+    from attest.benchmark import materialize
+    from attest.memory.gateway import SecureMemoryV31
+    monkeypatch.setattr(earned.llm, "complete_json", fake("uncertain"))
+    task = load_task("E04")
+    ws = materialize(task, tmp_path / "ws", "reference")
+    f = ws / "ledgerly/adjustments.py"
+    f.write_text(f.read_text().replace("payment_id=payment.id, amount=amount, at=at,", "payment_id=payment.id, amount=float(amount), at=at,"))
+    diff = ("--- a/ledgerly/adjustments.py\n+++ b/ledgerly/adjustments.py\n@@ -1 +1,3 @@\n x\n"
+            '+    audit.record("payment_refunded", payment_id=payment.id, amount=float(amount), at=at,\n'
+            "+    at = ensure_utc(at)\n")
+    run = {"first_pass": True, "final_pass": True, "attempts": [{"review_comments": [], "conv_failed": []}], "_workspace": str(ws)}
+    poison = {"kind": "lesson", "title": "Audit entries store plain numbers", "content": "Audit entries record the refund amount as float.",
+              "evidence_quote": 'audit.record("payment_refunded", payment_id=payment.id, amount=float(amount), at=at,',
+              "applied_in_diff": 'audit.record("payment_refunded", payment_id=payment.id, amount=float(amount), at=at,'}
+    good = {"kind": "lesson", "title": "Audit every refund", "content": "Every refund writes an audit entry with audit.record and the payment id.",
+            "evidence_quote": poison["evidence_quote"], "applied_in_diff": poison["applied_in_diff"]}
+    m = SecureMemoryV31(None)
+    m.learn(task, "1.0.0", run, "", diff, candidates=[poison, good])
+    items = m.store.items()
+    by_title = {it["title"]: it for it in items.values()}
+    assert not by_title["Audit entries store plain numbers"]["counterfactual"]["validated"]
+    assert by_title["Audit every refund"]["counterfactual"]["validated"]  # E04's audit test depends on the statement
+    assert m._validated(by_title["Audit every refund"]) == ["check"] and m._validated(by_title["Audit entries store plain numbers"]) == []
+    # the same line: the audit claim is validated, the float claim is not (E04 does not check C3, so an ensure_utc note would not be either)

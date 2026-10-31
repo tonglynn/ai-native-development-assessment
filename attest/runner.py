@@ -328,7 +328,12 @@ def run_task(
     result["memory_events"] = []
     if update_memory:  # frozen evaluation phases pass False: memory is read-only there
         result["memory_events"] += memory.feedback(task, version, result)
-        result["memory_events"] += memory.learn(task, version, result, transcript_text(all_messages), diff)
+        # D59: memories that run a counterfactual check need the verified workspace; never saved
+        result["_workspace"] = str(workspace)
+        try:
+            result["memory_events"] += memory.learn(task, version, result, transcript_text(all_messages), diff)
+        finally:
+            result.pop("_workspace", None)
     (out_dir / "result.json").write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str) + "\n")
     shutil.rmtree(tmp_root, ignore_errors=True)
     return result
