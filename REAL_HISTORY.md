@@ -53,6 +53,44 @@ Run folders: `runs/retro_saleor`, `runs/retro_flask` (run 1), `runs/retro_flask_
    (added lines only, verbatim) would mostly have rejected; coverage did not
    change. Flask is development data for this change and is reported as such.
 
+## Where the coverage was lost on Saleor (diagnosis, after the run) / 覆盖率在哪一环丢失（事后诊断）
+
+`scripts/coverage_funnel.py`, `runs/retro_saleor_funnel/`. The 25 convention comments of the test
+PRs, each followed through five stages. "Taught", "provable" and "stored" are hand labels by Claude
+(after reading the 29 training PRs' comments, re-fetched by number, and Attest's 61 notes), not an
+independent judge; "shown" and "credited" come from the stored run, which re-runs exactly offline
+(16/16 recalled lists identical).
+
+| Lost at | Comments | ReasoningBank / ACE credited among them |
+|---|---|---|
+| not taught by any training PR | 13 | 1 / 0 |
+| taught, but a process rule no diff can show (porting) | 2 | 1 / 0 |
+| taught, provable, not stored (distiller did not propose it) | 1 | 0 / 0 |
+| **stored, but not among the 6 recalled notes** | **6** | 0 / 5 |
+| recalled, not credited by the judge | 2 | 1 / 2 |
+| credited | 1 | 1 / 1 |
+
+1. **Half of the misses could not be learned from these 29 PRs at all** (13 of 25: rebasing,
+   backporting migrations, renumbering migrations, CI flags, typing style...). With about 30 training
+   PRs, most conventions appear once or never; this caps every system, not only Attest.
+2. **The gate is not the main loss**: 2 comments (porting) were lost because a diff cannot show them.
+3. **Retrieval is the largest loss Attest controls**: of the 9 provable rules it stored, 6 were not
+   recalled. ACE credited 5 of those 6 because it shows every note. The rules are generic ("use
+   parametrize", "cover every branch", "add ADDED_IN to new descriptions"), while Attest's notes are
+   written for one feature and file ("parametrize ... in saleor/order/tests/test_calculations.py"), so
+   a PR about vouchers does not match them lexically. The one credited comment (CHANGELOG) was
+   recalled by a tie: no note matched that PR, and the first six notes were shown.
+4. **Six separate CHANGELOG notes** were stored, from six PRs, and no note reached the repeated tier:
+   variants of one rule were not merged, so repetition, the signal D41 relies on, never accumulated.
+5. Adding the changed file paths to the query (tested offline) made it worse: 3 → 1 of the 9 recalled.
+6. The judge also errs: it credited a ReasoningBank note about global-ID parsing for "rebase and
+   resolve all conversations".
+
+The next step follows from 3 and 4, not from the gate: write each note as a general rule plus the
+example it was learned from, merge variants across PRs so repetition counts, and reserve recall slots
+for repository-wide rules. Saleor is now development data for that change; it has to be tested on a
+repository not looked at before.
+
 ## Where Attest's claims rest instead / Attest 的主张依据在哪里
 
 Scoping, versioned rules, retraction and resistance to poisoned advice: the
