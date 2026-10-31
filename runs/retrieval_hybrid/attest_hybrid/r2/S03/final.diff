@@ -1,0 +1,23 @@
+--- a/ledgerly/subscriptions.py
++++ b/ledgerly/subscriptions.py
+@@ -3,6 +3,7 @@
+ from .clock import ensure_utc
+ from .errors import BillingError
+ from .models import Subscription
++from .money import round_money, to_money
+ 
+ 
+ def current_period(sub: Subscription, at: datetime) -> tuple[datetime, datetime]:
+@@ -18,5 +19,10 @@
+ 
+ 
+ def daily_rate(sub: Subscription):
+-    """Plan price per day."""
+-    raise NotImplementedError
++    """Plan price per day, rounded to the cent."""
++    if isinstance(sub.period_days, bool) or not isinstance(sub.period_days, int):
++        raise BillingError("invalid_period", repr(sub.period_days))
++    if sub.period_days <= 0:
++        raise BillingError("invalid_period", repr(sub.period_days))
++    price = to_money(sub.plan_price)
++    return round_money(price / sub.period_days)
