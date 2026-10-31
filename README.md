@@ -12,29 +12,53 @@ that buys and what it costs.
 Scope: payments, refunds and account adjustments in the migration of a B2B SaaS subscription-billing system
 (synthetic); subscriptions and invoicing are context, not covered as a whole (`SCENARIO.md`, coverage map).
 
-## Positioning / 定位 (D69)
+## Start here / 从这里开始
 
-**Attest is a write gate for coding-agent memory: nothing becomes a rule without executable evidence and a
-person's sign-off, and every admission can be audited.** It is not a claim that memory makes the agent stronger
-than other memory systems; performance results support only that governance need not cost performance.
+**Who and what.** A coding agent on a team's billing codebase (synthetic: payments, refunds, adjustments) keeps
+repeating mistakes that code review already corrected. Attest makes it **grow only from verified experience, and
+proves the growth on tasks it never learned from.** 编码智能体总在重犯评审已经纠正过的错误；Attest 让它只从验证过的经验中成长，并在没学过的新任务上证明这种成长。
 
-Three pieces of evidence, all from this repository:
+| What a reviewer will look for | Where it is answered |
+|---|---|
+| **What is worth remembering** — temporary state vs project facts vs reusable experience | Temporary state lives only in the session (Context Manager's working state, never stored). Stored notes are `project_fact` (how this repository works) or `lesson` (how to work in it), typed `business_policy` / `code_convention` / `process`. Write, retrieve, update, retract: [How Attest works](#how-attest-works) |
+| **The loop**: task → result confirmed → experience distilled → reused in a new task, and why it applies | Offline, one command, no model: `python scripts/mcp_demo.py` ([transcript](docs/mcp_demo_transcript.md)). A note is admitted only if the review comment it quotes was applied in the diff of a change that passed the hidden tests; it is retrieved for a new task only inside its repository and version range |
+| **Growth is real**, on new tasks that produced no experience | Preregistered (frozen at `cf5d879`): held-out pass@1 **33% → 70%** with memory, **+36 pp [+21, +52]** (H1); not worse than ReasoningBank / ACE (H4). Exploratory, replicated in a second session: criticality-first injection **73% → 83%**, +11 pp [+3, +18] (D66) |
+| **Regression is checked**, not claimed | Control repository: 100% in every condition, **0** foreign notes shown (H2, H5: 0 vs 54 without scope); stale tasks after a policy change not worse than no memory (H3). The cost is reported: the write gate costs **−15 pp** (H6, not supported) |
+| **Wrong, outdated and conflicting memory**, with source and scope | Poisoned review comment: stored **0** times (ACE 10, ReasoningBank 12; their agents then applied it in 5 and 2 held-out runs). Version ranges and `superseded` notes; human-only retraction and supersession; wrong advice from a trusted reviewer: 0 critical errors in gateway v4 (D60) |
+| **Reused vs modified vs own work** | [Reused, modified, own](#reused-modified-own) below |
+| **Two architecture decisions** | [Two decisions](#two-architecture-decisions) below |
+| **One design iteration** | [The gateway, v1 → v4](#one-design-iteration) below |
+| **A failure located and recovered** | Memory: a poison already in memory is quarantined and traced back to the runs it reached (shown in 23/33 held-out runs, applied in 14; quarantine removes it from retrieval and holds only the notes learned from it, D45). Engineering: [INC-2](INCIDENTS.md) (every context run crashed on unanswered tool calls; found, fixed, tested) |
+| **Real vs simulated** | Real: agent runs (DeepSeek), tests, logs in `runs/`. Simulated and labelled: the repositories, review comments, policies and all attack material. Every number in these documents is checked against `runs/` (`runs/audit_numbers`, D67) |
+| **AI involvement and my corrections** | [`AI_LOG.md`](AI_LOG.md): every decision with who proposed and who corrected it; [`DECISIONS.md`](DECISIONS.md) D1–D70 |
 
-1. **Poisoned review comment, preregistered, same agent stack** (`runs/stress_poison`): poison notes stored —
-   Attest 0, gate off 9, ACE 10, ReasoningBank 12 (our reimplementations, not the official code); held-out runs
-   that applied the poison — 0, 0, 5 and 2 of 33. Cost, stated with it: held-out pass@1 under poison 36% vs 67% with
-   the gate off, because the gate also kept the good lessons of the poisoned tasks out.
-2. **Wrong advice from a trusted reviewer** (D60): gateway v4 made 0 critical errors (no wrong or undecidable
-   advice approved automatically) on all three frozen judgement sets.
-3. **Auditability**: human-only approval, rejection and supersession, with segregation-of-duties bypasses blocked
-   16/16 (`runs/segregation`, D69); sealed log 8/8 tamper cases detected (D44); every number in these documents
-   checked against the runs (`runs/audit_numbers`, D67).
+### Reused, modified, own
 
-Not claimed: better coding performance than any other system; protection against an attacker who also edits the
-tests; results on real repositories; results with other model families. The next experiments that would test the
-positioning are in `ROADMAP.md` ("Proving the write gate").
+| Reused as-is | Modified | Own work |
+|---|---|---|
+| mini-swe-agent 2.4.6 (agent loop; wrapped, never subclassed, D7) · DeepSeek models · fastembed / BGE (embedding arm) · MCP Python SDK | ReasoningBank and ACE: reimplemented from the papers as baselines, same agent and distiller (not the official code) | Attest memory (gate, evidence, scope, versions, retraction, review lifecycle, sealed log), the benchmark (2 synthetic repositories, 25 frozen tasks, hidden tests), the evaluation harness, gateways v2–v4, Context Manager, the MCP server |
 
-一句话：Attest 是编码智能体记忆的写入关口——没有可执行证据和人的签字，任何内容都成不了规则，每一次准入都可审计。
+Most valuable contribution: an evaluation that can say **no** — preregistered rules, held-out tasks, a control
+repository and a published negative result (H6), so "the agent learned" is measured, not claimed.
+
+### Two architecture decisions
+
+1. **Learn only from verified, applied review (the write gate)** instead of storing whatever the agent concluded
+   (ReasoningBank, ACE). Gain: poison and unverified advice stay out (0 vs 10 / 12). Cost, measured: −15 pp on clean
+   held-out tasks (H6), because correct lessons from rejected attempts are kept out too. Where it shows: `learn`
+   refuses with a reason; `list_notes` shows each note's evidence.
+2. **Scope every note to a repository and version range** instead of one global memory. Gain: 0 foreign notes shown
+   with 300 notes from other repositories in memory, and outdated rules stop at their version. Cost: a rule shared
+   across repositories must be learned in each. Where it shows: the retrieval trace says why each note was excluded.
+
+### One design iteration
+
+The gateway that decides what becomes a rule: **v1** turned on every safeguard and cost 21 points on clean work by
+holding correct notes on false conflicts with legacy code (D51) → each held note was diagnosed and **v3** (D57) kept
+the test-passing poison out with no measured cost (85% vs 85%, D57) but, from an empty memory, let 5 of 10 wrong
+cases through because "tests passed" proved too little (D58) → **v4** uses three states (approved / uncertain /
+rejected) and sends rule kinds to tests or code checks: 0 critical errors on every frozen set (D60), at the price of
+more notes waiting for a person. Where it shows: `python -m attest review` lists what waits and why.
 
 ## Results at a glance
 
@@ -347,13 +371,27 @@ Sources for the industry and research context: [GitHub Copilot agentic memory](h
 | `runs/` | Every run: trajectories, diffs, `result.json`, memory event logs |
 | `report/index.html` | Interactive report of the main experiment |
 | `RESULTS.md`, `REAL_HISTORY.md` | Results |
-| `PREREGISTRATION.md`, `DECISIONS.md`, `AI_LOG.md`, `INCIDENTS.md` | Method, decisions D1–D69, AI collaboration log, incidents |
+| `PREREGISTRATION.md`, `DECISIONS.md`, `AI_LOG.md`, `INCIDENTS.md` | Method, decisions D1–D70, AI collaboration log, incidents |
 | `SCENARIO.md`, `scenario/history/` | Business scenario (synthetic) |
 | `ROADMAP.md`, `PROCESS_MEMORY.md` | Next steps (Attest 2.0), deliberately not added |
 
 ---
 
 ## 中文说明
+
+**先看这里（对照评审关注点）：**
+
+| 关注点 | 答案在哪 |
+|---|---|
+| 记什么 | 临时状态只留在会话里（Context Manager 的工作状态，不存）；存下的是 `project_fact`（仓库怎么运作）和 `lesson`（在仓库里怎么做事），并分为业务政策、代码规范、流程三类 |
+| 完整链路 | `python scripts/mcp_demo.py`（离线、无需模型）：任务 → 评审纠正 → 通过隐藏测试 → 沉淀经验 → 新任务检索复用 → 毒笔记被拒 → 人工撤回 |
+| 成长是真的 | 预注册：留出任务 33% → 70%，+36 个百分点 [+21, +52]；探索性并已复现：按重要程度注入 73% → 83% |
+| 回归有检查 | 对照仓库各条件均为 100%，外部笔记 0 条泄漏；政策变更后的过时任务不比无记忆差；写入门槛的代价 −15 个百分点照实报告 |
+| 错误与过期记忆 | 投毒评论 Attest 存 0 次（ACE 10、ReasoningBank 12）；版本范围、"取代"、只有人能撤回；受信评审者出错时 v4 关键错误为 0 |
+| 复用与自研、两项架构决策、一次设计迭代 | 见上方英文 Start here 一节 |
+| 失败定位与恢复 | 记忆层：隔离并追踪已入库的毒笔记（D45）；工程层：INC-2 |
+| AI 参与与纠正 | `AI_LOG.md`、`DECISIONS.md` |
+
 
 编码 Agent 记不住代码评审教过它的东西；而现有的记忆方案往往是"Agent 总结了什么就存什么、到哪都用、从不收回"。**Attest** 只保留被验证通过的改动真正落实过的经验，每条经验绑定来源仓库和适用版本，规则失效时降级、替换或撤回。一个预注册实验衡量了它带来的收益和代价。
 
