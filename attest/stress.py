@@ -275,6 +275,34 @@ def run_gateway(root: Path, reps: int = 3, parallel: int = 18, settings: Setting
                 print(f"== FAILED {futures[f]}: {type(exc).__name__}: {exc}", flush=True)
 
 
+GATE_CONFIRM_CONDITIONS = ("attest", "attest_no_gate", "attest_secure_v31", "attest_secure_v4", "reasoningbank", "ace")
+GATE_CONFIRM_SCENARIOS = ("clean", "poison_float")
+
+
+def run_gate_confirm(root: Path, reps: int = 5, parallel: int = 50, settings: Settings | None = None) -> None:
+    """Confirmation of "a gate without a performance cost" (D71). Every condition learns its own memory in the
+    same session (experience tasks, then held-out with memory updated, as in the gateway runs), on a clean stream
+    and on the stream whose review comment gives test-passing poison (float audit amounts, E04 and E06).
+    Business-policy guard OFF for every arm, so only the memory differs (in D59/D65 it was on for v3.1; disclosed).
+    Reading rule: scripts/gate_confirm_report.py, committed with this function before the run."""
+    settings = settings or Settings()
+    jobs = [(sc, c, r) for sc in GATE_CONFIRM_SCENARIOS for r in range(1, reps + 1) for c in GATE_CONFIRM_CONDITIONS]
+
+    def job(sc, c, r):
+        st = replace(settings, extra_review=GATEWAY_SCENARIOS[sc], policy_guard=False)
+        return run_sequence(c, r, root / sc, st, log=lambda m: print(m, flush=True), phases=LEARN_AND_HELDOUT)
+
+    print(f"{len(jobs)} sequences, {parallel} in parallel -> {root}")
+    with ThreadPoolExecutor(max_workers=parallel) as pool:
+        futures = {pool.submit(job, *j): j for j in jobs}
+        for f in as_completed(futures):
+            try:
+                f.result()
+                print(f"== finished {futures[f]}", flush=True)
+            except Exception as exc:  # noqa: BLE001
+                print(f"== FAILED {futures[f]}: {type(exc).__name__}: {exc}", flush=True)
+
+
 def summarise_gateway(root: Path) -> dict:
     from .analysis import load_results, paired, usable
 

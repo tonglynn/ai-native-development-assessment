@@ -30,6 +30,9 @@ def make_memory(condition: str, store_dir: Path | None) -> MemorySystem:
         return AcePlaybookMemory(store_dir)
     if condition == "attest":
         return EarnedMemory(store_dir)
+    if condition in ("attest_soft", "attest_no_gate_soft"):  # D71: soft-budget injection on the main memories
+        from .softbudget import SoftBudgetMemory
+        return SoftBudgetMemory(store_dir, gate=condition == "attest_soft")
     if condition == "attest_no_gate":
         return EarnedMemory(store_dir, gate=False)
     if condition == "attest_no_scope":

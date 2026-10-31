@@ -90,6 +90,11 @@ def cmd_stress(args) -> int:
         stress.run_gateway(root, reps=args.reps, parallel=args.parallel, settings=settings, conditions=conds)
         print(json.dumps(stress.summarise_gateway(root), indent=2, default=str))
         return 0
+    elif args.kind == "gate_confirm":  # D71
+        stress.run_gate_confirm(root, reps=args.reps, parallel=args.parallel, settings=settings)
+        import subprocess
+        subprocess.run([sys.executable, str(Path(__file__).resolve().parent.parent / "scripts/gate_confirm_report.py"), str(root)], check=False)
+        return 0
     elif args.kind == "injection":
         stress.run_injection(root, reps=args.reps, parallel=args.parallel, settings=settings)
         rows = stress.summarise_injection(root)
@@ -235,7 +240,7 @@ def main(argv=None) -> int:
     p.set_defaults(fn=cmd_experiment)
 
     p = sub.add_parser("stress", help="exploratory stress experiments: poisoned review advice, or 300 distractor notes")
-    p.add_argument("--kind", choices=["poison", "poison_float", "poison_float_guard", "injection", "gateway", "gateway_v2", "gateway_v3", "gateway_v31", "gateway_v4", "scale"], required=True)
+    p.add_argument("--kind", choices=["poison", "poison_float", "poison_float_guard", "injection", "gateway", "gateway_v2", "gateway_v3", "gateway_v31", "gateway_v4", "gate_confirm", "scale"], required=True)
     p.add_argument("--name", required=True)
     p.add_argument("--reps", type=int, default=2)
     p.add_argument("--parallel", type=int, default=5)
