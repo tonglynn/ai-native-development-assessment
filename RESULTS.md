@@ -1069,6 +1069,45 @@ arithmetic, an idempotency note) are correct rules that now wait for a person an
 files. This is the price of not turning Uncertain into Approved; v3.1 pays it the other way, with wrong advice
 from a trusted reviewer.
 
+**Independent soft evidence (D61, `attest/memory/provenance.py`, `runs/independence/`).** Repetition used to
+mean "two tasks with different quotes", which one comment can fake. Each piece of evidence is now traced to
+its origin (the full review comment it was quoted from, stored with new evidence), near-duplicates and
+comments citing the same external reference are merged, the agent's own diff lines never count, and a
+trusted reviewer's comment counted as "reviewer" cannot also count as repetition. Constructed attacks
+counted as repetition: old rule 4/6 (fragments of one comment on three tasks, a paraphrase, two comments
+quoting one reference, a fragment confirmed later), new rule **0/6**; both legitimate repetitions kept.
+
+**Human review in the lifecycle (D62, `attest/memory/review.py`, `python -m attest review ...`).** Uncertain and
+held notes form a review queue; only a registered approver may decide (an agent identity, or the note's
+proposer, is refused; the operations are not exposed through MCP); each decision records who, why, the
+evidence relied on, the repository and version range, and the policies it depends on; when such a policy
+changes (`review policy-changed FIN-2026-03`), every note approved on it goes back to uncertain. Tested,
+not yet used by a real team.
+
+**Review replay (D63, exploratory, `runs/review_replay/`).** A simulated business owner (decisions written by
+me as the synthetic company's owner, committed before the run) worked every queue; the reviewed memory then
+ran the held-out tasks again with the real agent (66 runs, 0 crashed).
+
+| Queue | Reviewed | Approved | Rejected |
+|---|---|---|---|
+| gateway v4, clean / first poison / second poison | 5 / 5 / 7 | all | 0 (no wrong note reached the queue: the poisons were rejected automatically) |
+| first frozen set, empty memory (mixed) | 16 | 4 | 12, including all 5 wrong pieces of advice v4 had left uncertain |
+
+| Scenario | Attest | v4 before review | v4 after review | after vs Attest | after vs before |
+|---|---|---|---|---|---|
+| clean stream | 85% | 79% | **70%** | −15 pp [−30, −3] | −9 pp [−24, 0] |
+| second poison | 73% | 55% | 52% | −21 pp [−42, −3] | −3 pp [−21, +12] |
+
+**The rule fixed before the run is not met: approving the waiting notes did not recover the gap.** So v4's
+cost on clean work is not (only) notes waiting for a person. Inspecting the failures: none is the policy
+guard; they are the idempotency and audit rules (C5, C4) on H06, H08, H10, H11, failing in every arm; after
+review the idempotency note reached the prompt in 16 of the 18 runs that need it (18 of 18 before), because
+the newly approved correct but low-value rules (bool checks, to_money) now rank as rules and take slots.
+Approval says a note is right, not that it matters, and the rest of the gap is within run-to-run variation
+at 3 repetitions. The human review itself did what it should on the mixed queue: 0 wrong notes approved, 0
+correct ones rejected. Review time was not measured (the reviewer is simulated).
+
+
 
 ## Closing the "self-proving evidence" gap (exploratory, after an external review) / 证据自证问题的改进
 
