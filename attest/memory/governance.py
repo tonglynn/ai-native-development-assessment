@@ -133,14 +133,16 @@ def semantic_review(cand: dict, existing: list[dict], log: str, version: str, mo
 class GovernedMemory(EarnedMemory):
     """Attest whose verified candidates also pass semantic review before they can be injected."""
 
-    def __init__(self, store_dir, *, review_model: str | None = REVIEW_MODEL, **kw):
+    def __init__(self, store_dir, *, review_model: str | None = REVIEW_MODEL, code_review: bool = False, **kw):
         super().__init__(store_dir, **kw)
         self.semantic_model = review_model
+        self.code_review = code_review  # D50: the reviewer may also cite the repository's code
         self.name = "attest_governed"
 
     def _admit(self, task, repo_version, run, cand, changed):
         existing = [it for it in self.store.items().values() if self._same_scope(it, task) and it["status"] in VISIBLE]
-        review = semantic_review(cand, existing, changelog(task.repo), repo_version, self.semantic_model)
+        code = code_excerpts(task.repo, cand) if self.code_review else None
+        review = semantic_review(cand, existing, changelog(task.repo), repo_version, self.semantic_model, code=code)
         if review["verdict"] == "approved":
             events = super()._admit(task, repo_version, run, cand, changed)
             for e in events:
