@@ -1005,6 +1005,70 @@ notes whose applied line is a function signature (idempotency_key parameters: no
 not validated by it and fall back to the other validations. Under the float poison v3.1 learned less again
 (45%; v3 52%, v2 61%), within run-to-run noise at 3 repetitions but consistently below v2.
 
+**Three states and rule kinds (D60).** Three changes, from an external review: (1) a rule carried by a
+function signature gets a counterfactual too (the parameter is ignored: `approved_by = None`); (2) rules are
+routed by kind: a business rule is verified by an independent test (the counterfactual) and policy, a
+code-implementation convention by the team's code checks (`attest/memory/codechecks.py`: round only with
+round_money, no float for money, BillingError not ValueError, simkit's ValueError and float-only, snake_case
+names; each reads only the note's applied line), never by tests; (3) three states, no forced approval:
+**Approved** needs no counter-evidence and hard evidence (a registered policy, a counterfactual test, a
+supporting code check) or two kinds of soft evidence (a trusted reviewer, repetition); **Rejected** needs
+counter-evidence (a violated code check, a cited conflict with a rule or the CHANGELOG, the advice failing the
+tests) and no hard evidence; everything else is **Uncertain** and waits for a person (kept, marked, never a
+rule), including a trusted reviewer alone and counter-evidence against hard evidence.
+
+*Third frozen set* (`benchmark/judgement/set3_cases.*`, 14 verified changes on real workspaces, empty memory:
+signature rules, code conventions, wrong advice from trusted reviewers, undecidable; committed before
+evaluating; one case excluded because the advice failed the tests). Critical errors, fixed beforehand: a
+correct note rejected, a wrong or undecidable one approved.
+
+| Set | System | Correct: approved / uncertain / rejected | Wrong: approved / uncertain / rejected | Undecidable: approved / uncertain | Critical errors |
+|---|---|---|---|---|---|
+| set 3 (13) | v3.1 | 5 rules of 6 | 4 rules of 5 | 0 of 2 | **4** |
+| set 3 | **v4** | 6 / 0 / 0 | 0 / 1 / 4 | 0 / 2 | **0** |
+| set 2 (14) | v3.1 | 7 rules of 8 | 1 of 4 | 0 of 2 | 1 |
+| set 2 | **v4** | 7 / 1 / 0 | 0 / 1 / 3 | 0 / 2 | **0** |
+
+Disclosed: the first evaluation (report kept as `runs/three_state/report_first.md`) had 0 critical errors on
+set 3 but 1 on set 2, and showed that routing was not applied (quantize passed as "test-validated") and that
+code checks read every added line (a docstring note was "supported" by round_money elsewhere in the change);
+both were fixed, and then a business rule that mentions BillingError on an `if` line was misrouted as a code
+convention, fixed by routing on the applied line. Sets 2 and 3 are therefore development data for these
+fixes; the held-out tests follow.
+
+*First frozen set, with the reviewer model* (`runs/judgement_v4/`, `runs/judgement_cold_v4/`; rule fixed before
+the run: no wrong, undecidable or insider case approved, no trusted case rejected):
+
+| Memory | Trusted → approved | Wrong → approved | Undecidable → approved | Insider → approved | Critical | Uncertain (human review) |
+|---|---|---|---|---|---|---|
+| as in use | 7/11 (3 uncertain, 1 held) | **0/10** (10 rejected) | 0/7 | **0/2** (2 rejected) | **0** | 10 of 30 |
+| empty | 7/11 (4 uncertain) | **0/10** (5 rejected, 5 uncertain) | 0/7 | **0/2** (2 rejected) | **0** | 16 of 30 |
+
+The insider cases, wrong advice from a trusted reviewer that v3 and v3.1 approved, are now rejected by the
+team's code checks (float for money; round instead of round_money), from an empty memory too. With an empty
+memory the five wrong cases no check covers (naive datetimes, skipping audit under 1.00, self-approval,
+idempotency at the gateway, a spoofed threshold) are uncertain, not approved: nothing can refute them, and
+nothing confirms them. The cost is that trusted rules stated only by a trusted reviewer (ensure_utc, audit)
+are uncertain too, as asked: authority alone is not independent evidence.
+
+*End to end* (`runs/stress_gateway/`, same Attest arm; rule fixed before the run):
+
+| Scenario | | Attest | v3.1 | **v4** |
+|---|---|---|---|---|
+| clean stream | held-out pass@1 (vs Attest) | 85% | 88% (+3 [0, +9]) | 79% (−6 [−15, 0]) |
+| clean stream | notes approved / uncertain / rejected | – | – | 19 / 5 / 0 |
+| second poison | poison stored / held-out applying | 3 / 13 | 0 / 0 | **0 / 0** |
+| second poison | held-out pass@1 | 73% | 45% | 55% |
+| first poison | poison stored / applying | 0 / 0 | 0 / 0 | **0 / 0** |
+
+Both poisons stay out. (The summary script counted one v4 note under the first poison because it searches the
+whole stored record; the note is the approval rule, whose stored review comments include the poison comment;
+by its own text no stored note is a poison, in any arm.) On clean work v4 is 6 points below Attest and the
+interval reaches −15, so "not worse" is **not shown**: the five uncertain notes (to_money, bool checks, period
+arithmetic, an idempotency note) are correct rules that now wait for a person and are shown only in their own
+files. This is the price of not turning Uncertain into Approved; v3.1 pays it the other way, with wrong advice
+from a trusted reviewer.
+
 
 ## Closing the "self-proving evidence" gap (exploratory, after an external review) / 证据自证问题的改进
 
