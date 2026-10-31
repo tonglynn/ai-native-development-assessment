@@ -117,6 +117,8 @@ def validity(item: dict, version: str | None) -> str:
     if status == "retired":
         return "retired" + (f" by {item['retracted_by']}" if item.get("retracted_by") else "")
     if status == "superseded" and not scope.get("valid_until"):
+        if item.get("supersede"):  # D69: replaced by a newer approved rule (e.g. a policy change), not necessarily wrong
+            return f"superseded by {item.get('superseded_by')} (replaced by a newer rule, recorded by {item['supersede'].get('by')})"
         return f"superseded by {item.get('superseded_by')} (the old rule was wrong)"
     if version is not None:
         if scope.get("valid_from") and _version_tuple(version) < _version_tuple(scope["valid_from"]):

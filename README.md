@@ -12,6 +12,30 @@ that buys and what it costs.
 Scope: payments, refunds and account adjustments in the migration of a B2B SaaS subscription-billing system
 (synthetic); subscriptions and invoicing are context, not covered as a whole (`SCENARIO.md`, coverage map).
 
+## Positioning / 定位 (D69)
+
+**Attest is a write gate for coding-agent memory: nothing becomes a rule without executable evidence and a
+person's sign-off, and every admission can be audited.** It is not a claim that memory makes the agent stronger
+than other memory systems; performance results support only that governance need not cost performance.
+
+Three pieces of evidence, all from this repository:
+
+1. **Poisoned review comment, preregistered, same agent stack** (`runs/stress_poison`): poison notes stored —
+   Attest 0, gate off 9, ACE 10, ReasoningBank 12 (our reimplementations, not the official code); held-out runs
+   that applied the poison — 0, 0, 5 and 2 of 33. Cost, stated with it: held-out pass@1 under poison 36% vs 67% with
+   the gate off, because the gate also kept the good lessons of the poisoned tasks out.
+2. **Wrong advice from a trusted reviewer** (D60): gateway v4 made 0 critical errors (no wrong or undecidable
+   advice approved automatically) on all three frozen judgement sets.
+3. **Auditability**: human-only approval, rejection and supersession, with segregation-of-duties bypasses blocked
+   16/16 (`runs/segregation`, D69); sealed log 8/8 tamper cases detected (D44); every number in these documents
+   checked against the runs (`runs/audit_numbers`, D67).
+
+Not claimed: better coding performance than any other system; protection against an attacker who also edits the
+tests; results on real repositories; results with other model families. The next experiments that would test the
+positioning are in `ROADMAP.md` ("Proving the write gate").
+
+一句话：Attest 是编码智能体记忆的写入关口——没有可执行证据和人的签字，任何内容都成不了规则，每一次准入都可审计。
+
 ## Results at a glance
 
 Preregistered (frozen at commit `cf5d879` before any memory run), 6 conditions ×
@@ -150,7 +174,7 @@ more relevant notes but did not improve coding results (retrieval ablation in
 | v3 (D57) | code is a clue not an authority; passing checks validate | from an empty memory, wrong advice validated by "tests passed" (D58) |
 | v3.1 (D59) | counterfactual check: a test vouches only if it fails without the change | wrong advice from a trusted reviewer approved |
 | v4 (D60) | three states; business rules by tests, code conventions by code checks; reviewer alone is uncertain | review queue; injection crowding (D63) |
-| + D61–D68 | origin-based independence; review lifecycle; criticality-first and soft-budget injection | cross-domain check; rules injected but not followed |
+| + D61–D69 | origin-based independence; review lifecycle; criticality-first and soft-budget injection | cross-domain check; rules injected but not followed |
 
 The counterfactual check costs about 1 s of test time per candidate note (15 frozen-set candidates, mean 1.0 s, max
 1.7 s), paid once when a note is learned.
@@ -323,7 +347,7 @@ Sources for the industry and research context: [GitHub Copilot agentic memory](h
 | `runs/` | Every run: trajectories, diffs, `result.json`, memory event logs |
 | `report/index.html` | Interactive report of the main experiment |
 | `RESULTS.md`, `REAL_HISTORY.md` | Results |
-| `PREREGISTRATION.md`, `DECISIONS.md`, `AI_LOG.md`, `INCIDENTS.md` | Method, decisions D1–D68, AI collaboration log, incidents |
+| `PREREGISTRATION.md`, `DECISIONS.md`, `AI_LOG.md`, `INCIDENTS.md` | Method, decisions D1–D69, AI collaboration log, incidents |
 | `SCENARIO.md`, `scenario/history/` | Business scenario (synthetic) |
 | `ROADMAP.md`, `PROCESS_MEMORY.md` | Next steps (Attest 2.0), deliberately not added |
 

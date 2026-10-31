@@ -136,3 +136,20 @@ def test_d68_many_constraints_stay_within_budget_and_reviews_are_never_dropped()
     text = "\n".join(str(m.get("content")) for m in ctx)
     assert tokens_of(ctx) <= 3000 and not cm.log[-1]["over_budget"]
     assert RULE in text and "Rule 399:" in text and "Rule 0:" not in text  # newest constraints kept first
+
+
+def test_d69_superseded_and_withdrawn_policies_leave_the_working_state():
+    msgs = [{"role": "system", "content": "system prompt"}, {"role": "user", "content": "earlier task"},
+            {"role": "user", "content": "Policy FIN-2026-03: refunds above 500.00 need an `approved_by`."},
+            {"role": "user", "content": "Policy FIN-2026-05: CSV exports must use semicolons."}]
+    for i in range(20):
+        msgs += step(i)
+    msgs += [{"role": "user", "content": "Policy FIN-2026-11 supersedes FIN-2026-03: the threshold is now 1000.00."},
+             {"role": "user", "content": "FIN-2026-05 is withdrawn; exports keep their previous format."}]
+    for i in range(20, 40):
+        msgs += step(i)
+    msgs.append({"role": "user", "content": "NEW TASK"})
+    ctx = ContextManager("manager", 3000).assemble(msgs, task_index=len(msgs) - 1)
+    state = next(m["content"] for m in ctx if "[Working state" in str(m.get("content")))
+    assert "1000.00" in state and "500.00" not in state and "semicolons" not in state
+    assert "No longer in force" in state and "FIN-2026-03" in state and "FIN-2026-05" in state

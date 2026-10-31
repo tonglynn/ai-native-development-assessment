@@ -147,7 +147,7 @@ Example (synthetic, not a real transaction / 模拟数据，不代表真实交�
 |---|---|---|---|
 | Subscriptions and invoicing | renewal (E03), cancellation (H09), proration (H05), discounts, tax, amounts (E01, E05, H01, H02) | billing periods | plan upgrade and downgrade; failed-renewal retries |
 | Payments and refunds | partial refund (E04), void (H06), partial capture (H08), duplicate refunds (C5), provider timeout (X01) | refund vs credit (both present, distinguished in this document only) | refund to the original method; refund failure and reprocessing |
-| Approval and permissions | second approver above the threshold (C6), policy versions (FIN-2026-03, FIN-2026-09) | segregation of duties (stated, not tested) | a full role and permission model |
+| Approval and permissions | second approver above the threshold (C6), policy versions (FIN-2026-03, FIN-2026-09) | segregation of duties in the business operation (stated, not tested); in the memory lifecycle tested 16/16 (D69) | a full role and permission model |
 | Ledger and audit | event, entity id, amount, idempotency key, approver (C4) | | operator, state before and after, request id |
 | Failure recovery | timeouts, duplicate requests | | compensation after a ledger failure; late or out-of-order callbacks |
 

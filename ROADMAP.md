@@ -159,3 +159,25 @@ Each would add a business rule that is only in review or policy, which is where 
 | LangGraph | the agent loop needs no orchestration framework |
 | Multi-agent collaboration | adds experimental variables |
 | Fine-tuning | the research is about governing memory, not training models |
+
+
+## Proving the write gate (after the competitive review, D69)
+
+The positioning in README rests on one preregistered poisoning run. What would test it properly, in order:
+
+1. **A coding-memory poisoning benchmark**: attacks through the real write channels (review comments, issue text,
+   README, a forged "team convention", a trusted reviewer's mistake), in the style of query-only memory injection
+   (MINJA) and trigger-based retrieval poisoning (AgentPoison), with two measures — injection success (it reached
+   memory) and downstream attack success (a harmful patch) — against no memory, ReasoningBank, ACE, extraction-style
+   memory, use-time citation checking (Copilot style), consensus checking (A-MemGuard style), Attest and Attest without
+   the gate.
+2. **Dose-response harm**: 0, 5, 10, 25 and 50% poisoned notes, with hidden tests that only convention-following
+   patches pass, so that harm from stored poison is measured rather than inferred.
+3. **An adaptive attacker**: advice that passes the tests but is harmful (the float poison already shows the gate
+   alone does not stop this), a poisoned PR that edits the tests too, and test-coverage blind spots.
+4. **Non-inferiority on a public benchmark** (a SWE-Bench-CL or VibeMemBench subset): clean stream, Attest not
+   worse than ReasoningBank and ACE by a margin fixed beforehand; then the poisoned comment again.
+5. **A second model family and 5–10 repetitions** for the main comparison.
+
+Not pursued: retrieval quality (rerank already gave the best Recall@5 with no coding gain) and conversational memory
+benchmarks (LoCoMo, LongMemEval), which do not test the write gate.

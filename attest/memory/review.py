@@ -85,3 +85,64 @@ def policy_changed(memory, policy_id: str, *, by: str, reason: str) -> list[dict
                                                                        "observed_only": True},
                                               reason=f"{policy_id} changed ({reason}; recorded by {by}): back to review"))
     return events
+
+
+def supersede(memory, new_id: str, old_ids: list[str], *, by: str, reason: str, approvers) -> list[dict]:
+    """D69: a person records that an approved rule replaces older ones (e.g. a new threshold policy).
+
+    The old notes become "superseded" with superseded_by and invalid_at, so retrieval no longer shows them, but they
+    stay in the append-only log (nothing is deleted; Zep-style invalidation). Only a registered approver may do it,
+    never an agent, and the new note must already be an approved rule."""
+    if not by or by.startswith("agent:"):
+        raise ReviewRefused(f"{by!r} may not supersede rules: agents cannot change what counts as a rule")
+    if by not in set(approvers or ()):
+        raise ReviewRefused(f"{by!r} is not a registered approver")
+    items = memory.store.items()
+    new = items.get(new_id)
+    if not new or (new.get("assessment") or {}).get("state") != "approved" or new["status"] not in ("active", "suspect"):
+        raise ValueError(f"{new_id} is not an approved rule")
+    events, now = [], round(time.time(), 3)
+    for old in old_ids:
+        if old == new_id or old not in items:
+            raise KeyError(old)
+        if items[old]["status"] in ("retired", "superseded"):
+            continue
+        events.append(memory.store.append("update", id=old, fields={"status": "superseded", "superseded_by": new_id, "invalid_at": now,
+                                                                     "supersede": {"by": by, "reason": reason, "at": now}},
+                                          reason=f"superseded by {new_id} (recorded by {by}): {reason}"))
+    if events:
+        events.append(memory.store.append("update", id=new_id, fields={"supersedes": sorted(set(list(new.get("supersedes") or []) + list(old_ids)))},
+                                          reason=f"supersedes {', '.join(old_ids)} (recorded by {by})"))
+    return events
+
+
+def audit_reviews(memory, approvers) -> list[dict]:
+    """D69: after the fact, check every human decision in the log against the rules above. A decision written into the
+    log by any other path (a forged "approved" update) is listed: decided by an agent, by the proposer, by someone not
+    registered, or without evidence."""
+    allowed, out, proposer = set(approvers or ()), [], {}
+    for e in memory.store.events:
+        if e["type"] == "add":
+            proposer[e["item"]["id"]] = (e["item"].get("source") or {}).get("proposed_by")
+        if e["type"] != "update":
+            continue
+        f = e.get("fields") or {}
+        rv = f.get("review") or {}
+        decided = rv.get("decision") in ("approved", "rejected") or (f.get("assessment") or {}).get("state") == "approved"
+        who = rv.get("by") or (f.get("supersede") or {}).get("by")
+        if not (decided or f.get("status") == "superseded"):
+            continue
+        problems = []
+        if not who:
+            problems.append("no decider recorded")
+        elif who.startswith("agent:"):
+            problems.append("decided by an agent")
+        elif who == proposer.get(e.get("id")):
+            problems.append("decided by the proposer")
+        elif who not in allowed:
+            problems.append("decider not a registered approver")
+        if rv.get("decision") == "approved" and not rv.get("evidence"):
+            problems.append("approval without evidence")
+        if problems:
+            out.append({"seq": e.get("seq"), "id": e.get("id"), "by": who, "problems": problems})
+    return out

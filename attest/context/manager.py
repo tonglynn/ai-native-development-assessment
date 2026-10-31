@@ -44,6 +44,9 @@ from dataclasses import dataclass, field
 CONSTRAINT_RE = re.compile(
     r"\[team convention\]|\[simkit convention\]|\b(?:FIN|INC|SEC|POL)-\d[\d-]*\b|\bmust\b|\bnever\b|\brequired?\b"
     r"|\bthreshold\b|\bapprov\w*|\bidempoten\w*", re.I)
+POLICY_ID_RE = re.compile(r"\b(?:FIN|POL|SEC|INC)-\d[\w-]*\d\b")
+SUPERSEDE_RE = re.compile(r"\bsupersed\w*\s+((?:FIN|POL|SEC|INC)-\d[\w-]*\d)\b", re.I)
+WITHDRAW_RE = re.compile(r"\b((?:FIN|POL|SEC|INC)-\d[\w-]*\d)\s+is\s+(?:withdrawn|revoked|no longer in force)\b", re.I)
 TEST_RE = re.compile(r"\b\d+ (?:passed|failed)\b[^\n]*|FAILED [^\n]+|ERROR [^\n]+")
 FILE_RE = re.compile(r"\b[\w./-]+\.py\b")
 KEY_TOKEN_RE = re.compile(r"\b\d+\.\d{2}\b|\b(?:FIN|INC)-\d[\d-]*\d\b|`[^`]+`|\b[a-z]+_[a-z_]+\b")
@@ -83,6 +86,8 @@ class WorkingState:
     constraints: list[tuple[int, str]] = field(default_factory=list)  # (source message index, sentence)
     last_tests: str = ""
     files: list[str] = field(default_factory=list)
+    superseded: list[tuple[int, str]] = field(default_factory=list)  # D69: constraints a later policy replaced or withdrew
+    invalid: set = field(default_factory=set)  # D69: policy ids replaced or withdrawn anywhere in the session
 
     def render(self) -> str:
         lines = ["[Working state, extracted from earlier in this session; quoted verbatim]"]
@@ -92,6 +97,9 @@ class WorkingState:
         if self.constraints:
             lines.append("Constraints and rules seen earlier:")
             lines += [f"- {s} (from message {i})" for i, s in self.constraints]
+        if self.invalid:
+            lines.append("No longer in force (replaced or withdrawn later in this session; do not apply): "
+                         + ", ".join(sorted(self.invalid)))
         if self.last_tests:
             lines.append(f"Latest test result seen: {self.last_tests}")
         if self.files:
@@ -132,6 +140,25 @@ def extract_state(messages: list[dict], goal: str = "") -> WorkingState:
             for f in FILE_RE.findall(text):
                 if f not in state.files:
                     state.files.append(f)
+    # D69: a later constraint that supersedes or withdraws a policy invalidates the earlier constraints that state it.
+    # They leave the working state (the archive keeps them); review comments are never removed this way.
+    gone: dict[str, int] = {}
+    for i, s in state.constraints:
+        for pid in SUPERSEDE_RE.findall(s):
+            gone[pid] = max(gone.get(pid, -1), i)
+        for pid in WITHDRAW_RE.findall(s):
+            gone[pid] = max(gone.get(pid, -1), i)
+    state.invalid |= set(gone)
+    if gone:
+        keep = []
+        for i, s in state.constraints:
+            ids = set(POLICY_ID_RE.findall(s))
+            stale = [p for p in ids if p in gone and i < gone[p] and not SUPERSEDE_RE.search(s)]
+            if stale and ids <= set(gone):
+                state.superseded.append((i, s))
+            else:
+                keep.append((i, s))
+        state.constraints = keep
     return state
 
 
@@ -164,6 +191,16 @@ def fidelity(summary: str, state: WorkingState) -> dict:
     low = summary.lower()
     kept = sorted(t for t in pinned if t in low)
     return {"pinned": len(pinned), "kept": len(kept), "dropped": sorted(pinned - set(kept))}
+
+
+def invalidated(messages: list[dict]) -> set:
+    """D69: policy ids that a message supersedes or withdraws (user and tool messages only)."""
+    out = set()
+    for m in messages:
+        if m.get("role") in ("user", "tool"):
+            t = _text(m)
+            out |= set(SUPERSEDE_RE.findall(t)) | set(WITHDRAW_RE.findall(t))
+    return out
 
 
 CLIP_LINES = 40
@@ -266,6 +303,7 @@ class ContextManager:
         elif old and self.strategy == "manager":
             # Steps 1-3: extract, keep constraints verbatim (importance: pinned), compress the rest.
             state = extract_state(old)
+            state.invalid |= invalidated([msgs[i] for i in keep])
             state_room = (self.budget - tokens_of([system, task] + [msgs[i] for i in keep])) * 4 - 100
             state_text = fit_state(state, state_room)
             while len(state_text) > state_room and len(keep) > 1:
@@ -279,6 +317,7 @@ class ContextManager:
                 keep = keep[start:]
                 old = [messages[i] for i in history[:pos]]
                 state = extract_state(old)
+                state.invalid |= invalidated([msgs[i] for i in keep])
                 state_room = (self.budget - tokens_of([system, task] + [msgs[i] for i in keep])) * 4 - 100
                 state_text = fit_state(state, state_room)
             kept_tokens = tokens_of([system, task] + [msgs[i] for i in keep])

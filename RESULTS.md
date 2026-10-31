@@ -1443,3 +1443,25 @@ in known formats, simulated trust signals.
 - Limits: one model, one synthetic benchmark designed by the author, simulated
   review comments, 11 held-out tasks × 3 repetitions; real review history shows no
   recall advantage (`REAL_HISTORY.md`).
+
+
+## Supersession and segregation of duties (D69, offline, after a competitive review)
+
+**Superseded rules.** A person can record that an approved rule replaces older ones (`review.supersede`): the old
+notes become `superseded` with `superseded_by` and `invalid_at`, retrieval stops showing them, and they stay in the
+append-only log (invalidation, not deletion). Agents and unregistered names are refused. In the Context Manager, a
+constraint that supersedes or withdraws a policy id removes the earlier constraints that state it from the working
+state and adds a line "No longer in force: …". On the long-session scenario (D49) the working state now names
+FIN-2026-03 (superseded) and FIN-2026-05 (withdrawn) at 4k, 8k and 12k, keeps all 5 needed facts and stays within
+budget. This fixes the defect declared in D49; the D49 agent runs were made before it and were not rerun, so their
+numbers describe the earlier version. One remaining case: the same scenario's real review comment states both
+thresholds by version ("500.00 before 2.0.0, 1000.00 since"), which is correct and stays.
+
+**Segregation of duties in the memory lifecycle** (`scripts/segregation_eval.py`, `runs/segregation`): 16 cases
+fixed in advance, **16/16 as expected** — 14 bypasses blocked (an agent, the proposer, an unregistered name or nobody
+approving; approval without evidence; replaying an approval; an agent rejecting or superseding; superseding with an
+unapproved replacement; three approvals forged straight into the log, listed by `review.audit_reviews`; no approval
+tool reachable through MCP) and 2 legitimate decisions allowed. Limits: the log check lists violations after the
+fact; identities are names, not signatures; this is the memory lifecycle, not the business rule that a refund's
+requester may not approve it (`SCENARIO.md`, still not tested).
+修正：记忆生命周期里的职责分离现在有可执行用例（16/16）；新规则可由人标记"取代"旧规则，旧规则不再被检索但保留在日志中。
