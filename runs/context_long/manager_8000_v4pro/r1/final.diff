@@ -1,0 +1,60 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,13 +1,18 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import audit
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money
++
++APPROVAL_THRESHOLD = 1000.00
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+     if invoice.status not in ("issued", "paid"):
+-        raise ValueError("can only adjust issued or paid invoices")
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
+     if not note:
+-        raise ValueError("a note is required")
++        raise BillingError("missing_note", invoice.id)
+     return {"invoice_id": invoice.id, "amount": amount, "note": note}
+ 
+ 
+@@ -15,6 +20,34 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def outage_refund(payment, amount, at):
++def outage_refund(payment, amount, at, *, idempotency_key=None, approved_by=None):
+     """Refund part of a captured payment after a service outage."""
+-    raise NotImplementedError
++    if idempotency_key is not None:
++        for entry in audit.events("outage_refund"):
++            if entry.get("idempotency_key") == idempotency_key:
++                return payment
++
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    if payment.refunded_amount + amount > payment.amount:
++        raise BillingError("refund_exceeds_captured", payment.id)
++
++    if amount > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError("approval_required")
++
++    payment.refunded_amount = round_money(payment.refunded_amount + amount)
++    if payment.refunded_amount >= payment.amount:
++        payment.status = "refunded"
++
++    audit.record(
++        "outage_refund",
++        payment_id=payment.id,
++        amount=amount,
++        refunded_amount=payment.refunded_amount,
++        approved_by=approved_by,
++        idempotency_key=idempotency_key,
++    )
++    return payment

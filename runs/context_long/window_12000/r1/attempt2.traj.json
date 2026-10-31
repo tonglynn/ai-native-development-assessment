@@ -1,0 +1,655 @@
+{
+  "info": {
+    "model_stats": {
+      "instance_cost": 0.0052245780000000006,
+      "api_calls": 8
+    },
+    "config": {
+      "agent": {
+        "system_template": "You are a helpful assistant that can interact with a computer.\n",
+        "instance_template": "You are working in a Python repository located at {{cwd}}. Every command runs with this directory as the current directory.\n\nPlease solve this issue: {{task}}\n{%- if memory_context %}\n\n## Notes from earlier work\n{{memory_context}}\n{%- endif %}\n{%- if review_feedback %}\n\n## Code review of your previous attempt\nYour previous attempt at this issue was reviewed and not accepted. The repository still contains that attempt. Address every comment below:\n{{review_feedback}}\n{%- endif %}\n\nYou can execute bash commands and edit files to implement the necessary changes.\n\n## Recommended Workflow\n\nThis workflow should be done step-by-step so that you can iterate on your changes and any possible problems.\n\n1. Analyze the codebase by finding and reading relevant files\n2. Edit the source code to resolve the issue\n3. Run the test suite with `python -m pytest -q` and check edge cases\n4. Submit your changes and finish your work by issuing the following command:\n   {%- if memory_context %}\n   `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && echo \"USED_NOTES: <comma-separated ids of the notes you relied on, or none>\"`\n   {%- else %}\n   `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\n   {%- endif %}\n   <important>After this command, you cannot continue working on this task.</important>\n\n## Command Execution Rules\n\nYou are operating in an environment where\n\n1. You issue at least one command\n2. The system executes the command(s) in a subshell\n3. You see the result(s)\n4. You write your next command(s)\n\nEach response should include:\n\n1. **Reasoning text** where you explain your analysis and plan\n2. At least one tool call with your command\n\n**CRITICAL REQUIREMENTS:**\n\n- Your response SHOULD include reasoning text explaining what you're doing\n- Your response MUST include AT LEAST ONE bash tool call\n- Directory or environment variable changes are not persistent. Every action is executed in a new subshell.\n- However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files\n\n<system_information>\n{{system}} {{release}} {{version}} {{machine}}\n</system_information>\n\n## Useful command examples\n\n### Create a new file:\n\n```bash\ncat <<'EOF' > newfile.py\nhello = \"world\"\nprint(hello)\nEOF\n```\n\n### Edit files with sed:\n\n```bash\n# Replace all occurrences\nsed -i 's/old_string/new_string/g' filename.py\n\n# Replace only first occurrence\nsed -i 's/old_string/new_string/' filename.py\n```\n\n### View file content:\n\n```bash\n# View specific lines with numbers\nnl -ba filename.py | sed -n '10,20p'\n```\n",
+        "step_limit": 30,
+        "cost_limit": 0.0,
+        "wall_time_limit_seconds": 600,
+        "max_consecutive_format_errors": 3,
+        "output_path": "runs/context_long/window_12000/r1/attempt2.traj.json"
+      },
+      "agent_type": "minisweagent.agents.default.DefaultAgent",
+      "model": {
+        "model_name": "deepseek/deepseek-flash",
+        "model_kwargs": {
+          "drop_params": true,
+          "temperature": 0.0,
+          "extra_body": {
+            "thinking": {
+              "type": "disabled"
+            }
+          }
+        },
+        "litellm_model_registry": null,
+        "set_cache_control": null,
+        "cost_tracking": "ignore_errors",
+        "format_error_template": "{% if finish_reason is defined and (finish_reason == \"length\" or (finish_reason == \"tool_calls\" and not has_tool_calls)) -%}\nYour previous response reached the output token limit (finish_reason={{ finish_reason }}) before you produced a tool call, so it was cut off. Respond more concisely and finish with exactly one bash tool call. If you need to think more, do so briefly.\n{%- else -%}\nTool call error:\n\n<error>\n{{error}}\n</error>\n\nHere is general guidance on how to submit correct toolcalls:\n\nEvery response needs to use the 'bash' tool at least once to execute commands.\n\nCall the bash tool with your command as the argument:\n- Tool: bash\n- Arguments: {\"command\": \"your_command_here\"}\n\nIf you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\nwithout any other command.\n{%- endif %}\n",
+        "observation_template": "{%- if output.output | length < 10000 -%}\n{\n  \"returncode\": {{ output.returncode }},\n  \"output\": {{ output.output | tojson }}\n  {%- if output.exception_info %}, \"exception_info\": {{ output.exception_info | tojson }}{% endif %}\n}\n{%- else -%}\n{\n  \"returncode\": {{ output.returncode }},\n  \"output_head\": {{ output.output[:5000] | tojson }},\n  \"output_tail\": {{ output.output[-5000:] | tojson }},\n  \"elided_chars\": {{ output.output | length - 10000 }},\n  \"warning\": \"Output too long.\"\n  {%- if output.exception_info %}, \"exception_info\": {{ output.exception_info | tojson }}{% endif %}\n}\n{%- endif -%}\n",
+        "multimodal_regex": ""
+      },
+      "model_type": "minisweagent.models.litellm_model.LitellmModel",
+      "environment": {
+        "cwd": "/tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace",
+        "env": {
+          "PAGER": "cat",
+          "MANPAGER": "cat",
+          "LESS": "-R",
+          "PIP_PROGRESS_BAR": "off",
+          "TQDM_DISABLE": "1",
+          "PYTHONDONTWRITEBYTECODE": "1"
+        },
+        "timeout": 60
+      },
+      "environment_type": "attest.runner.ScrubbedEnvironment"
+    },
+    "mini_version": "2.4.6",
+    "exit_status": "Submitted",
+    "submission": ""
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant that can interact with a computer."
+    },
+    {
+      "role": "user",
+      "content": "You are working in a Python repository located at /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace. Every command runs with this directory as the current directory.\n\nPlease solve this issue: After a service outage the support team refunds part of what affected customers paid. Add `outage_refund(payment, amount, at)` to `ledgerly/adjustments.py`: it refunds `amount` of a captured payment, adding it to `payment.refunded_amount` and setting the status to `\"refunded\"` once everything has been refunded. Return the payment. The amount must be positive, the total refunded may not exceed the captured amount, and only captured payments can be refunded. Apply the review guidance and the policy updates you received earlier in this session.\n\n## Code review of your previous attempt\nYour previous attempt at this issue was reviewed and not accepted. The repository still contains that attempt. Address every comment below:\n- [team convention] Support-initiated refunds and credits above the approval threshold need a second approver: accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below the threshold need no approval; above it, raise BillingError(\"approval_required\") when `approved_by` is missing. The threshold is set by finance policy: 500.00 before 2.0.0, 1000.00 since 2.0.0 (see CHANGELOG).\n\nYou can execute bash commands and edit files to implement the necessary changes.\n\n## Recommended Workflow\n\nThis workflow should be done step-by-step so that you can iterate on your changes and any possible problems.\n\n1. Analyze the codebase by finding and reading relevant files\n2. Edit the source code to resolve the issue\n3. Run the test suite with `python -m pytest -q` and check edge cases\n4. Submit your changes and finish your work by issuing the following command:\n   `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\n   <important>After this command, you cannot continue working on this task.</important>\n\n## Command Execution Rules\n\nYou are operating in an environment where\n\n1. You issue at least one command\n2. The system executes the command(s) in a subshell\n3. You see the result(s)\n4. You write your next command(s)\n\nEach response should include:\n\n1. **Reasoning text** where you explain your analysis and plan\n2. At least one tool call with your command\n\n**CRITICAL REQUIREMENTS:**\n\n- Your response SHOULD include reasoning text explaining what you're doing\n- Your response MUST include AT LEAST ONE bash tool call\n- Directory or environment variable changes are not persistent. Every action is executed in a new subshell.\n- However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files\n\n<system_information>\nLinux 7.0.0-1017-azure #17~24.04.1-Ubuntu SMP PREEMPT Thu Sep 24 18:46:57 UTC 2026 x86_64\n</system_information>\n\n## Useful command examples\n\n### Create a new file:\n\n```bash\ncat <<'EOF' > newfile.py\nhello = \"world\"\nprint(hello)\nEOF\n```\n\n### Edit files with sed:\n\n```bash\n# Replace all occurrences\nsed -i 's/old_string/new_string/g' filename.py\n\n# Replace only first occurrence\nsed -i 's/old_string/new_string/' filename.py\n```\n\n### View file content:\n\n```bash\n# View specific lines with numbers\nnl -ba filename.py | sed -n '10,20p'\n```"
+    },
+    {
+      "content": "I'll start by examining the repository, especially the existing attempt and relevant modules.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && find . -type f -not -path './.git/*' | sort && echo '=== adjustments.py ===' && cat ledgerly/adjustments.py && echo '=== CHANGELOG ===' && cat CHANGELOG.md && echo '=== __init__ ===' && cat ledgerly/__init__.py\"}",
+            "name": "bash"
+          },
+          "id": "call_00_z3fsgFBS1SJWjzXBwWOD6048",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && find . -type f -not -path './.git/*' | sort && echo '=== adjustments.py ===' && cat ledgerly/adjustments.py && echo '=== CHANGELOG ===' && cat CHANGELOG.md && echo '=== __init__ ===' && cat ledgerly/__init__.py",
+            "tool_call_id": "call_00_z3fsgFBS1SJWjzXBwWOD6048"
+          }
+        ],
+        "response": {
+          "id": "700c4e6a-90e1-4b5a-b284-31e067fb1953",
+          "created": 1793430430,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "I'll start by examining the repository, especially the existing attempt and relevant modules.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && find . -type f -not -path './.git/*' | sort && echo '=== adjustments.py ===' && cat ledgerly/adjustments.py && echo '=== CHANGELOG ===' && cat CHANGELOG.md && echo '=== __init__ ===' && cat ledgerly/__init__.py\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_z3fsgFBS1SJWjzXBwWOD6048",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 143,
+            "prompt_tokens": 15356,
+            "total_tokens": 15499,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 14592
+            },
+            "prompt_cache_hit_tokens": 14592,
+            "prompt_cache_miss_tokens": 764
+          }
+        },
+        "cost": 0.00024417600000000003,
+        "timestamp": 1793430432.0562882
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"./.pytest_cache/.gitignore\\n./.pytest_cache/CACHEDIR.TAG\\n./.pytest_cache/README.md\\n./.pytest_cache/v/cache/lastfailed\\n./.pytest_cache/v/cache/nodeids\\n./CHANGELOG.md\\n./README.md\\n./__pycache__/conftest.cpython-311-pytest-9.2.0.pyc\\n./conftest.py\\n./ledgerly/__init__.py\\n./ledgerly/__pycache__/__init__.cpython-311.pyc\\n./ledgerly/__pycache__/adjustments.cpython-311.pyc\\n./ledgerly/__pycache__/audit.cpython-311.pyc\\n./ledgerly/__pycache__/clock.cpython-311.pyc\\n./ledgerly/__pycache__/errors.cpython-311.pyc\\n./ledgerly/__pycache__/importers.cpython-311.pyc\\n./ledgerly/__pycache__/invoice.cpython-311.pyc\\n./ledgerly/__pycache__/models.cpython-311.pyc\\n./ledgerly/__pycache__/money.cpython-311.pyc\\n./ledgerly/__pycache__/payments.cpython-311.pyc\\n./ledgerly/__pycache__/pricing.cpython-311.pyc\\n./ledgerly/__pycache__/promotions.cpython-311.pyc\\n./ledgerly/__pycache__/renewals.cpython-311.pyc\\n./ledgerly/__pycache__/reporting.cpython-311.pyc\\n./ledgerly/__pycache__/subscriptions.cpython-311.pyc\\n./ledgerly/adjustments.py\\n./ledgerly/audit.py\\n./ledgerly/clock.py\\n./ledgerly/errors.py\\n./ledgerly/importers.py\\n./ledgerly/invoice.py\\n./ledgerly/models.py\\n./ledgerly/money.py\\n./ledgerly/payments.py\\n./ledgerly/pricing.py\\n./ledgerly/promotions.py\\n./ledgerly/renewals.py\\n./ledgerly/reporting.py\\n./ledgerly/subscriptions.py\\n./tests/__pycache__/test_core.cpython-311-pytest-9.2.0.pyc\\n./tests/__pycache__/test_legacy.cpython-311-pytest-9.2.0.pyc\\n./tests/__pycache__/test_outage_refund.cpython-311-pytest-9.2.0.pyc\\n./tests/test_core.py\\n./tests/test_legacy.py\\n./tests/test_outage_refund.py\\n=== adjustments.py ===\\n\\\"\\\"\\\"Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith).\\\"\\\"\\\"\\n\\nfrom . import audit\\nfrom .clock import ensure_utc\\nfrom .errors import BillingError\\nfrom .invoice import invoice_total\\nfrom .money import ZERO, round_money, to_money\\n\\n\\ndef manual_adjustment(invoice, amount, note):\\n    if invoice.status not in (\\\"issued\\\", \\\"paid\\\"):\\n        raise ValueError(\\\"can only adjust issued or paid invoices\\\")\\n    if not note:\\n        raise ValueError(\\\"a note is required\\\")\\n    return {\\\"invoice_id\\\": invoice.id, \\\"amount\\\": amount, \\\"note\\\": note}\\n\\n\\ndef adjustable_balance(invoice) -\\u003e float:\\n    return float(invoice_total(invoice))\\n\\n\\ndef outage_refund(payment, amount, at):\\n    \\\"\\\"\\\"Refund part of a captured payment after a service outage.\\n\\n    ``amount`` is added to ``payment.refunded_amount``; once the whole\\n    captured amount has been refunded the payment status becomes\\n    ``\\\"refunded\\\"``.  Only captured payments may be refunded, the amount must\\n    be positive, and the total refunded may not exceed the captured amount.\\n    \\\"\\\"\\\"\\n    at = ensure_utc(at)\\n    amount = round_money(amount)\\n    if amount \\u003c= ZERO:\\n        raise BillingError(\\\"non_positive_amount\\\", str(amount))\\n    if payment.status != \\\"captured\\\":\\n        raise BillingError(\\\"invalid_state\\\", f\\\"payment {payment.id} is {payment.status}\\\")\\n\\n    captured = to_money(payment.amount)\\n    refunded = to_money(payment.refunded_amount)\\n    if refunded + amount \\u003e captured:\\n        raise BillingError(\\n            \\\"refund_exceeds_captured\\\",\\n            f\\\"{refunded + amount} \\u003e {captured}\\\",\\n        )\\n\\n    payment.refunded_amount = round_money(refunded + amount)\\n    if payment.refunded_amount \\u003e= captured:\\n        payment.status = \\\"refunded\\\"\\n\\n    audit.record(\\n        \\\"outage_refund\\\",\\n        payment_id=payment.id,\\n        amount=amount,\\n        refunded_amount=payment.refunded_amount,\\n        at=at,\\n    )\\n    return payment\\n=== CHANGELOG ===\\n# Changelog\\n\\n## 2.0.0 \\u2014 2026-09-15\\n\\n- **Breaking:** finance policy FIN-2026-07 switches all monetary rounding to\\n  banker\\u0027s rounding (`ROUND_HALF_EVEN`) to match the new general ledger.\\n  `round_money()` now rounds half to even. Any code that rounds money on its\\n  own must be updated.\\n- Finance policy FIN-2026-09 raises the approval threshold for support-initiated\\n  refunds and credits from 500.00 to 1000.00.\\n\\n## 1.0.0 \\u2014 2026-03-02\\n\\n- Initial internal release: invoices, payment authorization, subscription periods.\\n=== __init__ ===\\n\\\"\\\"\\\"Ledgerly: Acme\\u0027s internal billing library (invoices, payments, subscriptions).\\\"\\\"\\\"\\n\\n__version__ = \\\"2.0.0\\\"\\n\"\n}",
+      "extra": {
+        "raw_output": "./.pytest_cache/.gitignore\n./.pytest_cache/CACHEDIR.TAG\n./.pytest_cache/README.md\n./.pytest_cache/v/cache/lastfailed\n./.pytest_cache/v/cache/nodeids\n./CHANGELOG.md\n./README.md\n./__pycache__/conftest.cpython-311-pytest-9.2.0.pyc\n./conftest.py\n./ledgerly/__init__.py\n./ledgerly/__pycache__/__init__.cpython-311.pyc\n./ledgerly/__pycache__/adjustments.cpython-311.pyc\n./ledgerly/__pycache__/audit.cpython-311.pyc\n./ledgerly/__pycache__/clock.cpython-311.pyc\n./ledgerly/__pycache__/errors.cpython-311.pyc\n./ledgerly/__pycache__/importers.cpython-311.pyc\n./ledgerly/__pycache__/invoice.cpython-311.pyc\n./ledgerly/__pycache__/models.cpython-311.pyc\n./ledgerly/__pycache__/money.cpython-311.pyc\n./ledgerly/__pycache__/payments.cpython-311.pyc\n./ledgerly/__pycache__/pricing.cpython-311.pyc\n./ledgerly/__pycache__/promotions.cpython-311.pyc\n./ledgerly/__pycache__/renewals.cpython-311.pyc\n./ledgerly/__pycache__/reporting.cpython-311.pyc\n./ledgerly/__pycache__/subscriptions.cpython-311.pyc\n./ledgerly/adjustments.py\n./ledgerly/audit.py\n./ledgerly/clock.py\n./ledgerly/errors.py\n./ledgerly/importers.py\n./ledgerly/invoice.py\n./ledgerly/models.py\n./ledgerly/money.py\n./ledgerly/payments.py\n./ledgerly/pricing.py\n./ledgerly/promotions.py\n./ledgerly/renewals.py\n./ledgerly/reporting.py\n./ledgerly/subscriptions.py\n./tests/__pycache__/test_core.cpython-311-pytest-9.2.0.pyc\n./tests/__pycache__/test_legacy.cpython-311-pytest-9.2.0.pyc\n./tests/__pycache__/test_outage_refund.cpython-311-pytest-9.2.0.pyc\n./tests/test_core.py\n./tests/test_legacy.py\n./tests/test_outage_refund.py\n=== adjustments.py ===\n\"\"\"Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith).\"\"\"\n\nfrom . import audit\nfrom .clock import ensure_utc\nfrom .errors import BillingError\nfrom .invoice import invoice_total\nfrom .money import ZERO, round_money, to_money\n\n\ndef manual_adjustment(invoice, amount, note):\n    if invoice.status not in (\"issued\", \"paid\"):\n        raise ValueError(\"can only adjust issued or paid invoices\")\n    if not note:\n        raise ValueError(\"a note is required\")\n    return {\"invoice_id\": invoice.id, \"amount\": amount, \"note\": note}\n\n\ndef adjustable_balance(invoice) -> float:\n    return float(invoice_total(invoice))\n\n\ndef outage_refund(payment, amount, at):\n    \"\"\"Refund part of a captured payment after a service outage.\n\n    ``amount`` is added to ``payment.refunded_amount``; once the whole\n    captured amount has been refunded the payment status becomes\n    ``\"refunded\"``.  Only captured payments may be refunded, the amount must\n    be positive, and the total refunded may not exceed the captured amount.\n    \"\"\"\n    at = ensure_utc(at)\n    amount = round_money(amount)\n    if amount <= ZERO:\n        raise BillingError(\"non_positive_amount\", str(amount))\n    if payment.status != \"captured\":\n        raise BillingError(\"invalid_state\", f\"payment {payment.id} is {payment.status}\")\n\n    captured = to_money(payment.amount)\n    refunded = to_money(payment.refunded_amount)\n    if refunded + amount > captured:\n        raise BillingError(\n            \"refund_exceeds_captured\",\n            f\"{refunded + amount} > {captured}\",\n        )\n\n    payment.refunded_amount = round_money(refunded + amount)\n    if payment.refunded_amount >= captured:\n        payment.status = \"refunded\"\n\n    audit.record(\n        \"outage_refund\",\n        payment_id=payment.id,\n        amount=amount,\n        refunded_amount=payment.refunded_amount,\n        at=at,\n    )\n    return payment\n=== CHANGELOG ===\n# Changelog\n\n## 2.0.0 \u2014 2026-09-15\n\n- **Breaking:** finance policy FIN-2026-07 switches all monetary rounding to\n  banker's rounding (`ROUND_HALF_EVEN`) to match the new general ledger.\n  `round_money()` now rounds half to even. Any code that rounds money on its\n  own must be updated.\n- Finance policy FIN-2026-09 raises the approval threshold for support-initiated\n  refunds and credits from 500.00 to 1000.00.\n\n## 1.0.0 \u2014 2026-03-02\n\n- Initial internal release: invoices, payment authorization, subscription periods.\n=== __init__ ===\n\"\"\"Ledgerly: Acme's internal billing library (invoices, payments, subscriptions).\"\"\"\n\n__version__ = \"2.0.0\"\n",
+        "returncode": 0,
+        "timestamp": 1793430432.066683,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_z3fsgFBS1SJWjzXBwWOD6048",
+      "role": "tool"
+    },
+    {
+      "content": "The existing attempt lacks the approval logic. Let me read the tests, models, audit, and money modules.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && echo '=== test_outage_refund ===' && cat tests/test_outage_refund.py && echo '=== models ===' && cat ledgerly/models.py && echo '=== audit ===' && cat ledgerly/audit.py && echo '=== money ===' && cat ledgerly/money.py && echo '=== errors ===' && cat ledgerly/errors.py && echo '=== conftest ===' && cat conftest.py\"}",
+            "name": "bash"
+          },
+          "id": "call_00_4oE8Lerteqsl1698lsRQ0583",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && echo '=== test_outage_refund ===' && cat tests/test_outage_refund.py && echo '=== models ===' && cat ledgerly/models.py && echo '=== audit ===' && cat ledgerly/audit.py && echo '=== money ===' && cat ledgerly/money.py && echo '=== errors ===' && cat ledgerly/errors.py && echo '=== conftest ===' && cat conftest.py",
+            "tool_call_id": "call_00_4oE8Lerteqsl1698lsRQ0583"
+          }
+        ],
+        "response": {
+          "id": "61c30f2e-111f-42ad-9623-6c326339b02e",
+          "created": 1793430432,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "The existing attempt lacks the approval logic. Let me read the tests, models, audit, and money modules.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && echo '=== test_outage_refund ===' && cat tests/test_outage_refund.py && echo '=== models ===' && cat ledgerly/models.py && echo '=== audit ===' && cat ledgerly/audit.py && echo '=== money ===' && cat ledgerly/money.py && echo '=== errors ===' && cat ledgerly/errors.py && echo '=== conftest ===' && cat conftest.py\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_4oE8Lerteqsl1698lsRQ0583",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 172,
+            "prompt_tokens": 15107,
+            "total_tokens": 15279,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 12544
+            },
+            "prompt_cache_hit_tokens": 12544,
+            "prompt_cache_miss_tokens": 2563
+          }
+        },
+        "cost": 0.000525282,
+        "timestamp": 1793430433.671252
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"=== test_outage_refund ===\\nfrom datetime import datetime, timezone\\nfrom decimal import Decimal\\n\\nfrom ledgerly.adjustments import outage_refund\\nfrom ledgerly.models import Payment\\n\\nT0 = datetime(2026, 10, 1, tzinfo=timezone.utc)\\n\\n\\ndef test_outage_refund():\\n    p = Payment(\\\"pay_1\\\", \\\"inv_1\\\", Decimal(\\\"80.00\\\"), status=\\\"captured\\\", created_at=T0, captured_at=T0)\\n    outage_refund(p, Decimal(\\\"8.00\\\"), T0)\\n    assert p.refunded_amount == Decimal(\\\"8.00\\\")\\n=== models ===\\nfrom dataclasses import dataclass, field\\nfrom datetime import datetime\\nfrom decimal import Decimal\\n\\n\\n@dataclass\\nclass LineItem:\\n    description: str\\n    quantity: int\\n    unit_price: Decimal\\n\\n\\n@dataclass\\nclass Invoice:\\n    id: str\\n    customer_id: str\\n    currency: str = \\\"USD\\\"\\n    lines: list[LineItem] = field(default_factory=list)\\n    issued_at: datetime | None = None\\n    status: str = \\\"draft\\\"  # draft | issued | paid | void\\n\\n\\n@dataclass\\nclass Payment:\\n    id: str\\n    invoice_id: str\\n    amount: Decimal\\n    status: str = \\\"authorized\\\"  # authorized | captured | voided | refunded\\n    created_at: datetime | None = None\\n    captured_at: datetime | None = None\\n    refunded_amount: Decimal = Decimal(\\\"0.00\\\")\\n\\n\\n@dataclass\\nclass Subscription:\\n    id: str\\n    customer_id: str\\n    plan_price: Decimal\\n    period_days: int\\n    started_at: datetime\\n    canceled_at: datetime | None = None\\n=== audit ===\\n\\\"\\\"\\\"In-process audit trail. Production ships these entries to the ledger service.\\\"\\\"\\\"\\n\\nfrom .clock import utcnow\\n\\n_EVENTS: list[dict] = []\\n\\n\\ndef record(event: str, **fields) -\\u003e dict:\\n    entry = {\\\"event\\\": event, \\\"at\\\": utcnow(), **fields}\\n    _EVENTS.append(entry)\\n    return entry\\n\\n\\ndef events(event: str | None = None) -\\u003e list[dict]:\\n    return [e for e in _EVENTS if event is None or e[\\\"event\\\"] == event]\\n\\n\\ndef clear() -\\u003e None:\\n    _EVENTS.clear()\\n=== money ===\\nfrom decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation\\n\\nfrom .errors import BillingError\\n\\nCENT = Decimal(\\\"0.01\\\")\\nZERO = Decimal(\\\"0.00\\\")\\n\\n\\ndef to_money(value) -\\u003e Decimal:\\n    \\\"\\\"\\\"Convert an int, str or Decimal into a Decimal amount.\\\"\\\"\\\"\\n    if isinstance(value, (bool, float)):\\n        raise BillingError(\\\"float_amount\\\", f\\\"refusing to convert {value!r}\\\")\\n    if isinstance(value, Decimal):\\n        return value\\n    try:\\n        return Decimal(str(value))\\n    except InvalidOperation:\\n        raise BillingError(\\\"invalid_amount\\\", repr(value)) from None\\n\\n\\ndef round_money(value) -\\u003e Decimal:\\n    \\\"\\\"\\\"Round to the cent using the finance team\\u0027s rounding policy.\\\"\\\"\\\"\\n    return to_money(value).quantize(CENT, rounding=ROUND_HALF_EVEN)\\n=== errors ===\\nclass BillingError(Exception):\\n    \\\"\\\"\\\"Raised for any invalid billing operation.\\n\\n    ``code`` is a short machine-readable reason such as ``\\\"negative_amount\\\"``;\\n    ``message`` is optional human-readable detail.\\n    \\\"\\\"\\\"\\n\\n    def __init__(self, code: str, message: str = \\\"\\\"):\\n        super().__init__(f\\\"{code}: {message}\\\" if message else code)\\n        self.code = code\\n        self.message = message\\n=== conftest ===\\nimport pytest\\n\\nfrom ledgerly import audit\\n\\n\\n@pytest.fixture(autouse=True)\\ndef _clean_audit():\\n    audit.clear()\\n    yield\\n    audit.clear()\\n\"\n}",
+      "extra": {
+        "raw_output": "=== test_outage_refund ===\nfrom datetime import datetime, timezone\nfrom decimal import Decimal\n\nfrom ledgerly.adjustments import outage_refund\nfrom ledgerly.models import Payment\n\nT0 = datetime(2026, 10, 1, tzinfo=timezone.utc)\n\n\ndef test_outage_refund():\n    p = Payment(\"pay_1\", \"inv_1\", Decimal(\"80.00\"), status=\"captured\", created_at=T0, captured_at=T0)\n    outage_refund(p, Decimal(\"8.00\"), T0)\n    assert p.refunded_amount == Decimal(\"8.00\")\n=== models ===\nfrom dataclasses import dataclass, field\nfrom datetime import datetime\nfrom decimal import Decimal\n\n\n@dataclass\nclass LineItem:\n    description: str\n    quantity: int\n    unit_price: Decimal\n\n\n@dataclass\nclass Invoice:\n    id: str\n    customer_id: str\n    currency: str = \"USD\"\n    lines: list[LineItem] = field(default_factory=list)\n    issued_at: datetime | None = None\n    status: str = \"draft\"  # draft | issued | paid | void\n\n\n@dataclass\nclass Payment:\n    id: str\n    invoice_id: str\n    amount: Decimal\n    status: str = \"authorized\"  # authorized | captured | voided | refunded\n    created_at: datetime | None = None\n    captured_at: datetime | None = None\n    refunded_amount: Decimal = Decimal(\"0.00\")\n\n\n@dataclass\nclass Subscription:\n    id: str\n    customer_id: str\n    plan_price: Decimal\n    period_days: int\n    started_at: datetime\n    canceled_at: datetime | None = None\n=== audit ===\n\"\"\"In-process audit trail. Production ships these entries to the ledger service.\"\"\"\n\nfrom .clock import utcnow\n\n_EVENTS: list[dict] = []\n\n\ndef record(event: str, **fields) -> dict:\n    entry = {\"event\": event, \"at\": utcnow(), **fields}\n    _EVENTS.append(entry)\n    return entry\n\n\ndef events(event: str | None = None) -> list[dict]:\n    return [e for e in _EVENTS if event is None or e[\"event\"] == event]\n\n\ndef clear() -> None:\n    _EVENTS.clear()\n=== money ===\nfrom decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation\n\nfrom .errors import BillingError\n\nCENT = Decimal(\"0.01\")\nZERO = Decimal(\"0.00\")\n\n\ndef to_money(value) -> Decimal:\n    \"\"\"Convert an int, str or Decimal into a Decimal amount.\"\"\"\n    if isinstance(value, (bool, float)):\n        raise BillingError(\"float_amount\", f\"refusing to convert {value!r}\")\n    if isinstance(value, Decimal):\n        return value\n    try:\n        return Decimal(str(value))\n    except InvalidOperation:\n        raise BillingError(\"invalid_amount\", repr(value)) from None\n\n\ndef round_money(value) -> Decimal:\n    \"\"\"Round to the cent using the finance team's rounding policy.\"\"\"\n    return to_money(value).quantize(CENT, rounding=ROUND_HALF_EVEN)\n=== errors ===\nclass BillingError(Exception):\n    \"\"\"Raised for any invalid billing operation.\n\n    ``code`` is a short machine-readable reason such as ``\"negative_amount\"``;\n    ``message`` is optional human-readable detail.\n    \"\"\"\n\n    def __init__(self, code: str, message: str = \"\"):\n        super().__init__(f\"{code}: {message}\" if message else code)\n        self.code = code\n        self.message = message\n=== conftest ===\nimport pytest\n\nfrom ledgerly import audit\n\n\n@pytest.fixture(autouse=True)\ndef _clean_audit():\n    audit.clear()\n    yield\n    audit.clear()\n",
+        "returncode": 0,
+        "timestamp": 1793430433.6824074,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_4oE8Lerteqsl1698lsRQ0583",
+      "role": "tool"
+    },
+    {
+      "content": "Now I understand the requirements. I need to add the approval threshold logic. The current version is 2.0.0, so the threshold is 1000.00. Let me check the payments module for conventions and run the baseline tests.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && cat ledgerly/payments.py && echo '=== baseline ===' && python -m pytest -q 2>&1 | tail -5\"}",
+            "name": "bash"
+          },
+          "id": "call_00_lZTh0phpmOWcAWne9Ad24901",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && cat ledgerly/payments.py && echo '=== baseline ===' && python -m pytest -q 2>&1 | tail -5",
+            "tool_call_id": "call_00_lZTh0phpmOWcAWne9Ad24901"
+          }
+        ],
+        "response": {
+          "id": "ea9b440c-da42-4d38-8a33-65adc3be6a1d",
+          "created": 1793430433,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "Now I understand the requirements. I need to add the approval threshold logic. The current version is 2.0.0, so the threshold is 1000.00. Let me check the payments module for conventions and run the baseline tests.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && cat ledgerly/payments.py && echo '=== baseline ===' && python -m pytest -q 2>&1 | tail -5\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_lZTh0phpmOWcAWne9Ad24901",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 138,
+            "prompt_tokens": 15285,
+            "total_tokens": 15423,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 11648
+            },
+            "prompt_cache_hit_tokens": 11648,
+            "prompt_cache_miss_tokens": 3637
+          }
+        },
+        "cost": 0.0006632939999999999,
+        "timestamp": 1793430435.119313
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"from datetime import datetime\\n\\nfrom . import audit\\nfrom .clock import ensure_utc\\nfrom .errors import BillingError\\nfrom .models import Invoice, Payment\\nfrom .money import ZERO, round_money\\n\\n\\ndef authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -\\u003e Payment:\\n    amount = round_money(amount)\\n    if amount \\u003c= ZERO:\\n        raise BillingError(\\\"non_positive_amount\\\", str(amount))\\n    if invoice.status != \\\"issued\\\":\\n        raise BillingError(\\\"invalid_state\\\", f\\\"invoice {invoice.id} is {invoice.status}\\\")\\n    payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))\\n    audit.record(\\\"payment_authorized\\\", payment_id=payment.id, amount=amount)\\n    return payment\\n=== baseline ===\\n..........                                                               [100%]\\n10 passed in 0.02s\\n\"\n}",
+      "extra": {
+        "raw_output": "from datetime import datetime\n\nfrom . import audit\nfrom .clock import ensure_utc\nfrom .errors import BillingError\nfrom .models import Invoice, Payment\nfrom .money import ZERO, round_money\n\n\ndef authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -> Payment:\n    amount = round_money(amount)\n    if amount <= ZERO:\n        raise BillingError(\"non_positive_amount\", str(amount))\n    if invoice.status != \"issued\":\n        raise BillingError(\"invalid_state\", f\"invoice {invoice.id} is {invoice.status}\")\n    payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))\n    audit.record(\"payment_authorized\", payment_id=payment.id, amount=amount)\n    return payment\n=== baseline ===\n..........                                                               [100%]\n10 passed in 0.02s\n",
+        "returncode": 0,
+        "timestamp": 1793430435.4384627,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_lZTh0phpmOWcAWne9Ad24901",
+      "role": "tool"
+    },
+    {
+      "content": "Now I'll update `outage_refund` to accept a keyword-only `approved_by=None` and enforce the 1000.00 threshold (current version 2.0.0). I'll derive the threshold from the package version so it stays consistent with the CHANGELOG policy.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && cat <<'EOF' > ledgerly/adjustments.py\\n\\\"\\\"\\\"Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith).\\\"\\\"\\\"\\n\\nfrom decimal import Decimal\\n\\nfrom . import __version__, audit\\nfrom .clock import ensure_utc\\nfrom .errors import BillingError\\nfrom .invoice import invoice_total\\nfrom .money import ZERO, round_money, to_money\\n\\n# Finance policy FIN-2026-09: support-initiated refunds and credits above this\\n# amount need a second approver.  The threshold was 500.00 before 2.0.0.\\nAPPROVAL_THRESHOLD = Decimal(\\\"1000.00\\\") if tuple(\\n    int(part) for part in __version__.split(\\\".\\\")[:2]\\n) >= (2, 0) else Decimal(\\\"500.00\\\")\\n\\n\\ndef manual_adjustment(invoice, amount, note):\\n    if invoice.status not in (\\\"issued\\\", \\\"paid\\\"):\\n        raise ValueError(\\\"can only adjust issued or paid invoices\\\")\\n    if not note:\\n        raise ValueError(\\\"a note is required\\\")\\n    return {\\\"invoice_id\\\": invoice.id, \\\"amount\\\": amount, \\\"note\\\": note}\\n\\n\\ndef adjustable_balance(invoice) -> float:\\n    return float(invoice_total(invoice))\\n\\n\\ndef outage_refund(payment, amount, at, *, approved_by=None):\\n    \\\"\\\"\\\"Refund part of a captured payment after a service outage.\\n\\n    ``amount`` is added to ``payment.refunded_amount``; once the whole\\n    captured amount has been refunded the payment status becomes\\n    ``\\\"refunded\\\"``.  Only captured payments may be refunded, the amount must\\n    be positive, and the total refunded may not exceed the captured amount.\\n\\n    Support-initiated refunds above the finance approval threshold require a\\n    second approver, passed as ``approved_by``.\\n    \\\"\\\"\\\"\\n    at = ensure_utc(at)\\n    amount = round_money(amount)\\n    if amount <= ZERO:\\n        raise BillingError(\\\"non_positive_amount\\\", str(amount))\\n    if payment.status != \\\"captured\\\":\\n        raise BillingError(\\\"invalid_state\\\", f\\\"payment {payment.id} is {payment.status}\\\")\\n\\n    captured = to_money(payment.amount)\\n    refunded = to_money(payment.refunded_amount)\\n    if refunded + amount > captured:\\n        raise BillingError(\\n            \\\"refund_exceeds_captured\\\",\\n            f\\\"{refunded + amount} > {captured}\\\",\\n        )\\n\\n    if amount > APPROVAL_THRESHOLD and approved_by is None:\\n        raise BillingError(\\n            \\\"approval_required\\\",\\n            f\\\"{amount} exceeds approval threshold {APPROVAL_THRESHOLD}\\\",\\n        )\\n\\n    payment.refunded_amount = round_money(refunded + amount)\\n    if payment.refunded_amount >= captured:\\n        payment.status = \\\"refunded\\\"\\n\\n    audit.record(\\n        \\\"outage_refund\\\",\\n        payment_id=payment.id,\\n        amount=amount,\\n        refunded_amount=payment.refunded_amount,\\n        approved_by=approved_by,\\n        at=at,\\n    )\\n    return payment\\nEOF\\npython -m pytest -q 2>&1 | tail -5\"}",
+            "name": "bash"
+          },
+          "id": "call_00_Ie8SBK9dr4DyTRisHGNq7419",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && cat <<'EOF' > ledgerly/adjustments.py\n\"\"\"Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith).\"\"\"\n\nfrom decimal import Decimal\n\nfrom . import __version__, audit\nfrom .clock import ensure_utc\nfrom .errors import BillingError\nfrom .invoice import invoice_total\nfrom .money import ZERO, round_money, to_money\n\n# Finance policy FIN-2026-09: support-initiated refunds and credits above this\n# amount need a second approver.  The threshold was 500.00 before 2.0.0.\nAPPROVAL_THRESHOLD = Decimal(\"1000.00\") if tuple(\n    int(part) for part in __version__.split(\".\")[:2]\n) >= (2, 0) else Decimal(\"500.00\")\n\n\ndef manual_adjustment(invoice, amount, note):\n    if invoice.status not in (\"issued\", \"paid\"):\n        raise ValueError(\"can only adjust issued or paid invoices\")\n    if not note:\n        raise ValueError(\"a note is required\")\n    return {\"invoice_id\": invoice.id, \"amount\": amount, \"note\": note}\n\n\ndef adjustable_balance(invoice) -> float:\n    return float(invoice_total(invoice))\n\n\ndef outage_refund(payment, amount, at, *, approved_by=None):\n    \"\"\"Refund part of a captured payment after a service outage.\n\n    ``amount`` is added to ``payment.refunded_amount``; once the whole\n    captured amount has been refunded the payment status becomes\n    ``\"refunded\"``.  Only captured payments may be refunded, the amount must\n    be positive, and the total refunded may not exceed the captured amount.\n\n    Support-initiated refunds above the finance approval threshold require a\n    second approver, passed as ``approved_by``.\n    \"\"\"\n    at = ensure_utc(at)\n    amount = round_money(amount)\n    if amount <= ZERO:\n        raise BillingError(\"non_positive_amount\", str(amount))\n    if payment.status != \"captured\":\n        raise BillingError(\"invalid_state\", f\"payment {payment.id} is {payment.status}\")\n\n    captured = to_money(payment.amount)\n    refunded = to_money(payment.refunded_amount)\n    if refunded + amount > captured:\n        raise BillingError(\n            \"refund_exceeds_captured\",\n            f\"{refunded + amount} > {captured}\",\n        )\n\n    if amount > APPROVAL_THRESHOLD and approved_by is None:\n        raise BillingError(\n            \"approval_required\",\n            f\"{amount} exceeds approval threshold {APPROVAL_THRESHOLD}\",\n        )\n\n    payment.refunded_amount = round_money(refunded + amount)\n    if payment.refunded_amount >= captured:\n        payment.status = \"refunded\"\n\n    audit.record(\n        \"outage_refund\",\n        payment_id=payment.id,\n        amount=amount,\n        refunded_amount=payment.refunded_amount,\n        approved_by=approved_by,\n        at=at,\n    )\n    return payment\nEOF\npython -m pytest -q 2>&1 | tail -5",
+            "tool_call_id": "call_00_Ie8SBK9dr4DyTRisHGNq7419"
+          }
+        ],
+        "response": {
+          "id": "5d5648ff-83aa-45dd-95d5-d32305dd72b2",
+          "created": 1793430435,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "Now I'll update `outage_refund` to accept a keyword-only `approved_by=None` and enforce the 1000.00 threshold (current version 2.0.0). I'll derive the threshold from the package version so it stays consistent with the CHANGELOG policy.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && cat <<'EOF' > ledgerly/adjustments.py\\n\\\"\\\"\\\"Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith).\\\"\\\"\\\"\\n\\nfrom decimal import Decimal\\n\\nfrom . import __version__, audit\\nfrom .clock import ensure_utc\\nfrom .errors import BillingError\\nfrom .invoice import invoice_total\\nfrom .money import ZERO, round_money, to_money\\n\\n# Finance policy FIN-2026-09: support-initiated refunds and credits above this\\n# amount need a second approver.  The threshold was 500.00 before 2.0.0.\\nAPPROVAL_THRESHOLD = Decimal(\\\"1000.00\\\") if tuple(\\n    int(part) for part in __version__.split(\\\".\\\")[:2]\\n) >= (2, 0) else Decimal(\\\"500.00\\\")\\n\\n\\ndef manual_adjustment(invoice, amount, note):\\n    if invoice.status not in (\\\"issued\\\", \\\"paid\\\"):\\n        raise ValueError(\\\"can only adjust issued or paid invoices\\\")\\n    if not note:\\n        raise ValueError(\\\"a note is required\\\")\\n    return {\\\"invoice_id\\\": invoice.id, \\\"amount\\\": amount, \\\"note\\\": note}\\n\\n\\ndef adjustable_balance(invoice) -> float:\\n    return float(invoice_total(invoice))\\n\\n\\ndef outage_refund(payment, amount, at, *, approved_by=None):\\n    \\\"\\\"\\\"Refund part of a captured payment after a service outage.\\n\\n    ``amount`` is added to ``payment.refunded_amount``; once the whole\\n    captured amount has been refunded the payment status becomes\\n    ``\\\"refunded\\\"``.  Only captured payments may be refunded, the amount must\\n    be positive, and the total refunded may not exceed the captured amount.\\n\\n    Support-initiated refunds above the finance approval threshold require a\\n    second approver, passed as ``approved_by``.\\n    \\\"\\\"\\\"\\n    at = ensure_utc(at)\\n    amount = round_money(amount)\\n    if amount <= ZERO:\\n        raise BillingError(\\\"non_positive_amount\\\", str(amount))\\n    if payment.status != \\\"captured\\\":\\n        raise BillingError(\\\"invalid_state\\\", f\\\"payment {payment.id} is {payment.status}\\\")\\n\\n    captured = to_money(payment.amount)\\n    refunded = to_money(payment.refunded_amount)\\n    if refunded + amount > captured:\\n        raise BillingError(\\n            \\\"refund_exceeds_captured\\\",\\n            f\\\"{refunded + amount} > {captured}\\\",\\n        )\\n\\n    if amount > APPROVAL_THRESHOLD and approved_by is None:\\n        raise BillingError(\\n            \\\"approval_required\\\",\\n            f\\\"{amount} exceeds approval threshold {APPROVAL_THRESHOLD}\\\",\\n        )\\n\\n    payment.refunded_amount = round_money(refunded + amount)\\n    if payment.refunded_amount >= captured:\\n        payment.status = \\\"refunded\\\"\\n\\n    audit.record(\\n        \\\"outage_refund\\\",\\n        payment_id=payment.id,\\n        amount=amount,\\n        refunded_amount=payment.refunded_amount,\\n        approved_by=approved_by,\\n        at=at,\\n    )\\n    return payment\\nEOF\\npython -m pytest -q 2>&1 | tail -5\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_Ie8SBK9dr4DyTRisHGNq7419",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 811,
+            "prompt_tokens": 15675,
+            "total_tokens": 16486,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 15360
+            },
+            "prompt_cache_hit_tokens": 15360,
+            "prompt_cache_miss_tokens": 315
+          }
+        },
+        "cost": 0.00057993,
+        "timestamp": 1793430438.9287202
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"..........                                                               [100%]\\n10 passed in 0.02s\\n\"\n}",
+      "extra": {
+        "raw_output": "..........                                                               [100%]\n10 passed in 0.02s\n",
+        "returncode": 0,
+        "timestamp": 1793430439.2464092,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_Ie8SBK9dr4DyTRisHGNq7419",
+      "role": "tool"
+    },
+    {
+      "content": "All tests pass. Let me verify the edge cases: threshold boundary, approval requirement, full refund status, over-refund, non-captured, and audit entries.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && python - <<'EOF'\\nfrom datetime import datetime, timezone\\nfrom decimal import Decimal\\nfrom ledgerly.adjustments import outage_refund, APPROVAL_THRESHOLD\\nfrom ledgerly.models import Payment\\nfrom ledgerly.errors import BillingError\\nfrom ledgerly import audit\\n\\nT0 = datetime(2026, 10, 1, tzinfo=timezone.utc)\\nprint(\\\"threshold\\\", APPROVAL_THRESHOLD)\\n\\ndef mk(amt=\\\"5000.00\\\", status=\\\"captured\\\"):\\n    return Payment(\\\"p\\\", \\\"i\\\", Decimal(amt), status=status, created_at=T0, captured_at=T0)\\n\\n# at threshold: no approval needed\\np = mk(); outage_refund(p, Decimal(\\\"1000.00\\\"), T0); print(\\\"at threshold ok\\\", p.refunded_amount)\\n# above threshold without approval\\np = mk()\\ntry: outage_refund(p, Decimal(\\\"1000.01\\\"), T0)\\nexcept BillingError as e: print(\\\"above no approval:\\\", e.code)\\n# above threshold with approval\\np = mk(); outage_refund(p, Decimal(\\\"1000.01\\\"), T0, approved_by=\\\"mgr\\\"); print(\\\"approved ok\\\", p.refunded_amount)\\n# full refund sets status\\np = mk(\\\"80.00\\\"); outage_refund(p, Decimal(\\\"80.00\\\"), T0); print(\\\"full:\\\", p.status, p.refunded_amount)\\n# partial then full\\np = mk(\\\"80.00\\\"); outage_refund(p, Decimal(\\\"30.00\\\"), T0); print(\\\"partial:\\\", p.status, p.refunded_amount)\\noutage_refund(p, Decimal(\\\"50.00\\\"), T0); print(\\\"then full:\\\", p.status, p.refunded_amount)\\n# over refund\\np = mk(\\\"80.00\\\")\\ntry: outage_refund(p, Decimal(\\\"80.01\\\"), T0)\\nexcept BillingError as e: print(\\\"over:\\\", e.code)\\n# non-captured\\np = mk(status=\\\"authorized\\\")\\ntry: outage_refund(p, Decimal(\\\"1.00\\\"), T0)\\nexcept BillingError as e: print(\\\"state:\\\", e.code)\\n# non-positive\\np = mk()\\ntry: outage_refund(p, Decimal(\\\"0\\\"), T0)\\nexcept BillingError as e: print(\\\"nonpos:\\\", e.code)\\n# audit\\nprint(\\\"audit events:\\\", [e[\\\"event\\\"] for e in audit.events(\\\"outage_refund\\\")])\\nEOF\"}",
+            "name": "bash"
+          },
+          "id": "call_00_WHE9ltUDNMg6jzBFp9OM4776",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && python - <<'EOF'\nfrom datetime import datetime, timezone\nfrom decimal import Decimal\nfrom ledgerly.adjustments import outage_refund, APPROVAL_THRESHOLD\nfrom ledgerly.models import Payment\nfrom ledgerly.errors import BillingError\nfrom ledgerly import audit\n\nT0 = datetime(2026, 10, 1, tzinfo=timezone.utc)\nprint(\"threshold\", APPROVAL_THRESHOLD)\n\ndef mk(amt=\"5000.00\", status=\"captured\"):\n    return Payment(\"p\", \"i\", Decimal(amt), status=status, created_at=T0, captured_at=T0)\n\n# at threshold: no approval needed\np = mk(); outage_refund(p, Decimal(\"1000.00\"), T0); print(\"at threshold ok\", p.refunded_amount)\n# above threshold without approval\np = mk()\ntry: outage_refund(p, Decimal(\"1000.01\"), T0)\nexcept BillingError as e: print(\"above no approval:\", e.code)\n# above threshold with approval\np = mk(); outage_refund(p, Decimal(\"1000.01\"), T0, approved_by=\"mgr\"); print(\"approved ok\", p.refunded_amount)\n# full refund sets status\np = mk(\"80.00\"); outage_refund(p, Decimal(\"80.00\"), T0); print(\"full:\", p.status, p.refunded_amount)\n# partial then full\np = mk(\"80.00\"); outage_refund(p, Decimal(\"30.00\"), T0); print(\"partial:\", p.status, p.refunded_amount)\noutage_refund(p, Decimal(\"50.00\"), T0); print(\"then full:\", p.status, p.refunded_amount)\n# over refund\np = mk(\"80.00\")\ntry: outage_refund(p, Decimal(\"80.01\"), T0)\nexcept BillingError as e: print(\"over:\", e.code)\n# non-captured\np = mk(status=\"authorized\")\ntry: outage_refund(p, Decimal(\"1.00\"), T0)\nexcept BillingError as e: print(\"state:\", e.code)\n# non-positive\np = mk()\ntry: outage_refund(p, Decimal(\"0\"), T0)\nexcept BillingError as e: print(\"nonpos:\", e.code)\n# audit\nprint(\"audit events:\", [e[\"event\"] for e in audit.events(\"outage_refund\")])\nEOF",
+            "tool_call_id": "call_00_WHE9ltUDNMg6jzBFp9OM4776"
+          }
+        ],
+        "response": {
+          "id": "c77ae85d-2614-4fc1-9798-2ffa46072e84",
+          "created": 1793430439,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "All tests pass. Let me verify the edge cases: threshold boundary, approval requirement, full refund status, over-refund, non-captured, and audit entries.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && python - <<'EOF'\\nfrom datetime import datetime, timezone\\nfrom decimal import Decimal\\nfrom ledgerly.adjustments import outage_refund, APPROVAL_THRESHOLD\\nfrom ledgerly.models import Payment\\nfrom ledgerly.errors import BillingError\\nfrom ledgerly import audit\\n\\nT0 = datetime(2026, 10, 1, tzinfo=timezone.utc)\\nprint(\\\"threshold\\\", APPROVAL_THRESHOLD)\\n\\ndef mk(amt=\\\"5000.00\\\", status=\\\"captured\\\"):\\n    return Payment(\\\"p\\\", \\\"i\\\", Decimal(amt), status=status, created_at=T0, captured_at=T0)\\n\\n# at threshold: no approval needed\\np = mk(); outage_refund(p, Decimal(\\\"1000.00\\\"), T0); print(\\\"at threshold ok\\\", p.refunded_amount)\\n# above threshold without approval\\np = mk()\\ntry: outage_refund(p, Decimal(\\\"1000.01\\\"), T0)\\nexcept BillingError as e: print(\\\"above no approval:\\\", e.code)\\n# above threshold with approval\\np = mk(); outage_refund(p, Decimal(\\\"1000.01\\\"), T0, approved_by=\\\"mgr\\\"); print(\\\"approved ok\\\", p.refunded_amount)\\n# full refund sets status\\np = mk(\\\"80.00\\\"); outage_refund(p, Decimal(\\\"80.00\\\"), T0); print(\\\"full:\\\", p.status, p.refunded_amount)\\n# partial then full\\np = mk(\\\"80.00\\\"); outage_refund(p, Decimal(\\\"30.00\\\"), T0); print(\\\"partial:\\\", p.status, p.refunded_amount)\\noutage_refund(p, Decimal(\\\"50.00\\\"), T0); print(\\\"then full:\\\", p.status, p.refunded_amount)\\n# over refund\\np = mk(\\\"80.00\\\")\\ntry: outage_refund(p, Decimal(\\\"80.01\\\"), T0)\\nexcept BillingError as e: print(\\\"over:\\\", e.code)\\n# non-captured\\np = mk(status=\\\"authorized\\\")\\ntry: outage_refund(p, Decimal(\\\"1.00\\\"), T0)\\nexcept BillingError as e: print(\\\"state:\\\", e.code)\\n# non-positive\\np = mk()\\ntry: outage_refund(p, Decimal(\\\"0\\\"), T0)\\nexcept BillingError as e: print(\\\"nonpos:\\\", e.code)\\n# audit\\nprint(\\\"audit events:\\\", [e[\\\"event\\\"] for e in audit.events(\\\"outage_refund\\\")])\\nEOF\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_WHE9ltUDNMg6jzBFp9OM4776",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 615,
+            "prompt_tokens": 14776,
+            "total_tokens": 15391,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 9984
+            },
+            "prompt_cache_hit_tokens": 9984,
+            "prompt_cache_miss_tokens": 4792
+          }
+        },
+        "cost": 0.001117752,
+        "timestamp": 1793430442.4409206
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"threshold 1000.00\\nat threshold ok 1000.00\\nabove no approval: approval_required\\napproved ok 1000.01\\nfull: refunded 80.00\\npartial: captured 30.00\\nthen full: refunded 80.00\\nover: refund_exceeds_captured\\nstate: invalid_state\\nnonpos: non_positive_amount\\naudit events: [\\u0027outage_refund\\u0027, \\u0027outage_refund\\u0027, \\u0027outage_refund\\u0027, \\u0027outage_refund\\u0027, \\u0027outage_refund\\u0027]\\n\"\n}",
+      "extra": {
+        "raw_output": "threshold 1000.00\nat threshold ok 1000.00\nabove no approval: approval_required\napproved ok 1000.01\nfull: refunded 80.00\npartial: captured 30.00\nthen full: refunded 80.00\nover: refund_exceeds_captured\nstate: invalid_state\nnonpos: non_positive_amount\naudit events: ['outage_refund', 'outage_refund', 'outage_refund', 'outage_refund', 'outage_refund']\n",
+        "returncode": 0,
+        "timestamp": 1793430442.503168,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_WHE9ltUDNMg6jzBFp9OM4776",
+      "role": "tool"
+    },
+    {
+      "content": "All edge cases behave correctly. Let me run the full suite once more and submit.",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && python -m pytest -q 2>&1 | tail -3 && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\"}",
+            "name": "bash"
+          },
+          "id": "call_00_iOgY8QIYoE5yaCb5gGCR9041",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && python -m pytest -q 2>&1 | tail -3 && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT",
+            "tool_call_id": "call_00_iOgY8QIYoE5yaCb5gGCR9041"
+          }
+        ],
+        "response": {
+          "id": "c21ebce8-b7ff-4139-8472-be46ef248f4f",
+          "created": 1793430442,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "All edge cases behave correctly. Let me run the full suite once more and submit.",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"cd /tmp/attest_workspaces/runs__context_long__window_12000__r1/workspace && python -m pytest -q 2>&1 | tail -3 && echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_iOgY8QIYoE5yaCb5gGCR9041",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 107,
+            "prompt_tokens": 15221,
+            "total_tokens": 15328,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 9600
+            },
+            "prompt_cache_hit_tokens": 9600,
+            "prompt_cache_miss_tokens": 5621
+          }
+        },
+        "cost": 0.0009361500000000001,
+        "timestamp": 1793430443.6914084
+      }
+    },
+    {
+      "content": "{\n  \"returncode\": 0,\n  \"output\": \"..........                                                               [100%]\\n10 passed in 0.04s\\nCOMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\\n\"\n}",
+      "extra": {
+        "raw_output": "..........                                                               [100%]\n10 passed in 0.04s\nCOMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n",
+        "returncode": 0,
+        "timestamp": 1793430444.092722,
+        "exception_info": ""
+      },
+      "tool_call_id": "call_00_iOgY8QIYoE5yaCb5gGCR9041",
+      "role": "tool"
+    },
+    {
+      "role": "user",
+      "content": "Tool call error:\n\n<error>\nNo tool calls found in the response. Every response MUST include at least one tool call.\n</error>\n\nHere is general guidance on how to submit correct toolcalls:\n\nEvery response needs to use the 'bash' tool at least once to execute commands.\n\nCall the bash tool with your command as the argument:\n- Tool: bash\n- Arguments: {\"command\": \"your_command_here\"}\n\nIf you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`\nwithout any other command.",
+      "extra": {
+        "interrupt_type": "FormatError",
+        "cost": 0.00020154599999999998,
+        "response": {
+          "id": "179901a5-ce4a-42c3-97b0-33b9e4e8f78f",
+          "created": 1793430444,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "I've addressed the review comment and completed the task.\n\nSummary of changes to `ledgerly/adjustments.py`:\n- Added keyword-only `approved_by=None` to `outage_refund`.\n- Added `APPROVAL_THRESHOLD`, derived from the package version: 1000.00 for 2.0.0+ (current), 500.00 before 2.0.0, per CHANGELOG policy FIN-2026-09.\n- Refunds above the threshold raise `BillingError(\"approval_required\")` when `approved_by` is missing; amounts at or below the threshold need no approval.\n- Preserved existing behavior: positive amount validation, captured-only, no over-refund, status flips to `\"refunded\"` on full refund, returns the payment, and writes an audit entry (now including `approved_by`).\n\nAll 10 tests pass, and edge cases (threshold boundary, approval, partial/full refund, over-refund, invalid state, non-positive amount, audit) were verified.",
+                "role": "assistant",
+                "tool_calls": null,
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 221,
+            "prompt_tokens": 15387,
+            "total_tokens": 15608,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 15232
+            },
+            "prompt_cache_hit_tokens": 15232,
+            "prompt_cache_miss_tokens": 155
+          }
+        }
+      }
+    },
+    {
+      "content": "",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "index": 0,
+          "function": {
+            "arguments": "{\"command\": \"echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\"}",
+            "name": "bash"
+          },
+          "id": "call_00_sOmfrqS0hODmSCar1u8U3086",
+          "type": "function"
+        }
+      ],
+      "function_call": null,
+      "provider_specific_fields": null,
+      "extra": {
+        "actions": [
+          {
+            "command": "echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT",
+            "tool_call_id": "call_00_sOmfrqS0hODmSCar1u8U3086"
+          }
+        ],
+        "response": {
+          "id": "e1575d4f-1add-4d36-9e03-6bcde937f053",
+          "created": 1793430446,
+          "model": "deepseek-flash",
+          "object": "chat.completion",
+          "system_fingerprint": "bc19ba97cbe016479903222bb1578db6",
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "content": "",
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "{\"command\": \"echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\"}",
+                      "name": "bash"
+                    },
+                    "id": "call_00_sOmfrqS0hODmSCar1u8U3086",
+                    "type": "function"
+                  }
+                ],
+                "function_call": null
+              },
+              "provider_specific_fields": {}
+            }
+          ],
+          "usage": {
+            "completion_tokens": 50,
+            "prompt_tokens": 15208,
+            "total_tokens": 15258,
+            "completion_tokens_details": null,
+            "prompt_tokens_details": {
+              "cached_tokens": 9216
+            },
+            "prompt_cache_hit_tokens": 9216,
+            "prompt_cache_miss_tokens": 5992
+          }
+        },
+        "cost": 0.0009564479999999999,
+        "timestamp": 1793430447.5770688
+      }
+    },
+    {
+      "role": "exit",
+      "content": "",
+      "extra": {
+        "exit_status": "Submitted",
+        "submission": ""
+      }
+    }
+  ],
+  "trajectory_format": "mini-swe-agent-1.1"
+}

@@ -1,0 +1,75 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,18 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from datetime import datetime
++from decimal import Decimal
++
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .models import Payment
++from .money import ZERO, round_money, to_money
++
++# Finance policy FIN-2026-09: support-initiated refunds and credits at or above
++# this amount require approval.
++APPROVAL_THRESHOLD = Decimal("1000.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +27,50 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def outage_refund(payment, amount, at):
+-    """Refund part of a captured payment after a service outage."""
+-    raise NotImplementedError
++def outage_refund(
++    payment: Payment, amount, at: datetime, *, approved_by=None
++) -> Payment:
++    """Refund part of a captured payment after a service outage.
++
++    ``amount`` is added to ``payment.refunded_amount``.  The payment is marked
++    ``"refunded"`` once its full captured amount has been refunded.  The amount
++    must be positive, the total refunded may not exceed the captured amount,
++    and only captured payments can be refunded.
++
++    Refunds above ``APPROVAL_THRESHOLD`` require a second approver; pass
++    ``approved_by`` to record one.  Amounts at or below the threshold need no
++    approval.
++    """
++    at = ensure_utc(at)
++    amount = round_money(to_money(amount))
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    if amount > APPROVAL_THRESHOLD and not approved_by:
++        raise BillingError(
++            "approval_required",
++            f"{amount} exceeds approval threshold {APPROVAL_THRESHOLD}",
++        )
++
++    refunded = round_money(to_money(payment.refunded_amount) + amount)
++    if refunded > payment.amount:
++        raise BillingError(
++            "refund_exceeds_captured",
++            f"{refunded} > {payment.amount}",
++        )
++
++    payment.refunded_amount = refunded
++    if refunded == payment.amount:
++        payment.status = "refunded"
++
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        refunded_amount=refunded,
++        requires_approval=amount > APPROVAL_THRESHOLD,
++        approved_by=approved_by,
++        at=at,
++    )
++    return payment
