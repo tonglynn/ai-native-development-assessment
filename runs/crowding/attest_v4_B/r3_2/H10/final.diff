@@ -1,0 +1,53 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,12 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from datetime import datetime
++
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .models import Invoice
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +21,35 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def write_off(invoice, at, reason):
++def write_off(
++    invoice: Invoice,
++    at: datetime,
++    reason: str,
++    *,
++    idempotency_key: str | None = None,
++) -> dict:
+     """Write off an issued invoice that will never be paid."""
+-    raise NotImplementedError
++    if idempotency_key is not None:
++        for event in audit.events("invoice_written_off"):
++            if event.get("idempotency_key") == idempotency_key:
++                return event["result"]
++
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    if not reason:
++        raise BillingError("missing_reason", invoice.id)
++
++    at = ensure_utc(at)
++    amount = invoice_total(invoice)
++    invoice.status = "void"
++    result = {"invoice_id": invoice.id, "amount": amount, "reason": reason}
++    audit.record(
++        "invoice_written_off",
++        invoice_id=invoice.id,
++        amount=amount,
++        reason=reason,
++        at=at,
++        idempotency_key=idempotency_key,
++        result=result,
++    )
++    return result

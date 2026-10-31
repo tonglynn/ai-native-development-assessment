@@ -1,0 +1,25 @@
+--- a/ledgerly/fees.py
++++ b/ledgerly/fees.py
+@@ -1,3 +1,19 @@
+-def processing_fee(amount):
+-    """Card processing fee: 2.9% + 0.30."""
+-    raise NotImplementedError
++from decimal import Decimal
++
++from .errors import BillingError
++from .money import round_money, to_money
++
++RATE = Decimal("0.029")
++FIXED = Decimal("0.30")
++
++
++def processing_fee(amount) -> Decimal:
++    """Card processing fee: 2.9% of the amount plus a fixed 0.30.
++
++    The result is rounded to the cent using the finance team's rounding
++    policy. Amounts must be positive.
++    """
++    value = to_money(amount)
++    if value <= 0:
++        raise BillingError("invalid_amount", repr(amount))
++    return round_money(value * RATE + FIXED)
