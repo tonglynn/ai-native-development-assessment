@@ -128,8 +128,9 @@ more relevant notes but did not improve coding results (retrieval ablation in
   compared.
 - **The preregistered result is the main experiment (H1–H6).** Everything after it (D18 onwards) is exploratory: many
   comparisons, no correction for multiplicity, several frozen sets reused as development data after fixes (each
-  disclosed). Treat single-session "better" results as leads, not findings, unless replicated (D66 was replicated, see
-  RESULTS).
+  disclosed). Treat single-session "better" results as leads, not findings. D66 was rerun in a second session: every
+  value-aware arm (C, D2, E) beat v4's default injection in both sessions in direction (+6 to +15 pp), each significant in
+  at least one; the order among them is not established.
 - **Real review history shows no recall advantage** for Attest (Saleor, home-assistant), and a remedy tried did not help.
 
 ### Which configuration to use / 推荐哪种配置 (not preregistered)

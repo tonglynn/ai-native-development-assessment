@@ -1158,6 +1158,18 @@ needed core rules injected; both before any agent run of these arms.
 - Limits: one memory snapshot type (v4 after review), Ledgerly only, 6 runs per task; task types are keyword
   rules over the task text, written by me.
 
+*Replication in a second session* (`runs/crowding_soft_rep/`, same design, 456 runs, 0 crashed):
+
+| Arm | Session 1 (vs A) | Session 2 (vs A) |
+|---|---|---|
+| A | 70% | 73% |
+| C | 76% (+6 [−5, +17]) | 83% (**+11 [+3, +18]**) |
+| D2 | 85% (**+15 [+5, +27]**) | 83% (+11 [0, +21]) |
+| E | 83% (**+14 [+2, +26]**) | 85% (+12 [0, +27]) |
+
+Every value-aware arm is ahead of A in both sessions; which one clears the "better" bar changes between sessions, so
+the finding is that value-aware injection beats the default, not that one of C, D2 and E is best.
+
 **Whole pipelines in one session (D65, exploratory, `scripts/pipeline_compare.py`, `runs/pipeline_compare/`).** The
 numbers above come from different sessions whose Attest baselines differed by 15 points (85% in the gateway run,
 70% here), so v3.1's 88% and arm C's 77% cannot be compared directly. Here each arm uses the memory its own
