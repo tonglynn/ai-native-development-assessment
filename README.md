@@ -102,7 +102,9 @@ is that correct rules with only a reviewer's word wait for a person (79% vs 85% 
 and uncertain notes go to a human review queue with approvers, records and policy-change rollback. Replaying
 that review did not recover the gap (70% after approving every waiting note): approval says a note is right,
 not that it is worth a slot. Ranking business-critical rules first removed every displacement (idempotency rule
-injected 18 of 18 times) and gave 77% against 70% on the same memory, not shown to be better at 6 runs per task.
+injected 18 of 18 times) and gave 77% against 70% on the same memory, not shown to be better at 6 runs per task. Compared in one session on the memories their pipelines learned, v3.1
+beat Attest (83% vs 70%, +14 pp [+5, +24]) and v4 with review and that injection was not worse than either
+(79%); v3.1's edge comes with approving a trusted reviewer's wrong advice, which v4 rejects.
 
 What it does **not** show: on real review history Attest anticipated the fewest
 convention comments (Saleor 1/25, against ReasoningBank 4/25 and ACE 8/25) ([`REAL_HISTORY.md`](REAL_HISTORY.md)); embedding retrieval finds
@@ -267,7 +269,7 @@ Sources for the industry and research context: [GitHub Copilot agentic memory](h
 | `runs/` | Every run: trajectories, diffs, `result.json`, memory event logs |
 | `report/index.html` | Interactive report of the main experiment |
 | `RESULTS.md`, `REAL_HISTORY.md` | Results |
-| `PREREGISTRATION.md`, `DECISIONS.md`, `AI_LOG.md`, `INCIDENTS.md` | Method, decisions D1–D64, AI collaboration log, incidents |
+| `PREREGISTRATION.md`, `DECISIONS.md`, `AI_LOG.md`, `INCIDENTS.md` | Method, decisions D1–D65, AI collaboration log, incidents |
 | `SCENARIO.md`, `scenario/history/` | Business scenario (synthetic) |
 | `ROADMAP.md`, `PROCESS_MEMORY.md` | Next steps (Attest 2.0), deliberately not added |
 
@@ -287,7 +289,7 @@ Sources for the industry and research context: [GitHub Copilot agentic memory](h
 - **业务风险**（无记忆 → Attest）：重复资金操作 18/18 → 6/18，未授权操作 15/15 → 2/15，误拦合法操作 15/15 → 3/15。这是记忆带来的，不是门槛带来的：关掉门槛时这三项相同或更好（2/18、2/15、2/15）。
 - **近迁移与远迁移**（预注册的拆分，补报）：在 4 个与经验任务结构相近的留出任务上，Attest 比无记忆高 58 个百分点（[+42, +67]，只有 4 个任务）；在另外 7 个任务上高 24 个百分点（[+10, +43]）。
 - **后续扩展（探索性）**：上下文管理器（看到结果后设计）在 6k token 预算下保住了会话中的评审规则（S05 通过 2/3，0 次审批违规；滑动窗口 0/3；普通摘要基线有缺陷，不作比较）；动态遗忘实验显示 200 条一次性笔记把留出组从 70% 降到 42%，默认参数下没有一种遗忘策略能修复，统一衰减误删了审批规则，按类型衰减没有；**可信度分级写入**（只出现一次的细节只在所属文件中注入）在更难的污染任务流上（不分级时为 36%）把留出组提高到 67%，与按类型遗忘结合为 76%，审批违规为 0（探索性，区分信号为构造所得）。**遗忘 V1.1**（离线）：把"被采用"当成贡献，会让 34 条一次性笔记永久保留；只按验证强化能消除这一点，但 V1.1 误归档的正确规则从 4/52 增加到 10–11/52，多为没有测试覆盖的规则，因此 V1 仍为默认。难点在于拿到可靠的价值反馈，而不是遗忘速度。
-- **记忆安全（探索性）**：信任边界让攻击者写的标记、政策编号和重复评论不能提升毒药的层级（26 条正确笔记 0 条受影响）；封存日志发现 8/8 种篡改；密钥扫描后已知格式 0 泄漏（不扫描时记录密钥的笔记 10/10 通过写入门槛）；隔离 + 追溯把毒药移出检索（此前留出任务注入 23/33 次、照做 14 次）。发现并修复两个真实漏洞：MCP 按 remote 最后一段区分记忆（别人的 `ledgerly` 能读到）；Agent 的 shell 继承了模型密钥。真实注入运行中 Agent 23/24 次照做注入的 issue，执行了 37 次 `env`；注入有 1 次进入 Attest 的记忆。全部安全措施一起开，起初因为把正确笔记误判为与遗留代码"冲突"而挂起，干净任务流上低 21 个百分点；逐条诊断后的第三版挡住了能通过测试的毒药（0 写入、0 照做），干净任务流上没有测到代价（85% 对 85%，挂起 0 条），仍为可选项。在一组冻结的 30 条新经验（全部设定为测试已通过）上，v3 让错误和无法判断的经验都没有成为规则，可信的 11 条中 10 条成为规则（Attest 30 条全部成为规则）；但这依赖记忆里已有团队规则：记忆为空时，10 条错误建议中有 5 条成为规则，原因是它把"这条规范的测试通过了"当成了独立验证。改用反事实检查（只有回退这条笔记的改动后测试会失败，测试才算为它作证）后，第二组冻结测试集上错误 0/4、可信 7/8 被验证；端到端两种毒药都挡住，干净任务流上没有代价（88% 对 85%）；行为等价的风格违规（用 quantize 代替 round_money）任何测试都分辨不出。三种状态的版本（通过 / 驳回 / 不确定；业务规则用测试验证，代码规范用团队代码检查验证，可信评审者单独一项不够）在所有冻结测试集上 0 个致命错误，驳回了此前版本放行的"可信评审者的错误建议"，无法判断的留给人工；代价是只有评审者一句话的正确规则也要等人确认（干净任务流 79% 对 85%，"不更差"未证明）。重复证据现在按来源判断（人为制造的重复 0/6 被采信，原来 4/6）；不确定的笔记进入人工审核队列（审批人、记录、政策变更回退）。回放人工审核没有补回差距（批准全部待审笔记后为 70%）：批准说明它对，不说明它值得占一个注入名额。把业务关键规则排在前面后，挤占全部消失（幂等规则 18/18 注入），同一份记忆下留出组 77% 对 70%，每个任务 6 次运行下"更好"未证明。
+- **记忆安全（探索性）**：信任边界让攻击者写的标记、政策编号和重复评论不能提升毒药的层级（26 条正确笔记 0 条受影响）；封存日志发现 8/8 种篡改；密钥扫描后已知格式 0 泄漏（不扫描时记录密钥的笔记 10/10 通过写入门槛）；隔离 + 追溯把毒药移出检索（此前留出任务注入 23/33 次、照做 14 次）。发现并修复两个真实漏洞：MCP 按 remote 最后一段区分记忆（别人的 `ledgerly` 能读到）；Agent 的 shell 继承了模型密钥。真实注入运行中 Agent 23/24 次照做注入的 issue，执行了 37 次 `env`；注入有 1 次进入 Attest 的记忆。全部安全措施一起开，起初因为把正确笔记误判为与遗留代码"冲突"而挂起，干净任务流上低 21 个百分点；逐条诊断后的第三版挡住了能通过测试的毒药（0 写入、0 照做），干净任务流上没有测到代价（85% 对 85%，挂起 0 条），仍为可选项。在一组冻结的 30 条新经验（全部设定为测试已通过）上，v3 让错误和无法判断的经验都没有成为规则，可信的 11 条中 10 条成为规则（Attest 30 条全部成为规则）；但这依赖记忆里已有团队规则：记忆为空时，10 条错误建议中有 5 条成为规则，原因是它把"这条规范的测试通过了"当成了独立验证。改用反事实检查（只有回退这条笔记的改动后测试会失败，测试才算为它作证）后，第二组冻结测试集上错误 0/4、可信 7/8 被验证；端到端两种毒药都挡住，干净任务流上没有代价（88% 对 85%）；行为等价的风格违规（用 quantize 代替 round_money）任何测试都分辨不出。三种状态的版本（通过 / 驳回 / 不确定；业务规则用测试验证，代码规范用团队代码检查验证，可信评审者单独一项不够）在所有冻结测试集上 0 个致命错误，驳回了此前版本放行的"可信评审者的错误建议"，无法判断的留给人工；代价是只有评审者一句话的正确规则也要等人确认（干净任务流 79% 对 85%，"不更差"未证明）。重复证据现在按来源判断（人为制造的重复 0/6 被采信，原来 4/6）；不确定的笔记进入人工审核队列（审批人、记录、政策变更回退）。回放人工审核没有补回差距（批准全部待审笔记后为 70%）：批准说明它对，不说明它值得占一个注入名额。把业务关键规则排在前面后，挤占全部消失（幂等规则 18/18 注入），同一份记忆下留出组 77% 对 70%，每个任务 6 次运行下"更好"未证明。在同一轮中、各用自己流程学到的记忆比较：v3.1 比 Attest 更好（83% 对 70%，+14 [+5, +24]），v4 + 人工审核 + 该排序相对两者都"不更差"（79%）；v3.1 的优势伴随批准可信评审者的错误建议，v4 会驳回。
 - **没有证明的**：在真实评审历史上，Attest 预判到的规范类评审意见最少（Saleor 上 1/25，ReasoningBank 4/25，ACE 8/25）；语义检索找到更多相关笔记，但没有改善编码结果。
 
 ### 问题

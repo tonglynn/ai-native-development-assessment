@@ -1132,6 +1132,27 @@ fitted weights. Design and reading rule committed before any run; 456 agent runs
   warning; stale tasks passed 97–100% in every arm, so it did not mislead the agent here.
 - This is exploratory and changes nothing in the frozen main experiment.
 
+**Whole pipelines in one session (D65, exploratory, `scripts/pipeline_compare.py`, `runs/pipeline_compare/`).** The
+numbers above come from different sessions whose Attest baselines differed by 15 points (85% in the gateway run,
+70% here), so v3.1's 88% and arm C's 77% cannot be compared directly. Here each arm uses the memory its own
+pipeline learned in the same gateway clean-stream run (r1–r3), frozen, on the same tasks in one session, 6 runs
+per task (342 runs, 0 crashed); rule fixed before running.
+
+| Pipeline | Held-out pass@1 | Stale | Control | vs Attest | vs v3.1 |
+|---|---|---|---|---|---|
+| Attest | 70% | 87% | 100% | – | −14 pp [−24, −5] |
+| gateway v3.1 | **83%** | 97% | 100% | **+14 pp [+5, +24], better** | – |
+| v4 + human review + criticality-first (C) | 79% | 100% | 100% | +9 pp [0, +20], not worse | −5 pp [−9, 0], not worse |
+
+- v3.1 is **better than Attest** on held-out tasks by the rule fixed beforehand (5 tasks better, none worse): the
+  first time a safeguarded variant beats Attest as evaluated, with the policy guard on, in the same session.
+- v4 with review and criticality-first injection is **not worse** than either (lower bounds 0 and −9 points); its
+  point estimate is 5 points below v3.1 (3 tasks worse, none better), within the margin.
+- Read with the frozen sets: v3.1's edge comes with approving a trusted reviewer's wrong advice (D58, D60: 2 of 2
+  insider cases approved); v4 rejected both and approved no wrong or undecidable note, at the price of a human
+  review queue. Which one to deploy is a choice between those two costs, not a ranking.
+- Exploratory; the held-out tasks are the main experiment's, and the memories come from one gateway run.
+
 
 
 
