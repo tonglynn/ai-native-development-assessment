@@ -9,6 +9,9 @@ ties each note to the repository and version it came from, and demotes, supersed
 or retracts it when it stops being true. A preregistered experiment measures what
 that buys and what it costs.
 
+Scope: payments, refunds and account adjustments in the migration of a B2B SaaS subscription-billing system
+(synthetic); subscriptions and invoicing are context, not covered as a whole (`SCENARIO.md`, coverage map).
+
 ## Results at a glance
 
 Preregistered (frozen at commit `cf5d879` before any memory run), 6 conditions ×
@@ -280,6 +283,8 @@ Sources for the industry and research context: [GitHub Copilot agentic memory](h
 ## 中文说明
 
 编码 Agent 记不住代码评审教过它的东西；而现有的记忆方案往往是"Agent 总结了什么就存什么、到哪都用、从不收回"。**Attest** 只保留被验证通过的改动真正落实过的经验，每条经验绑定来源仓库和适用版本，规则失效时降级、替换或撤回。一个预注册实验衡量了它带来的收益和代价。
+
+研究范围：B2B SaaS 订阅计费系统迁移中的支付、退款与账务调整业务（合成场景）；订阅与账单是业务背景，未完整覆盖（见 `SCENARIO.md` 覆盖地图）。
 
 ### 结果概览
 

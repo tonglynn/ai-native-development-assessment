@@ -10,6 +10,13 @@
 
 ## The business / 业务背景
 
+**Research scope.** Payments, refunds and account adjustments (credits, write-offs) in the migration of a B2B
+SaaS subscription-billing system. Subscriptions and invoicing are business context: some tasks touch them (renewal,
+cancellation, proration, discounts, tax), but the benchmark does not cover the whole billing system.
+
+**研究范围。** B2B SaaS 订阅计费系统迁移中的支付、退款与账务调整（抵扣、核销）业务。订阅与账单是业务背景，部分任务
+涉及（续费、取消、按比例退款、折扣、税），但本基准不覆盖完整的计费系统。
+
 A B2B SaaS company is migrating its billing monolith to a modular platform.
 **ledgerly** is the extracted billing library: subscription renewals, invoices,
 payments, refunds and the account adjustments that the support team makes for
@@ -77,6 +84,72 @@ So the business metrics point in two directions, and both are reported:
 
 - **Risk control / 风险控制:** unauthorised-operation rate (C6 *blocks* failed), duplicate-money-operation rate (C5 failed), unaudited movements (C4 failed).
 - **Efficiency / 业务效率:** legitimate-operation-blocked rate (C6 *allows* failed, including a stale 500.00 threshold on 2.0.0). Processing time of a real request is not simulated; the agent's steps and tokens per task are reported as engineering cost, not as business processing time.
+
+### Who initiates, approves, executes and audits / 谁发起、谁审批、谁执行、谁审计
+
+| Operation / 操作 | Initiates / 发起 | Approves / 审批 | Executes / 执行 | Audits / 审计 | Checked by the benchmark / 基准是否检查 |
+|---|---|---|---|---|---|
+| Capture a payment / 扣款 | billing system (renewal, invoice) | – | billing code (ledgerly) | finance reconciles from audit entries | C3, C4, C5 (E06, H08) |
+| Void an authorization / 作废授权 | billing system or support | – | billing code | finance | C4, C5 (H06) |
+| Refund (money back) / 退款 | customer request via support | finance lead, above the threshold | billing code, through the payment provider (X01) | finance, auditor | C1, C4, C5, C6 (E04, H07, H11, S05, X01) |
+| Credit (balance adjustment) / 抵扣 | support | finance lead, above the threshold | billing code | finance | C4, C5, C6 (H04, S04) |
+| Write-off / 核销 | finance | finance (policy) | billing code | auditor | C4, C5 (H10) |
+| Change a policy / 政策变更 | finance | finance leadership (FIN-…) | engineering releases a version | auditor | stale group on 2.0.0 (S01–S05) |
+| Change team memory / 团队记忆变更 | the agent proposes | a registered approver (D62) | Attest stores it | the event log (D42) | judgement sets (D58–D60) |
+
+A **refund** returns money to the customer through the payment provider and changes `payment.refunded_amount`;
+a **credit** adjusts what the customer owes on an invoice and moves no money. Both need approval above the
+threshold and an audit entry; only a refund can fail at the provider.
+**退款**是通过支付服务商把钱退回客户，改变 `payment.refunded_amount`；**抵扣**是调整客户在账单上的应付金额，不发生资金
+流动。两者超过阈值都需要审批、都要写审计记录；只有退款可能在支付服务商一侧失败。
+
+**Segregation of duties / 职责分离.** Whoever requests an operation may not approve it, and the approver is not
+the code that executes it. In the benchmark, C6 checks that an approver is present above the threshold, **not** that
+the approver differs from the requester (H11 passes `requested_by` and `approved_by`, but no test sets them equal):
+that rule is stated here, not measured. The same principle is enforced for the team's memory: an agent cannot
+approve its own candidate experience (D62).
+申请人不能审批自己的操作，审批人也不是执行操作的代码。基准中 C6 只检查超过阈值时是否有审批人，**不检查**审批人与申请人
+是否不同（H11 同时传入 `requested_by` 与 `approved_by`，但没有测试让两者相同），这一规则在此说明，未被测量。同一原则
+在团队记忆上是强制的：Agent 不能批准自己提出的经验（D62）。
+
+### What every money operation records / 每笔资金操作记录什么
+
+| Field / 字段 | Required by the benchmark (C4) / 基准要求 | Stated here, not checked / 仅在此说明 |
+|---|---|---|
+| event name (past tense) | yes | |
+| payment or invoice id | yes | |
+| amount | yes | |
+| idempotency key | yes, in tasks with C5 | |
+| approver | where the operation needed approval (E04 reference) | |
+| operator (requested_by) | | yes |
+| state before and after | | yes |
+| related business request id | | yes |
+
+Example (synthetic, not a real transaction / 模拟数据，不代表真实交易):
+`audit.record("payment_refunded", payment_id="pay_2026_001", amount=Decimal("800.00"), idempotency_key="req_7f3", approved_by="usr_finance_lead")`
+
+### Failures at each step and what the agent must learn / 各环节的异常与 Agent 应学会的处理
+
+| Failure / 异常 | Business risk / 业务风险 | What handles it / 处理方式 | In the benchmark / 基准 |
+|---|---|---|---|
+| Invalid request (zero, negative, over-refund, wrong state) | money moved that should not move | reject with `BillingError(code)` (C2) | every task |
+| Provider timeout, retried request | refund paid twice | idempotency key checked first (C5); retry with the same key (C7) | E04, H04, H06–H08, H10, H11; X01 |
+| Duplicate request with the same key | double money operation | return the original result (C5) | C5 tests |
+| Large operation without approval | unauthorised money movement | `approval_required` (C6) | C6 *blocks* tests |
+| Legitimate operation refused | support blocked, customer harmed | threshold of the current policy version (FIN-2026-09) | C6 *allows* tests, S04, S05 |
+| Provider succeeded, ledger update failed | books disagree with the bank | compensation or reconciliation | **not covered** (ROADMAP) |
+| Callback late or out of order | wrong payment state | state checks and event handling | **not covered** (ROADMAP) |
+| Refund failed at the provider, reprocessing | customer not refunded | retry or manual handling | **not covered** (X01 tests success and timeout only) |
+
+### Coverage map / 覆盖地图
+
+| Area / 领域 | Covered / 已覆盖 | Partly / 部分 | Not covered / 未覆盖 |
+|---|---|---|---|
+| Subscriptions and invoicing | renewal (E03), cancellation (H09), proration (H05), discounts, tax, amounts (E01, E05, H01, H02) | billing periods | plan upgrade and downgrade; failed-renewal retries |
+| Payments and refunds | partial refund (E04), void (H06), partial capture (H08), duplicate refunds (C5), provider timeout (X01) | refund vs credit (both present, distinguished in this document only) | refund to the original method; refund failure and reprocessing |
+| Approval and permissions | second approver above the threshold (C6), policy versions (FIN-2026-03, FIN-2026-09) | segregation of duties (stated, not tested) | a full role and permission model |
+| Ledger and audit | event, entity id, amount, idempotency key, approver (C4) | | operator, state before and after, request id |
+| Failure recovery | timeouts, duplicate requests | | compensation after a ledger failure; late or out-of-order callbacks |
 
 ## The refund and adjustment flow / 退款与账务调整流程
 

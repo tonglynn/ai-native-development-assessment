@@ -141,6 +141,14 @@ simkit in every run. Three things are not built:
 | Cross-domain check | does criticality-first injection help in another domain, does one domain's core rules crowd out another's within one repository | simkit has 3 control tasks and no business rules of its own; this needs new tasks with their own critical rules (e.g. a second business module in Ledgerly, or a simkit module with safety limits), i.e. benchmark work, not only a run |
 | Rules injected but not followed | the remaining failures of the best pipelines (C1 precision, C5 idempotency) happen with the rule in the prompt | a pre-submit code check or the team's code checks (D60) run as feedback before the agent submits, measured against injection alone |
 
+## Business coverage: not in the benchmark (from the scenario's coverage map) / 业务覆盖缺口
+
+New tasks with their own hidden tests, outside the frozen task set: plan upgrade and downgrade with proration;
+failed-renewal retries; refund to the original method, and refund failure with reprocessing; compensation when the
+provider succeeded but the ledger update failed; late or out-of-order provider callbacks; segregation of duties
+(the approver must differ from the requester); audit entries with operator, state before and after, and request id.
+Each would add a business rule that is only in review or policy, which is where memory is meant to matter.
+
 ## Deliberately not added / 刻意不加
 
 | Technology | Why not |
