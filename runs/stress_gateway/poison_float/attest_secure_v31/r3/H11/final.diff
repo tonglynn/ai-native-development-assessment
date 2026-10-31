@@ -1,0 +1,88 @@
+--- a/ledgerly/support.py
++++ b/ledgerly/support.py
+@@ -1,6 +1,82 @@
+ """Entry points used by the support console."""
+ 
++from datetime import datetime
++from decimal import Decimal
+ 
+-def process_refund_request(payment, amount, requested_by, at):
+-    """Refund part or all of a captured payment on behalf of a support agent."""
+-    raise NotImplementedError
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
++from .models import Payment
++from .money import ZERO, round_money
++
++# Finance policy FIN-2026-03: support-initiated refunds above this amount
++# require a second approver.
++APPROVAL_THRESHOLD = Decimal("500.00")
++
++
++def process_refund_request(
++    payment: Payment,
++    amount,
++    requested_by: str,
++    at: datetime,
++    *,
++    idempotency_key: str | None = None,
++    approved_by: str | None = None,
++) -> Payment:
++    """Refund part or all of a captured payment on behalf of a support agent.
++
++    ``amount`` is the text the support agent typed; it is rounded to the cent.
++    Only captured payments can be refunded, the amount must be positive, and
++    the total refunded must never exceed the captured amount.
++
++    ``idempotency_key`` makes the operation safe to retry: if an audit entry
++    with the same key already exists, the original result is returned without
++    applying the refund again.
++
++    ``approved_by`` is required for refunds above ``APPROVAL_THRESHOLD``
++    (finance policy FIN-2026-03).
++    """
++    # Idempotency is checked first, before any state validation, so that a
++    # retried request returns the original result even if the payment has
++    # since changed (e.g. it is now fully refunded).
++    if idempotency_key is not None:
++        for entry in audit.events("payment_refunded"):
++            if entry.get("idempotency_key") == idempotency_key:
++                return payment
++
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++
++    refund = round_money(amount)
++    if refund <= ZERO:
++        raise BillingError("non_positive_amount", str(refund))
++
++    if refund > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError(
++            "approval_required",
++            f"refund of {refund} requires a second approver",
++        )
++
++    captured = round_money(payment.amount)
++    already_refunded = round_money(payment.refunded_amount)
++    if already_refunded + refund > captured:
++        raise BillingError(
++            "refund_exceeds_captured",
++            f"refund {refund} would exceed captured amount {captured}",
++        )
++
++    at = ensure_utc(at)
++    payment.refunded_amount = already_refunded + refund
++    if payment.refunded_amount >= captured:
++        payment.status = "refunded"
++
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=refund,
++        requested_by=requested_by,
++        approved_by=approved_by,
++        idempotency_key=idempotency_key,
++        at=at,
++    )
++    return payment

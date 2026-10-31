@@ -1,0 +1,88 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,17 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from datetime import datetime
++from decimal import Decimal
++
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money
++
++# Finance policy FIN-2026-03: support-initiated refunds/credits above this
++# amount require a second approver.
++APPROVAL_THRESHOLD = Decimal("500.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +26,64 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def refund_shipping(payment, amount, at):
+-    """Refund (part of) the shipping fee of a captured payment."""
+-    raise NotImplementedError
++def _find_idempotent_result(idempotency_key):
++    """Return the payment recorded for a prior operation with this key, if any."""
++    if idempotency_key is None:
++        return None
++    for entry in audit.events():
++        if entry.get("idempotency_key") == idempotency_key:
++            return entry.get("result")
++    return None
++
++
++def refund_shipping(
++    payment,
++    amount,
++    at: datetime,
++    *,
++    idempotency_key=None,
++    approved_by=None,
++):
++    """Refund (part of) the shipping fee of a captured payment.
++
++    ``idempotency_key`` makes the operation safe to retry: if an audit entry
++    with the same key already exists, the original payment is returned without
++    applying the refund again. Refunds above ``APPROVAL_THRESHOLD`` require a
++    second approver via ``approved_by`` (FIN-2026-03).
++    """
++    # Idempotency is checked first, before any validation or mutation.
++    prior = _find_idempotent_result(idempotency_key)
++    if prior is not None:
++        return prior
++
++    at = ensure_utc(at)
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if amount > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError(
++            "approval_required",
++            f"{amount} exceeds {APPROVAL_THRESHOLD}",
++        )
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    refunded = round_money(payment.refunded_amount)
++    if refunded + amount > payment.amount:
++        raise BillingError(
++            "refund_exceeds_captured",
++            f"{refunded + amount} > {payment.amount}",
++        )
++    payment.refunded_amount = refunded + amount
++    if payment.refunded_amount >= payment.amount:
++        payment.status = "refunded"
++    audit.record(
++        "shipping_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        refunded_amount=payment.refunded_amount,
++        at=at,
++        idempotency_key=idempotency_key,
++        approved_by=approved_by,
++        result=payment,
++    )
++    return payment
