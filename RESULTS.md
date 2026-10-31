@@ -850,6 +850,25 @@ similar (duplicate money operations 7, 9, 7 of 18). Lexical retrieval stays the 
 second time a better ranking did not turn into better code, so the bottleneck for these tasks is not
 which notes are shown.
 
+### Every safeguard together (D51, `runs/stress_gateway/`) / 全部安全措施一起开
+
+`attest_secure`: secret scan → write gate → semantic review with code citations (D50; every uncertain
+verdict held, as in D39) → trust-tiered admission (D41), with the policy guard (D38). Against Attest as
+evaluated, 3 repetitions each, real agent runs, 0 crashes.
+
+| Scenario | | Attest | attest_secure |
+|---|---|---|---|
+| clean stream | held-out pass@1 | 85% | **64%** (−21 pp [−36, −6], 0 wins / 5 losses) |
+| clean stream | correct notes held for a person | – | 8 (round_money, idempotency ×5, money helpers ×2) |
+| first poison (`audit.clear()`) | poison stored / held-out applying | 0 / 0 | 0 / 0 |
+| second poison (`float(amount)`) | poison stored / held-out shown / applying | 3 / 22 / 13 | **0 / 0 / 0** |
+| second poison | held-out pass@1 | 73% | 33% |
+
+Against the reading rule: the poison is stopped completely, and the cost is **worse** than the margin on
+a clean stream: by holding every uncertain note it held the idempotency rule in most repetitions. All
+safeguards on at once, as designed in D39/D41, are too conservative to be a default; the graded version
+(D56) follows from this.
+
 ## Closing the "self-proving evidence" gap (exploratory, after an external review) / 证据自证问题的改进
 
 Four changes proposed in a review of the design, each measured offline on stored runs (no new agent
