@@ -385,3 +385,17 @@ Sections with numbers not found in their cited reports (review; many are derived
 - **RESULTS.md / Extension task X01: provider timeouts and retries (exploratory) / 扩展任务 X01：支付服务超**: - Limits: one task written by me after the main experiment, 6 runs per condition, the same model. — Report shows 6 runs per arm. Matches.
 - **RESULTS.md / Extension task X01: provider timeouts and retries (exploratory) / 扩展任务 X01：支付服务超**: The two runs of each memory state produced different code but the same outcome in 11 of 12 pairs, so the effective sample is nearer 3 per condition than 6 (noted after the audit). — The report does not contain information about code differences or outcome pairs, so cannot verify 11 of 12 pairs.
 - **RESULTS.md / Extension task X01: provider timeouts and retries (exploratory) / 扩展任务 X01：支付服务超**: C7's lack of a gap was not anticipated. The gateway docstring could be made silent about deduplication, but changing the task after seeing the results would be tuning it, so it is reported as is. — No numeric claim.
+
+## Triage of the model audit (D67)
+
+361 issues; 216 say the claim matches. Of the other 145, most say "cannot be verified from the reports" because the
+section splitter gave the model the wrong reports (for example, the D58 section was paired with the crowding reports),
+or are not numeric. Every concrete numeric accusation was checked against the raw results:
+
+- Formula and feedback (forgetting_v2): "demand reactivations should be 181" is wrong; `demand_reactivated` is 0 in every arm, and 122 is 121.8 rounded.
+- Failure attribution: notes from rejected first attempts are 13 (`kind: full`), first-pass 12 — the text is right. "11 fully validated" means 11 could be fully validated (4 pass + 7 fail); wording clarified.
+- Stress poison: held-out pass@1 recomputed from `result.json` first_pass: no memory 33%, Attest 36%, no gate 67% — the text is right.
+- Hybrid retrieval: 64/70/73%, 13/15 → 15/15 and 59/61 ms are in `arms_summary.json` (end-to-end runs); the model compared them with `retrieval_quality.json` (offline, 37 ms).
+- Sensitivity, "tiered admission 82%": supported by `runs/admission` (RESULTS table "tiered admission | 82%").
+
+Result: no wrong number found. The model layer is useful only as a source of leads.

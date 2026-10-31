@@ -826,7 +826,7 @@ task.
   name it explicitly; real reviews often do not (`REAL_HISTORY.md`). The next step would be to
   attribute a failure to the note whose evidence quote matches the review comment that names it.
   That is not tested here.
-- Limits: 25 checks, 11 of them fully validated; one prompt; replay reproduces the recorded
+- Limits: 25 checks, 11 of them could be fully validated (4 passed); one prompt; replay reproduces the recorded
   commands, not the agent's reasoning.
 
 ### Hybrid retrieval and task-aware reranking (D47, after the user's proposal) / 混合检索与按任务重排
