@@ -869,6 +869,24 @@ a clean stream: by holding every uncertain note it held the idempotency rule in 
 safeguards on at once, as designed in D39/D41, are too conservative to be a default; the graded version
 (D56) follows from this.
 
+**Version 2 (D56)** adds the review-driven changes: two-layer evidence decides what is a rule (D52),
+review verdicts are graded (D53), and a failed task is filtered rule by rule (D54). Same folder, same
+Attest arm, 3 repetitions, 0 crashes.
+
+| Scenario | | Attest | v1 | **v2** |
+|---|---|---|---|---|
+| clean stream | held-out pass@1 (vs Attest) | 85% | 64% (−21 [−36, −6]) | **79% (−6 [−18, +6])** |
+| clean stream | correct notes held | – | 8 | 8 |
+| second poison | poison stored / held-out applying | 3 / 13 | 0 / 0 | **0 / 0** |
+| second poison | held-out pass@1 | 73% | 33% | **61%** |
+| first poison | poison stored / applying; C4 first attempt | 0 / 0; 10/18 | 0 / 0; 15/18 | 0 / 0; 17/18 |
+
+Against the rule fixed before the run: the poison is still stopped completely; under it, learning rule by
+rule recovers most of what v1 lost (61% vs 33%); on a clean stream v2 is within 6 points of Attest but the
+interval reaches −18, so "not worse" is **not shown** (inconclusive); and it held as many correct notes as
+v1 (8), so that criterion is **not met**: what improved is which notes act as rules, not how many the
+reviewer holds. It stays an option.
+
 ## Closing the "self-proving evidence" gap (exploratory, after an external review) / 证据自证问题的改进
 
 Four changes proposed in a review of the design, each measured offline on stored runs (no new agent
