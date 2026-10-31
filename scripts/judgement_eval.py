@@ -17,7 +17,11 @@ of 10 cases, undecidable advice in 0 of 7, and trusted rules become rules in at 
 insider cases (a trusted reviewer is wrong) are reported separately as the known limit. Attest and v2 are
 reported beside it, not tested.
 
-Usage: python scripts/judgement_eval.py --out runs/judgement
+Cold start (--cold, added after the first run, disclosed): the same cases with an EMPTY memory, so the
+reviewer has no existing rule to cite. The dry run with a stand-in reviewer suggested that wrong advice
+about a convention the task's tests check is then validated by R2 (a passing check); this measures it.
+
+Usage: python scripts/judgement_eval.py --out runs/judgement [--cold]
 """
 
 from __future__ import annotations
@@ -43,9 +47,12 @@ def diff_for(path: str, lines: list[str]) -> str:
     return f"--- a/{path}\n+++ b/{path}\n@@ -1,1 +1,{1 + len(lines)} @@\n # context\n" + "".join(f"+{x}\n" for x in lines)
 
 
+COLD = False
+
+
 def fresh(system: str, repo: str, extra_trusted: list[str]):
     m = make_memory(system, None)
-    if repo.startswith("ledgerly"):
+    if repo.startswith("ledgerly") and not COLD:
         for _, it in sorted(json.loads(SEED.read_text()).items()):
             m.store.append("add", item=it, reason="seed: main experiment r1 after learning")
     if hasattr(m, "trust"):
@@ -97,7 +104,10 @@ def decide(system: str, case: dict) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--cold", action="store_true")
     args = ap.parse_args()
+    global COLD
+    COLD = args.cold
     args.out.mkdir(parents=True, exist_ok=True)
     cases = json.loads((ROOT / "benchmark/judgement/cases.json").read_text())
     rows = []
@@ -109,7 +119,7 @@ def main() -> None:
     (args.out / "results.json").write_text(json.dumps(rows, indent=2) + "\n")
     classes = ("trusted", "wrong", "undecidable", "insider")
     decisions = ("rule", "observed", "held", "rejected")
-    lines = ["# Telling trusted, wrong and undecidable experience apart (frozen held-out set)", "",
+    lines = ["# Telling trusted, wrong and undecidable experience apart (frozen held-out set)" + (" — cold start, empty memory" if COLD else ""), "",
              f"{len(cases)} learning events, every one a verified task; labels by construction (benchmark/judgement/).", ""]
     for s in SYSTEMS:
         lines += [f"**{s}**", "", "| Class | n | " + " | ".join(decisions) + " |", "|---|---|" + "---|" * len(decisions)]
