@@ -138,3 +138,63 @@ class SecureMemoryV2(SecureMemory):
                 "how": "the task failed; this candidate is unrelated to the failure and its own convention check passed"}},
                 reason="kept by rule-level validation from a failed task (observed only)"))
         return events
+
+
+def check_passed(item: dict) -> bool:
+    """D57 R2: every convention the note is about was checked by its source task's tests, and the task passed.
+    Never uses the diff; a claim about a convention no test of that task checks is not validated."""
+    from ..benchmark import load_task
+    conv = about(f"{item.get('title') or ''} {item.get('content') or ''}")
+    try:
+        task = load_task((item.get("source") or {}).get("task_id"))
+    except Exception:  # noqa: BLE001 - not a benchmark task: no checks known
+        return False
+    passed = ((item.get("evidence") or [{}])[0].get("verification") or {}).get("passed")
+    return bool(conv) and conv <= set(task.conventions) and bool(passed)
+
+
+class SecureMemoryV3(SecureMemoryV2):
+    """v2 with the D57 fixes for correct notes held: R1 a conflict citing only code is uncertain (code is
+    a clue); R2 a passing check of every convention the note is about is independent validation; R3 a
+    conflict with an existing rule does not hold a note validated by a registered policy or trusted reviewer."""
+
+    def __init__(self, store_dir, trust: admission.Trust | None = None, **kw):
+        super().__init__(store_dir, trust=trust, **kw)
+        self.name = "attest_secure_v3"
+
+    def _validated(self, item: dict) -> list[str]:
+        from .validation import independent
+        return independent(item, self.trust, {item.get("id"): check_passed(item)})
+
+    def _admit_after_review(self, review, task, repo_version, run, cand, changed) -> bool:
+        ev = self._evidence(task, repo_version, run, cand, changed)
+        probe = {"id": "probe", "title": cand.get("title"), "content": cand.get("content"), "evidence": [ev],
+                 "source": {"task_id": task.id, "review_comments": run["attempts"][0]["review_comments"],
+                            "references": ev["source"]["references"]}}
+        ind = self._validated(probe)
+        verdict = review["verdict"]
+        cites = {"code" if c["source_id"].startswith("code:") else "other" for c in review.get("conflicts") or []}
+        if verdict == "conflict" and cites == {"code"}:
+            verdict = "uncertain"  # R1
+        if verdict == "approved":
+            return True
+        if verdict == "conflict":
+            return bool({"policy", "reviewer"} & set(ind))  # R3
+        risky = HIGH_RISK.search(f"{cand.get('title') or ''} {cand.get('content') or ''}")
+        return not risky or bool(ind)
+
+    def _exclusion(self, item, task, version):
+        why = GovernedMemory._exclusion(self, item, task, version)
+        if why:
+            return why
+        if not item.get("observed_only") and self._validated(item):
+            return ""
+        files = set((item.get("scope") or {}).get("files") or [])
+        return "" if files & admission.files_named(task) else "observed: no independent validation, injected only in its own files"
+
+    def ranking(self, task, k=6, version=None):
+        items = self.store.items()
+        scored, ms = timed_rank("lexical", f"{task.title} {task.issue}", self.candidates(task, version), None)
+        rule = lambda i: not items[i].get("observed_only") and bool(self._validated(items[i]))  # noqa: E731
+        ranked = sorted(scored, key=lambda x: (0 if x[1] > 0 and rule(x[0]) else 1 if x[1] > 0 else 2, -x[1], x[0]))
+        return (ranked if k is None else ranked[:k]), ms

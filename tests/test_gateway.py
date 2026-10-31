@@ -55,3 +55,22 @@ def test_v2_grades_and_learns_rule_by_rule(monkeypatch):
                            {"review_comments": ["Money written to the audit trail must stay a Decimal."], "conv_failed": ["C1"]}]}
     ev = m.learn(load_task("E04"), "1.0.0", failed, "", DIFF, candidates=[CAND])
     assert ev[-1]["type"] == "reject" and not m.store.items()
+
+
+def test_v3_code_only_conflict_does_not_hold_a_validated_note(monkeypatch):
+    from attest.memory.gateway import SecureMemoryV3
+    def f(system, prompt, **k):
+        if system in (governance.SEMANTIC_SYSTEM, governance.CODE_SYSTEM):
+            return {"verdict": "conflict", "conflicts": [{"source_id": "code:ledgerly/pricing.py:17",
+                    "source_quote": "return round(price * (100 - COUPONS[coupon]) / 100, 2)", "candidate_quote": "Round money only"}]}
+        raise RuntimeError("offline")
+    monkeypatch.setattr(earned.llm, "complete_json", f)
+    diff = "--- a/ledgerly/invoice.py\n+++ b/ledgerly/invoice.py\n@@ -1 +1,2 @@\n x\n+    return round_money(total)\n"
+    review = "Round money only with ledgerly.money.round_money (half-up to the cent)."
+    m = SecureMemoryV3(None)
+    m.trust.trusted.add(" ".join(review.lower().split()))
+    run = {"first_pass": False, "final_pass": True, "attempts": [{"review_comments": [review]}]}
+    cand = {"kind": "lesson", "title": "Round money only with round_money", "content": "Round money only with round_money.",
+            "evidence_quote": "Round money only with ledgerly.money.round_money", "applied_in_diff": "return round_money(total)"}
+    m.learn(load_task("E01"), "1.0.0", run, "", diff, candidates=[cand])
+    assert m.store.items()["at-0001"]["status"] == "active"
