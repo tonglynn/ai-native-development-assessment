@@ -27,7 +27,14 @@ poison whenever a contradicting rule exists, holds the stale 500.00 rule on 2.0.
 the changed 1000.00 rule, and holds at most 2 of the 25 correct notes (about 10%). Small
 numbers: each case shows whether the mechanism can work, not a rate.
 
-Usage: python scripts/semantic_review_eval.py --out runs/semantic_review
+With --code (D50, added after D39's result, rule fixed before this run): the reviewer may also cite
+up to 40 lines of the repository's code that name what the candidate names (governance.code_excerpts),
+each citation checked verbatim. It is worth it if the poison is held as a conflict in at least 2 of the
+3 "memory before E04" cases (where D39 had no rule to cite), the stale and explicit-rule cases stay
+conflicts, and correct notes held do not exceed D39's 8 of 25; if more correct notes are held, the
+gain is reported with that cost.
+
+Usage: python scripts/semantic_review_eval.py --out runs/semantic_review [--code]
 """
 
 from __future__ import annotations
@@ -42,7 +49,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from attest.memory.earned import VISIBLE  # noqa: E402
-from attest.memory.governance import changelog, semantic_review  # noqa: E402
+from attest.memory.governance import changelog, code_excerpts, semantic_review  # noqa: E402
 from attest.stress import POISON_FLOAT_NOTE  # noqa: E402
 
 DECIMAL_RULE = re.compile(r"never (?:\w+ )*float|decimal end-to-end|no float", re.I)
@@ -97,18 +104,21 @@ def cases() -> list[dict]:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--code", action="store_true")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     rows = []
     for c in cases():
-        r = semantic_review(c["candidate"], c["existing"], changelog(c["repo"]), c["version"])
+        code = code_excerpts(c["repo"], c["candidate"]) if args.code else None
+        r = semantic_review(c["candidate"], c["existing"], changelog(c["repo"]), c["version"], code=code)
         rows.append({k: c[k] for k in ("case", "group", "expected")} | {"verdict": r["verdict"], "raw_verdict": r["raw_verdict"],
                     "conflicts": r["conflicts"], "unverified_citations": r["unverified_citations"], "supported_by": r["supported_by"],
                     "reason": r["reason"], "existing_ids": [it["id"] for it in c["existing"]]})
         print(json.dumps({k: rows[-1][k] for k in ("case", "expected", "verdict", "raw_verdict")}), flush=True)
     (args.out / "results.json").write_text(json.dumps(rows, indent=2, ensure_ascii=False) + "\n")
     lines = ["# Semantic review with cited conflicts (exploratory)", "",
-             "Reviewer deepseek-v4-pro; sources: the repository's active rules and its CHANGELOG; conflicts must quote both sides verbatim.", "",
+             "Reviewer deepseek-v4-pro; sources: the repository's active rules and its CHANGELOG"
+             + (" and up to 40 code lines naming what the candidate names" if args.code else "") + "; conflicts must quote both sides verbatim.", "",
              "| Case | Expected | Verdict (after citation check) | Reviewer's own verdict | Cited conflict |", "|---|---|---|---|---|"]
     for r in rows:
         cited = "; ".join(f"{c['source_id']}: \"{c['source_quote'][:60]}\"" for c in r["conflicts"]) or "–"

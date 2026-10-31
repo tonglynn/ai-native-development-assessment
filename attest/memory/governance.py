@@ -53,6 +53,42 @@ Return JSON: {"verdict": "approved|conflict|uncertain", "conflicts": [{"source_i
 "candidate_quote": "..."}], "supported_by": "<exact CHANGELOG excerpt or empty>", "reason": "<one sentence>"}"""
 
 
+# Optional (D50): the reviewer may also cite the repository's current code. Excerpts are chosen
+# deterministically (lines that name the code the candidate names), and a code citation must be
+# found verbatim on the cited line, like every other citation.
+CODE_SYSTEM = SEMANTIC_SYSTEM.replace(
+    "the existing rules of this repository (each with an id) and the repository's\nCHANGELOG.",
+    "the existing rules of this repository (each with an id), the repository's\nCHANGELOG, and CODE excerpts from the "
+    "repository at the current version (each with an id \"code:<file>:<line>\"). Code is evidence of how the team\n"
+    "actually works: a candidate that tells developers to do the opposite of what the code consistently enforces is a\n"
+    "conflict, citing that code line.").replace(
+    '"source_id" is the existing rule\'s id or "CHANGELOG"', '"source_id" is the existing rule\'s id, "CHANGELOG" or a code id')
+
+
+
+def code_excerpts(repo: str, cand: dict, limit: int = 40) -> dict[str, str]:
+    """Lines of the repository's code (tests included) that name the most identifiers the candidate names."""
+    import re
+    from .evidence import code_names
+    text = " ".join(str(cand.get(k) or "") for k in ("title", "content", "evidence_quote"))
+    names = code_names(text) | {w.lower() for w in re.findall(r"\b(?:Decimal|float|int|str|round\w*|audit\w*|record|approved_by|idempotency_key|\w+Error)\b", text)}
+    if not names:
+        return {}
+    root = REPOS_DIR / repo
+    scored = []
+    for f in sorted(root.rglob("*.py")):
+        rel = f.relative_to(root)
+        if "__pycache__" in rel.parts:
+            continue
+        for n, line in enumerate(f.read_text().splitlines(), 1):
+            low = line.lower()
+            hits = sum(1 for w in names if re.search(rf"\b{re.escape(w)}\b", low))
+            if hits and line.strip():
+                scored.append((-hits, str(rel), n, line.strip()[:200]))
+    scored.sort()
+    return {f"code:{r}:{n}": l for _, r, n, l in scored[:limit]}
+
+
 def changelog(repo: str) -> str:
     p = REPOS_DIR / repo / "CHANGELOG.md"
     return p.read_text() if p.exists() else ""
@@ -63,15 +99,18 @@ def _found(quote: str, text: str) -> bool:
     return len(q) >= 10 and q in normalise(text)
 
 
-def semantic_review(cand: dict, existing: list[dict], log: str, version: str, model: str | None = REVIEW_MODEL) -> dict:
-    """The reviewer's verdict, with its citations checked against the sources."""
+def semantic_review(cand: dict, existing: list[dict], log: str, version: str, model: str | None = REVIEW_MODEL,
+                    code: dict[str, str] | None = None) -> dict:
+    """The reviewer's verdict, with its citations checked against the sources (and code, if given; D50)."""
     sources = {it["id"]: f"{it['title']}: {it['content']}" for it in existing}
     candidate_text = " ".join(str(cand.get(k) or "") for k in ("title", "content", "evidence_quote"))
     prompt = json.dumps({"current_version": version,
                          "candidate": {k: cand.get(k) for k in ("title", "content", "evidence_quote")},
                          "existing_rules": [{"id": i, "rule": t} for i, t in sources.items()],
-                         "changelog": log}, ensure_ascii=False)
-    raw = llm.complete_json(SEMANTIC_SYSTEM, prompt, model=model) or {}
+                         "changelog": log, **({"code": [{"id": i, "line": t} for i, t in code.items()]} if code else {})},
+                        ensure_ascii=False)
+    raw = llm.complete_json(CODE_SYSTEM if code else SEMANTIC_SYSTEM, prompt, model=model) or {}
+    sources.update(code or {})
     verdict = raw.get("verdict") if raw.get("verdict") in ("approved", "conflict", "uncertain") else "uncertain"
     valid, invalid = [], []
     for c in raw.get("conflicts") or []:
