@@ -93,7 +93,12 @@ def reviewed_merged_prs(repo: str, limit: int, max_diff: int = 120_000, budget_s
                         comments.append(c["body"].strip())
             if not comments:
                 continue
-            diff = gh(f"/repos/{repo}/pulls/{pr['number']}", accept="application/vnd.github.v3.diff")
+            try:
+                diff = gh(f"/repos/{repo}/pulls/{pr['number']}", accept="application/vnd.github.v3.diff")
+            except requests.HTTPError as exc:
+                if exc.response is not None and exc.response.status_code == 406:  # GitHub refuses diffs that are too large
+                    continue
+                raise
             if len(diff) > max_diff:
                 continue
             found.append({"number": pr["number"], "title": pr["title"], "body": (pr.get("body") or "")[:1500],
