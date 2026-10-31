@@ -322,6 +322,41 @@ the 67% may not transfer. One finding holds regardless: a fact in the context is
 fact the agent uses. Nothing is claimed about model summaries, because the summary baseline
 was broken (see the correction above). 信息在上下文里不等于 Agent 会用；关于模型摘要不作结论，因为摘要基线有缺陷。
 
+### Forgetting over time (D48, after the user's proposal) / 遗忘的长期验证
+
+`scripts/forgetting_longterm.py`, `runs/forgetting_longterm/`. Simulated stream of 400 tasks with one
+one-off note every 2 tasks; the approval rule's task (E04) is absent for tasks 1–300 and returns
+after; at tasks 100, 200 and 400 the memory is frozen and the real agent runs the 11 held-out tasks and
+S04/S05 (351 runs, 0 crashed). Three repetitions.
+
+| Tasks | Policy | Policy rules active | One-off notes active | Learned notes archived | Old threshold shown on S04/S05 | Misses → reactivations | Held-out pass@1 (vs none) | S04/S05 pass@1 |
+|---|---|---|---|---|---|---|---|---|
+| 100 | none | 6/6 | 150/150 | 0 | 6/6 | 0 | 39% | 83% |
+| 100 | uniform | 6/6 | 138/150 | 2 | 6/6 | 0 | 39% (+0 [−9, +9]) | 83% |
+| 100 | type-aware | 6/6 | 144/150 | 0 | 6/6 | 0 | 39% (+0) | 83% |
+| 200 | none | 6/6 | 300/300 | 0 | 6/6 | 0 | 42% | 83% |
+| 200 | uniform | **3/6** | 138/300 | 4 | 0/6 | 1 → 1 | 39% (−3 [−12, +6]) | **0%** |
+| 200 | type-aware | 6/6 | 215/300 | 0 | 6/6 | 0 | 42% (+0 [−9, +9]) | 100% |
+| 400 | none | 6/6 | 600/600 | 0 | 6/6 | 0 | 36% | 83% |
+| 400 | uniform | 6/6 | 138/600 | 1 | 6/6 | 4 → 4 | 45% (+9 [−6, +27]) | 83% |
+| 400 | type-aware | 6/6 | 276/600 | 1 | 6/6 | 1 → 1 | 33% (−3 [−18, +15]) | 83% |
+
+- **No policy made the agent better** at any checkpoint (no interval above 0). Type-aware decay is
+  "not worse" at 100 and 200 tasks and inconclusive at 400; uniform decay is not worse at 100 and 400,
+  inconclusive at 200.
+- **The cost that matters is uniform decay's**: by task 200 it had archived the approval rule in all
+  three repetitions, and S04/S05, which need it, fell from 83% to **0%**. When the rule's task came back
+  (after task 300) every miss reactivated the note, and by task 400 S04/S05 were back to 83%: recovery
+  works, but only after the rule had already been missing for 100 tasks. Type-aware decay never
+  archived a policy rule.
+- One-off notes: uniform kept 138 of 600 active, type-aware 276, none all 600; the needed rule was
+  injected for 58% / 49% / 43% of held-out conventions at task 400, yet held-out pass@1 stayed within
+  the noise (33–45%). Archiving clutter improved what is shown more than what is done.
+- "Old threshold shown on S04/S05" is lower only where the approval rule itself was archived; with a
+  version warning attached it did not block legitimate operations (S04/S05 83–100% whenever the rule
+  was present). Limits: the stream is simulated with perfect attribution of use, which favours
+  forgetting; 3 repetitions; parameters are the module defaults.
+
 ### Long session with policy changes (D49; designed before running) / 带政策变更的长会话
 
 `scripts/context_long.py`, `runs/context_long/`. 169 messages (~40.6k tokens): 9 real task trajectories
@@ -791,6 +826,27 @@ task.
   That is not tested here.
 - Limits: 25 checks, 11 of them fully validated; one prompt; replay reproduces the recorded
   commands, not the agent's reasoning.
+
+### Hybrid retrieval and task-aware reranking (D47, after the user's proposal) / 混合检索与按任务重排
+
+`runs/retrieval_hybrid/`. Same memory snapshots and judge labels as the retrieval ablation; arms:
+lexical (as evaluated), hybrid (BM25 + embedding, reciprocal rank fusion), hybrid + rerank (a model
+scores the top 10 by whether each rule applies to this task, given its type, files and versions);
+6 notes injected in every arm; 3 repetitions; 0 crashes, 0 leaks. Reading rule in `retrieval.py`.
+
+| Arm | Recall@5 | Precision@5 | MRR | Held-out pass@1 | vs lexical, paired by task | Stale | Control | ms |
+|---|---|---|---|---|---|---|---|---|
+| lexical | 76% | 55% | 0.83 | 73% | – | 87% | 100% | 0.5 |
+| hybrid | 83% | 59% | 0.87 | 64% | −9 pp [−24, +6] | 93% | 100% | 59 |
+| hybrid + rerank | **90%** | **64%** | **0.95** | 70% | −3 pp [−21, +15] | 100% | 100% | 61 |
+
+Reranking gave the best retrieval of anything tried (Recall@5 +13.5 pp [+7.7, +19.7] over lexical),
+and neither arm changed the coding result: both held-out intervals reach below the −10-point margin,
+so by the rule fixed beforehand the result is **inconclusive**, not "better" and not "not worse". On the
+stale tasks reranking went 13/15 → 15/15 (lower bound 0, not "better"); business-risk failures are
+similar (duplicate money operations 7, 9, 7 of 18). Lexical retrieval stays the default: this is the
+second time a better ranking did not turn into better code, so the bottleneck for these tasks is not
+which notes are shown.
 
 ## Extension task X01: provider timeouts and retries (exploratory) / 扩展任务 X01：支付服务超时与重试（探索性）
 
