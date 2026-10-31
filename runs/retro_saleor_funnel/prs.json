@@ -1,0 +1,1061 @@
+{
+ "19560": {
+  "number": 19560,
+  "split": "train",
+  "title": "Add unique tie-breaker to default cursor pagination ordering",
+  "body": "Cursor pagination derives its cursor from the sorting fields in use. When a connection falls back to the model's `Meta.ordering` and that ordering is not unique, the cursor cannot identify a single row, so the \"everything after this cursor\" filter is wrong for any group of rows sharing the same values:\r\n\r\n- if the trailing ordering value is NULL, `_prepare_filter` skips the field entirely and the resulting filter matches the whole queryset, so the same page is served over and over and `endCursor` never advances;\r\n- otherwise the filter jumps past the entire group, silently dropping every remaining row in it.\r\n\r\n`productVariants` hits both cases. `ProductVariant.Meta.ordering` is `(\"sort_order\", \"sku\")`: `sort_order` is scoped per product, so it repeats across the global connection and is NULL for bulk created variants, and `sku` is optional. `Webhook.eventDeliveries` and `EventDelivery.attempts` hit the second case, as both order by `created_at` alone and deliveries fanned out for a single event are bulk created on the same timestamp.\r\n\r\nFix it once in `sort_queryset_by_default`, which every default-ordered connection routes through, by appending `pk` to the ordering when it does not already contain a primary key. `pk` is unique and never NULL, so every cursor now identifies exactly one row. Appending it does not reorder distinct keys, it only makes ties deterministic.\r\n\r\nNote that cursors gain a component, so cursors issued before this change are rejected with \"Received curs",
+  "comments": [
+   "The code looks good to me.\n\nI have doubts re. already existing cursors. This may have large blast radius across **every** client using cursors with default sorting order. On the other hand, clients are supposed to handle failures and next time you start the pagination everything will be alright."
+  ],
+  "files": [
+   "saleor/graphql/product/tests/queries/test_product_variants_query.py",
+   "saleor/graphql/utils/sorting.py",
+   "saleor/graphql/webhook/tests/queries/test_event_delivery_query.py"
+  ]
+ },
+ "19568": {
+  "number": 19568,
+  "split": "train",
+  "title": "Add setting to block customer and anonymous traffic",
+  "body": "Port of https://github.com/saleor/saleor/pull/19490",
+  "comments": [
+   "Unnecessary"
+  ],
+  "files": [
+   "AGENTS.md",
+   "CHANGELOG.md",
+   "docs/adr/0006-storefront-traffic-blocking-accepted-risks.md",
+   "docs/adr/0007-storefront-traffic-blocking-applies-to-introspection-and-auth.md",
+   "saleor/graphql/checkout/tests/benchmark/test_checkout_mutations.py",
+   "saleor/graphql/conftest.py",
+   "saleor/graphql/core/context.py",
+   "saleor/graphql/core/tests/test_view.py",
+   "saleor/graphql/schema.graphql",
+   "saleor/graphql/shop/mutations/shop_settings_update.py",
+   "saleor/graphql/shop/tests/mutations/test_shop_settings_update.py",
+   "saleor/graphql/shop/tests/queries/test_shop_allow_storefront_traffic.py",
+   "saleor/graphql/shop/types.py",
+   "saleor/graphql/storefront_traffic.py",
+   "saleor/graphql/tests/test_storefront_traffic.py",
+   "saleor/graphql/tests/test_tracing.py",
+   "saleor/graphql/views.py",
+   "saleor/site/migrations/0052_sitesettings_allow_storefront_traffic.py",
+   "saleor/site/models.py",
+   "saleor/tests/settings.py"
+  ]
+ },
+ "19569": {
+  "number": 19569,
+  "split": "train",
+  "title": "Assign the default customer type on non-API user-creation paths",
+  "body": "It's been mentioned in one of pull request reviews.",
+  "comments": [
+   "```suggestion                                                                                                                                                                                                    \n@pytest.fixture(autouse=True)\ndef default_customer_type(db):\n    return get_or_create_default_customer_type()\n```                                                                                                                                                                                                              \n\nI think there is an issue here that appears randomly across runs and brings flakiness. After any test marked `@pytest.mark.django_db(transaction=True)` finishes, its teardown truncates every table, and that commit takes the migration-seeded rows with it, including the default `CustomerType`. Nothing puts it back, the database then stays broken for every later run with `--reuse-db`\nFrom that point on, tests that request `default_customer_type` or create a user through `dangerously_create_test_user` are fine, but any test needing the default row without going through either one fails.                                                                                ",
+   "Flagging a consequence of making `default_customer_type` autouse: this test would then assert the fixture's row rather than the one the migration created - but it can already be unreliable"
+  ],
+  "files": [
+   "saleor/account/tests/fixtures/customer_type.py",
+   "saleor/account/tests/fixtures/user.py",
+   "saleor/account/tests/test_customer_type.py",
+   "saleor/core/utils/random_data.py",
+   "saleor/graphql/account/tests/bulk_mutations/test_customer_bulk_update.py",
+   "saleor/graphql/account/tests/queries/test_customers_where_attributes.py",
+   "saleor/graphql/account/tests/queries/test_customers_where_filtering.py",
+   "saleor/graphql/account/tests/queries/test_user_assigned_attributes.py",
+   "saleor/graphql/account/tests/queries/test_user_customer_type.py"
+  ]
+ },
+ "19574": {
+  "number": 19574,
+  "split": "train",
+  "title": "Delete unique attribute values when deleting users",
+  "body": "User deletion cascades away `AssignedUserAttributeValue` rows, but the `AttributeValue` rows of unique-value input types (plain text, rich text, file, reference, numeric, date, datetime) are created per user and were left orphaned - including values hidden by customer type rules. Such values are user-entered and can contain PII, which must not survive the user it belongs to.\r\n",
+  "comments": [
+   "I think that for `FILE` attributes this deletes the `AttributeValue` row but leaves the uploaded file in object storage. There is `delete_from_storage_task`, but I don't see it triggered for `AttributeValue` anywhere, so the file most likely outlives the user it describes, and it can potentially contain PII.      \n\nI don't think it's easy to fix here: `productDelete`, `pageDelete` and `attributeValueDelete` orphan files the same way, so I believe we need a general solution for this problem for all `AttributeValue`s rather than a user-specific one - probably as a separate PR",
+   "`ProductDelete.delete_assigned_attribute_values` and `PageBulkDelete.delete_assigned_attribute_values` lock the values with `attribute_value_qs_select_for_update()` before deleting them, and `attributeDelete` does the same with an explicit \"prevent concurrent modifications\" comment - should this path lock too?"
+  ],
+  "files": [
+   "saleor/attribute/utils.py",
+   "saleor/graphql/account/bulk_mutations/customer_bulk_delete.py",
+   "saleor/graphql/account/bulk_mutations/staff_bulk_delete.py",
+   "saleor/graphql/account/mutations/account/account_delete.py",
+   "saleor/graphql/account/mutations/staff/customer_delete.py",
+   "saleor/graphql/account/mutations/staff/staff_delete.py",
+   "saleor/graphql/account/tests/bulk_mutations/test_customer_bulk_delete.py",
+   "saleor/graphql/account/tests/bulk_mutations/test_staff_bulk_delete.py",
+   "saleor/graphql/account/tests/mutations/account/test_account_delete.py",
+   "saleor/graphql/account/tests/mutations/staff/test_customer_delete.py",
+   "saleor/graphql/account/tests/mutations/staff/test_staff_delete.py"
+  ]
+ },
+ "19595": {
+  "number": 19595,
+  "split": "train",
+  "title": "Fix permission checks for attribute value and bulk mutations to respect attribute type",
+  "body": "> [!WARNING]\r\n> To be backported.\r\n\r\n Makes the attribute mutations resolve their required permission from the attribute's type.\r\n\r\n| Mutation | Before |\r\n|---|---|\r\n| `attributeBulkDelete` | `MANAGE_PAGE_TYPES_AND_ATTRIBUTES` |\r\n| `attributeValueBulkDelete` | `MANAGE_PAGE_TYPES_AND_ATTRIBUTES` |\r\n| `attributeValueCreate` | `MANAGE_PRODUCTS` |\r\n| `attributeValueUpdate` | `MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES` |\r\n| `attributeValueDelete` | `MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES` |\r\n| `attributeReorderValues` | `MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES` |\r\n\r\nNow: `MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES` for `PRODUCT_TYPE` attributes, `MANAGE_PAGE_TYPES_AND_ATTRIBUTES` for `PAGE_TYPE` attributes, mixed bulk batches require both.\r\n",
+  "comments": [
+   "When a new attribute type arrives and `ATTRIBUTE_TYPE_PERMISSION_MAP` is not extended, this lookup raises an unhandled `KeyError` and a 500 for the client. Maybe we should handle it gracefully: when the type is unmapped, emit row error as for a missing permission? That stays fail-closed (the row is rejected either way) but is visible to the client instead of crashing the whole batch. The same lookup exists in `attribute_bulk_update.py`",
+   "```suggestion                                                                                                                                                                                                    \n    attribute_types_set = set(attribute_types)\n    if attribute_types_set - ATTRIBUTE_TYPE_PERMISSION_MAP.keys():\n        raise PermissionDenied(permissions=tuple(ATTRIBUTE_TYPE_PERMISSION_MAP.values()))\n```                                                                                                                                                                                                              \nIf we forget to extend the map after introducing Customer Types or any other new type in the future, e.g. `attributeBulkDelete` of a customer attribute would pass this check silently, letting a user with only `MANAGE_PAGE_TYPES_AND_ATTRIBUTES` delete it"
+  ],
+  "files": [
+   "saleor/graphql/attribute/bulk_mutations.py",
+   "saleor/graphql/attribute/mutations/attribute_bulk_create.py",
+   "saleor/graphql/attribute/mutations/attribute_bulk_update.py",
+   "saleor/graphql/attribute/mutations/attribute_create.py",
+   "saleor/graphql/attribute/mutations/attribute_delete.py",
+   "saleor/graphql/attribute/mutations/attribute_reorder_values.py",
+   "saleor/graphql/attribute/mutations/attribute_update.py",
+   "saleor/graphql/attribute/mutations/attribute_value_create.py",
+   "saleor/graphql/attribute/mutations/attribute_value_delete.py",
+   "saleor/graphql/attribute/mutations/attribute_value_update.py",
+   "saleor/graphql/attribute/mutations/permissions.py",
+   "saleor/graphql/attribute/tests/mutations/test_attribute_bulk_create.py",
+   "saleor/graphql/attribute/tests/mutations/test_attribute_bulk_update.py",
+   "saleor/graphql/attribute/tests/mutations/test_attribute_delete.py",
+   "saleor/graphql/attribute/tests/mutations/test_attribute_reorder_values.py",
+   "saleor/graphql/attribute/tests/mutations/test_attribute_value_create.py",
+   "saleor/graphql/attribute/tests/mutations/test_attribute_value_delete.py",
+   "saleor/graphql/attribute/tests/mutations/test_attribute_value_update.py",
+   "saleor/graphql/attribute/tests/mutations/test_bulk_delete.py",
+   "saleor/graphql/schema.graphql"
+  ]
+ },
+ "19599": {
+  "number": 19599,
+  "split": "train",
+  "title": "Add missing entry for permission checks changes",
+  "body": "Also added fix for a problem found when reviewing backports.",
+  "comments": [
+   "```suggestion\n  - `attributeValueCreate` \u2014 previously `MANAGE_PRODUCTS`; `PRODUCT_TYPE` attributes now require `MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES` and `PAGE_TYPE` attributes now require `MANAGE_PAGE_TYPES_AND_ATTRIBUTES`\n```"
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/graphql/attribute/mutations/attribute_value_update.py",
+   "saleor/graphql/attribute/tests/mutations/test_attribute_value_update.py"
+  ]
+ },
+ "19564": {
+  "number": 19564,
+  "split": "train",
+  "title": "Fix pageAttributeAssign crash on nonexistent attribute IDs and fix productAttributeAssign's existence check",
+  "body": "> [!IMPORTANT]\r\n> To be backported.\r\n\r\n`pageAttributeAssign` only checked attribute type and prior assignment, both via filters that silently drop missing pks, so a decoded but nonexistent attribute ID passed validation and blew up on the FK constraint in `page_type.page_attributes.add()` \u2014 an `IntegrityError` surfacing as HTTP 500. Any client sending a stale ID (e.g. racing an `attributeDelete`) could trigger it.\r\n\r\n`clean_attributes` now fetches pk/type pairs once, reports missing pks with a `NOT_FOUND` error (matching `productAttributeAssign`), and derives the existing wrong-type check from the same fetch, keeping the query count flat.\r\n\r\nAlso fix `productAttributeAssign`'s existence check: it diffed string input pks against int DB pks, so any missing attribute caused every input ID to be reported as missing instead of only the absent ones.",
+  "comments": [
+   "I believe that set difference is simpler to read, and I believe we still have some typing issues to resolve (I believe we have them in lot of places), but saying all of that I believe your change will work and will prevent us from running into constraint error on DB layer.",
+   "I don't know why we need in both places to `str(pk)`. I believe `graphene.Node.to_global_id()` doesn't require `str`, can live just fine with `int`.\nAlso we could simplify these 2 lines with set difference:\n\n```suggestion\n        # check if all attributes exist\n        missing_pks = set(attr_pks) - set(attr_type_by_pk.keys())\n```",
+   "I believe we may have to \n```suggestion\n        # check if all attributes exist\n        missing_pks = set(int(pk) for pk in attr_pks) - set(attr_type_by_pk.keys())\n```\nas typing of `attr_pks: list[int]` looks broken here (should be `attr_pks: list[str]`",
+   "Also this change only guard as before staled attribute ids on client side, as we haven't encapsulate `perform_migration` inside DB transaction, it may still happen that we will have raise, where between fetching ids in 49-50 line and `page_type.page_attributes.add(*attr_pks)` in line 122 somebody will delete attribute from database.",
+   "This also may benefit from simplicity of\n\n```suggestion\n        found_pks = attribute_models.Attribute.objects.filter(\n                pk__in=attrs_pk\n            ).values_list(\"pk\", flat=True)\n        }\n        missing_pks = set(int(pk) for pk in attrs_pk) - set(found_pks)\n```\n(here I again use `int()` on top of these keys, but here we don't define types on arguments to that method. We may also (more safely) do type casting the other way (using `str()` here), as theoretically passed ID can be either `int` or `UUID` and I don't know if we catch `UUID` for `Attribute.id` as invalid before."
+  ],
+  "files": [
+   "saleor/graphql/page/mutations/page_attribute_assign.py",
+   "saleor/graphql/page/tests/mutations/test_page_attribute_assign.py",
+   "saleor/graphql/product/mutations/attributes.py",
+   "saleor/graphql/product/tests/test_attributes.py"
+  ]
+ },
+ "19615": {
+  "number": 19615,
+  "split": "train",
+  "title": "Fix DB locks - never-evaluated `select_for_update` querysets",
+  "body": "While working on other stuff, I found locking code where the `select_for_update` queryset was built and assigned but never evaluated. Querysets are lazy, so no SQL ran at all - no `FOR UPDATE` lock was taken and the `bulk_update` that followed ran unlocked, in arbitrary row order (deadlock risk against other writers)\r\n\r\n- Fixed by forcing evaluation with `list(...)` inside the transaction\r\n- Added the `assert_locks_rows_before_write` fixture, which asserts an ordered\r\n  `FOR UPDATE` query runs before the `UPDATE` - to catch missing locks\r\n- Documented the pitfall in `AGENTS.md`\r\n\r\n<!-- Please mention all relevant issue numbers. -->\r\n<!-- GitHub issue number is required for external contributions. -->\r\n\r\n# Impact\r\n\r\n- [ ] New migrations\r\n- [ ] New/Updated API fields or mutations\r\n- [ ] Deprecated API fields or mutations\r\n- [ ] Removed API types, fields, or mutations\r\n\r\n# Docs\r\n\r\n<!-- Docs are stored in a separate repository: https://github.com/saleor/saleor-docs/. -->\r\n<!-- Please provide a link to the PR that updates documentation for your changes. -->\r\n<!-- If changes in docs are not required, please mention that in the description. -->\r\n\r\n- [ ] Link to documentation:\r\n\r\n# Pull Request Checklist\r\n\r\n<!-- Please keep this section. It will make the maintainer's life easier. -->\r\n\r\n- [ ] Privileged queries and mutations are either absent or guarded by proper permission checks\r\n- [ ] Database queries are optimized and the number of queries is constant\r\n- [ ] Database migrations a",
+  "comments": [
+   "Currently `attribute_value_qs_select_for_update` sorts objects in a following order `\"sort_order\", \"pk\"`. This doesn't seem to be stable sequence to rely on because `sort_order` may get mutated. I don't see how this could bite us in the future but maybe we could just streamline this locker with all the others? Other lockers are consistently using `pk` for ordering.\n\nLack of list(...) rendered this code no-op therefore this code was harmless."
+  ],
+  "files": [
+   "AGENTS.md",
+   "saleor/attribute/lock_objects.py",
+   "saleor/attribute/models/base.py",
+   "saleor/attribute/tests/models/test_base.py",
+   "saleor/checkout/lock_objects.py",
+   "saleor/checkout/search/indexing.py",
+   "saleor/checkout/tests/test_search_indexing.py",
+   "saleor/page/lock_objects.py",
+   "saleor/page/search.py",
+   "saleor/page/tests/test_search.py",
+   "saleor/tests/fixtures.py"
+  ]
+ },
+ "19584": {
+  "number": 19584,
+  "split": "train",
+  "title": "Complete deprecation of Export mutations",
+  "body": "We have \"export\" mutations deprecated but events/subscriptions are not. So technically let's depracate them too so [we can legally remove them in 3.24](https://github.com/saleor/saleor/pull/19583)\r\n\r\nPort to [main](https://github.com/saleor/saleor/pull/19663)",
+  "comments": [
+   "Consider adding `deprecation_reason=...` to the three `export = graphene.Field(...)` declarations to mark them with deprecated directive in schema.\n\n- https://github.com/saleor/saleor/blob/5cc44d1bdc71c63b472dfb5b9ab5da71453902e1/saleor/graphql/webhook/subscription_types.py#L757-L763\n- https://github.com/saleor/saleor/blob/5cc44d1bdc71c63b472dfb5b9ab5da71453902e1/saleor/graphql/webhook/subscription_types.py#L1238-L1244\n- https://github.com/saleor/saleor/blob/5cc44d1bdc71c63b472dfb5b9ab5da71453902e1/saleor/graphql/webhook/subscription_types.py#L2565-L2571"
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/graphql/core/descriptions.py",
+   "saleor/graphql/schema.graphql",
+   "saleor/graphql/webhook/enums.py",
+   "saleor/graphql/webhook/subscription_types.py"
+  ]
+ },
+ "19664": {
+  "number": 19664,
+  "split": "train",
+  "title": "Deprecate the preorder GraphQL API",
+  "body": "Preorder API is legacy and not used according to our metrics. Time to deprecate it so we can remove it in next minor\r\n\r\n[Dashboard leftovers removal](https://github.com/saleor/saleor-dashboard/pull/6837)",
+  "comments": [
+   "LGTM \ud83d\ude80"
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/graphql/core/descriptions.py",
+   "saleor/graphql/core/enums.py",
+   "saleor/graphql/order/filters.py",
+   "saleor/graphql/product/bulk_mutations/product_variant_bulk_update.py",
+   "saleor/graphql/product/filters/product.py",
+   "saleor/graphql/product/filters/product_variant.py",
+   "saleor/graphql/product/mutations/channels.py",
+   "saleor/graphql/product/mutations/product_variant/product_variant_create.py",
+   "saleor/graphql/product/mutations/product_variant/product_variant_preorder_deactivate.py",
+   "saleor/graphql/product/schema.py",
+   "saleor/graphql/product/types/channels.py",
+   "saleor/graphql/product/types/products.py",
+   "saleor/graphql/schema.graphql"
+  ]
+ },
+ "19671": {
+  "number": 19671,
+  "split": "train",
+  "title": "Deprecate remaining API surface of the storefront attributes presentation",
+  "body": "Saleor doesn't tell Storefront what to show, this field is deprecated for a long time. PR deprecates connected fields. In 3.24 we will remove them\r\n\r\nAttributes contain metadata which can be use to pass extra meta to each attribute (or storefront can control it entirely)",
+  "comments": [
+   "Should `filterableInDashboard` join this deprecation set? It seems to be in the same category as the three flags deprecated here. From a quick search of the dashboard codebase it is not used for any filtering/read logic (it is included in the `attributeCreate`/`attributeUpdate` input, so the deprecation would require some cleanup there). If this is a wrong assumption, or you prefer to keep this PR storefront-scoped, I am fine with deprecating it separately"
+  ],
+  "files": [
+   "saleor/graphql/attribute/descriptions.py",
+   "saleor/graphql/attribute/filters.py",
+   "saleor/graphql/attribute/mutations/attribute_create.py",
+   "saleor/graphql/attribute/mutations/attribute_update.py",
+   "saleor/graphql/attribute/sorters.py",
+   "saleor/graphql/attribute/tests/queries/test_attribute_filter.py",
+   "saleor/graphql/attribute/types.py",
+   "saleor/graphql/schema.graphql"
+  ]
+ },
+ "19667": {
+  "number": 19667,
+  "split": "train",
+  "title": "Enforce gift card customer assignment in the transaction flow",
+  "body": "Enforces gift card customer assignment in `transactionInitialize`, matching `checkoutAddPromoCode`:\n\n- restricted cards require the assigned authenticated customer and otherwise return a generic error;\n- cards backing checkout transactions cannot be reassigned;\n- full cancellation releases the card atomically.\n\nFixes #19612  \n[ENG-1746](https://linear.app/saleor/issue/ENG-1746/enforce-gift-card-customer-assignment-in-the-transaction-flow)",
+  "comments": [
+   "Please do update docs (https://docs.saleor.io/developer/gift-cards#gift-cards-as-payment-method).",
+   "This function is called with `source_object: Checkout | Order` which then gets named `checkout_user_id: int | None`. It's very much confusing."
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/giftcard/gateway.py",
+   "saleor/giftcard/models.py",
+   "saleor/giftcard/tests/test_utils.py",
+   "saleor/giftcard/utils.py",
+   "saleor/graphql/payment/tests/mutations/test_transaction_initialize.py",
+   "saleor/graphql/payment/tests/mutations/test_transaction_request_action.py"
+  ]
+ },
+ "19680": {
+  "number": 19680,
+  "split": "train",
+  "title": "Allow manifest URLs up to 2048 characters",
+  "body": "Previous limit was unreasonable - restore standard GET limit. This allows app to provide configurable manifest with parameters\r\n\r\nport https://github.com/saleor/saleor/pull/19681",
+  "comments": [
+   "Out of scope for this PR, but the sibling URL columns on `App` (`app_url`, `configuration_url`, `data_privacy_url`, `homepage_url`, `support_url`) are still default `URLField` = varchar(200), and their length is not validated before the DB insert. Maybe we could follow up with a fix that widens these columns to `URL_MAX_LENGTH` as well, and adds some length validation so it fails with a more meaningful error?"
+  ],
+  "files": [
+   "saleor/app/migrations/0041_widen_manifest_url.py",
+   "saleor/app/models.py",
+   "saleor/graphql/app/tests/mutations/test_app_install.py"
+  ]
+ },
+ "19668": {
+  "number": 19668,
+  "split": "train",
+  "title": "Serialize MPTT tree writes with a Postgres advisory lock",
+  "body": "> [!NOTE]\r\n> To be backported to `3.23`.\r\n\r\nConcurrent categoryCreate/Delete and menuItemCreate/Move/Delete interleave django-mptt's lft/rght renumbering and corrupt the tree (products leaking between sibling categories, false ancestors). Take a transaction-scoped pg_advisory_xact_lock before every structural tree write, as mptt requires callers to ensure mutual exclusivity.\r\n\r\nAdd check_category_tree command to detect corruption and repair it with --fix.\r\n",
+  "comments": [
+   "Minor: it is not a performance concern, as `import_string` should be fast after the first call (it uses caching inside) - but with such lazy resolving, any typo in `ADVISORY_LOCK_NAMESPACE_RESOLVER_IMPORT` surfaces only on the first use, inside a mutation. We have similar existing resolver-import settings (`CoreAppConfig.validate_jwt_manager`, `SiteAppConfig.setup_announcements`) which are resolved at startup instead, and I think we should consider following such pattern",
+   "```suggestion\n            new_parent._mptt_refresh()\n```\nMaybe we can use `new_parent._mptt_refresh()` here? It is a private method, but we are already using one (`_mptt_meta.update_mptt_cached_fields(menu_item)` above), it is what mptt itself calls in `insert_node` to refresh the target, and it should be more future-proof against any change to the mptt field set than the hardcoded field tuple - but this is just a suggestion",
+   "```suggestion\n# Arbitrary (not derived from anything) 32-bit integer identifying Saleor's\n# advisory locks globally within a database.\nADVISORY_LOCK_NAMESPACE = 21_218                                        \n  ```                                                                                                                                                                                                              \n\nMaybe worth a short comment that this value is an arbitrary (not derived from anything) 32-bit integer that is used to identify the lock globally",
+   "Both tests exercise only the `partial_rebuild` route, and the `needs_full_rebuild` branch most likely never runs in tests. I think it is worth adding as it should be cheap to cover"
+  ],
+  "files": [
+   "docs/adr/0009-mptt-tree-writes-serialized-by-advisory-lock.md",
+   "saleor/core/apps.py",
+   "saleor/core/db/locks.py",
+   "saleor/core/db/tests/test_locks.py",
+   "saleor/core/management/commands/check_mptt_trees.py",
+   "saleor/core/tests/commands/test_check_mptt_trees.py",
+   "saleor/core/tests/test_apps.py",
+   "saleor/core/utils/random_data.py",
+   "saleor/graphql/menu/mutations/menu_create.py",
+   "saleor/graphql/menu/mutations/menu_item_create.py",
+   "saleor/graphql/menu/mutations/menu_item_delete.py",
+   "saleor/graphql/menu/mutations/menu_item_move.py",
+   "saleor/graphql/menu/tests/mutations/test_menu_create.py",
+   "saleor/graphql/menu/tests/mutations/test_menu_item_create.py",
+   "saleor/graphql/menu/tests/mutations/test_menu_item_delete.py",
+   "saleor/graphql/menu/tests/mutations/test_menu_item_move.py",
+   "saleor/graphql/product/mutations/category/category_create.py",
+   "saleor/graphql/product/tests/mutations/test_category_create.py",
+   "saleor/graphql/product/tests/mutations/test_category_delete.py",
+   "saleor/graphql/product/tests/test_bulk_delete.py",
+   "saleor/menu/lock_objects.py",
+   "saleor/product/lock_objects.py",
+   "saleor/product/utils/__init__.py",
+   "saleor/settings.py",
+   "saleor/tests/fixtures.py"
+  ]
+ },
+ "19698": {
+  "number": 19698,
+  "split": "train",
+  "title": "Upgrade uvicorn to 0.52.1",
+  "body": "There are newer versions but they're excluded due to `exclude-newer`.",
+  "comments": [
+   "\ud83e\udd1e"
+  ],
+  "files": [
+   "pyproject.toml",
+   "uv.lock"
+  ]
+ },
+ "19674": {
+  "number": 19674,
+  "split": "train",
+  "title": "Remove the deprecated preorder GraphQL API",
+  "body": "Preorder was deprecated in 3.23 (#19664, #19670) as legacy and unused.\r\nRemove the whole deprecated API surface:\r\n\r\n- Mutation productVariantPreorderDeactivate and the\r\n  ProductVariantPreorderDeactivate type.\r\n- Types PreorderData (ProductVariant.preorder) and PreorderThreshold\r\n  (ProductVariantChannelListing.preorderThreshold), with their resolvers.\r\n- Input PreorderSettingsInput and the preorder field on ProductVariantInput,\r\n  ProductVariantCreateInput, ProductVariantBulkCreateInput and\r\n  ProductVariantBulkUpdateInput, along with the cleaning and save paths that\r\n  wrote is_preorder, preorder_global_threshold and preorder_end_date.\r\n- Input field preorderThreshold on ProductVariantChannelListingAddInput and\r\n  ChannelListingUpdateInput, with the write paths that set\r\n  preorder_quantity_threshold.\r\n- Filters hasPreorderedVariants (ProductFilterInput, ProductWhereInput) and\r\n  isPreorder (ProductVariantFilterInput, OrderFilterInput).\r\n- Error code PREORDER_VARIANT_CANNOT_BE_DEACTIVATED on ProductErrorCode.\r\n\r\nThe domain layer is untouched: preorder allocations and reservations, the\r\nfulfillment guard, the quantityAvailable calculation and the celery task that\r\ndeactivates a preorder once its end date passes all stay, so variants already\r\nin preorder keep working. The database columns will be dropped in a later\r\nrelease. Pre-sales can be modelled with regular stock instead: create the\r\nplanned quantity in a warehouse, or set trackInventory to false to sell\r\nwithout a stoc",
+  "comments": [
+   "> a preorder with an end date is still deactivated automatically once that date passes\n\nVariants with `preorder_end_date` not set will never deactivate. Is this a problem?"
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/graphql/core/descriptions.py",
+   "saleor/graphql/core/enums.py",
+   "saleor/graphql/order/filters.py",
+   "saleor/graphql/order/tests/queries/test_order_with_filter.py",
+   "saleor/graphql/product/bulk_mutations/product_variant_bulk_create.py",
+   "saleor/graphql/product/bulk_mutations/product_variant_bulk_update.py",
+   "saleor/graphql/product/filters/product.py",
+   "saleor/graphql/product/filters/product_helpers.py",
+   "saleor/graphql/product/filters/product_variant.py",
+   "saleor/graphql/product/mutations/__init__.py",
+   "saleor/graphql/product/mutations/channels.py",
+   "saleor/graphql/product/mutations/product_variant/__init__.py",
+   "saleor/graphql/product/mutations/product_variant/product_variant_cleaner.py",
+   "saleor/graphql/product/mutations/product_variant/product_variant_create.py",
+   "saleor/graphql/product/mutations/product_variant/product_variant_preorder_deactivate.py",
+   "saleor/graphql/product/mutations/product_variant/product_variant_update.py",
+   "saleor/graphql/product/mutations/utils.py",
+   "saleor/graphql/product/schema.py",
+   "saleor/graphql/product/tests/deprecated/test_product_variant_bulk_create.py",
+   "saleor/graphql/product/tests/mutations/test_product_variant_bulk_create.py",
+   "saleor/graphql/product/tests/mutations/test_product_variant_bulk_update.py",
+   "saleor/graphql/product/tests/mutations/test_product_variant_create.py",
+   "saleor/graphql/product/tests/mutations/test_product_variant_preorder_deactivate.py",
+   "saleor/graphql/product/tests/mutations/test_product_variant_update.py",
+   "saleor/graphql/product/tests/queries/test_product_variant_query.py",
+   "saleor/graphql/product/tests/queries/test_products_query_with_filter.py",
+   "saleor/graphql/product/tests/queries/test_products_query_with_where.py",
+   "saleor/graphql/product/tests/test_variant_channel_listing_update.py",
+   "saleor/graphql/product/tests/test_variant_with_filtering.py",
+   "saleor/graphql/product/types/channels.py",
+   "saleor/graphql/product/types/products.py",
+   "saleor/graphql/schema.graphql",
+   "saleor/order/tests/fixtures/order.py",
+   "saleor/product/error_codes.py",
+   "saleor/product/models.py",
+   "saleor/warehouse/models.py"
+  ]
+ },
+ "19678": {
+  "number": 19678,
+  "split": "train",
+  "title": "Limit the number of pixels of images we decode",
+  "body": "\r\n\r\n`MAX_IMAGE_FILE_SIZE` bounds the *encoded* size of an image, which says nothing about the memory needed to decode it. An 8000\u00d78000 WebP is 0.11 MB on disk but needs ~1 GB of RAM to decode. Pillow's built-in guard doesn't help at defaults: it warns above ~89M pixels and only raises above twice that, so a 64M-pixel image passes silently.\r\n\r\nThis PR adds a `MAX_IMAGE_PIXELS` setting (default 30M \u2248 5000\u00d75000, configurable via env var) enforced through `Image.MAX_IMAGE_PIXELS`, so it covers every place we decode an image. The check runs while parsing the image header, so an oversized image is rejected before any pixel memory is allocated.\r\n\r\n## Before\r\n\r\n- An image was only validated by encoded file size (10 MB), so a tiny highly-compressed file with a huge pixel count passed validation.\r\n- Decoding such an image (e.g. thumbnail generation) could exhaust the worker's memory.\r\n- Pillow's `DecompressionBombWarning`/`Error` fired only at ~89M/178M pixels, with no reference to which object was being processed.\r\n\r\n## After\r\n\r\n- Any decode of an image above `MAX_IMAGE_PIXELS` raises immediately at header-parse time, without allocating decode memory.\r\n- **Uploads** (product/collection/user media): rejected with the existing `FILE_SIZE_LIMIT_EXCEEDED` error code \u2014 no GraphQL schema change.\r\n- **Thumbnail view**: returns `400 Image is too large.` for a stored oversized image.\r\n- **`fetch_product_media_image_task`**: treats it as an expected, non-retryable failure (new `ImageTooLargeErr",
+  "comments": [
+   "We are eating the original exception from PIL which contains information about the image itself: https://github.com/python-pillow/Pillow/blob/807d689a83738027b6f6e0f219a6a6dd30e01c08/src/PIL/Image.py#L3559-L3564\r\n\r\nThis gives us important information which this PR replace with unactionable information (the filename - knowing the file name tells us very little)\r\n\r\nChange requested:\r\n- Keep the original error message when reraising and log it (inside the `logger.warnings(...)` that you added)\r\n- Keep the filename in log entries (what you currently do) - while it's not helpful information by itself, when collaborating with users or customers, that filename can become handy (as knowing the number of pixels inside that image is not helpful when talking human-to-human \ud83d\ude09)",
+   "The unit test covers `clean_image_file` directly, but there is no mutation-level test proving an oversized attachment upload (e.g. `productMediaCreate`) returns `FILE_SIZE_LIMIT_EXCEEDED` with the readable message. Since the upload rejection is the user-facing part of this change, could you add an end-to-end regression test for it?",
+   "Could you move this to https://github.com/saleor/saleor/blob/030c1676145d63154687fa394d1a4abb224b1ac2/saleor/core/apps.py#L14-L20? This doesn't belong inside the settings file",
+   "The original error message shouldn't be exposed to users:\r\n```suggestion\r\n            \"Invalid file. The image exceeds the maximum allowed number of pixels\",\r\n```\r\n\r\nIf you meant to show the number of allowed pixels, you can use the `settings.MAX_IMAGE_PIXELS` instead",
+   "Likewise, shouldn't expose the original error message",
+   "Missing `sanitize_url_for_logging()`:\n\n```suggestion\n                \"image_source\": sanitize_url_for_logging(product_media.external_url),\n```\n\nDo we need to log the URL though? This can potentially contain sensitive information in the URL (even if we drop the username & password fields)",
+   "```suggestion\n            sanitize_url_for_logging(product_media.external_url),\n```"
+  ],
+  "files": [
+   "saleor/core/apps.py",
+   "saleor/graphql/core/tests/test_file_validation.py",
+   "saleor/graphql/core/validators/file.py",
+   "saleor/graphql/product/tests/mutations/test_product_media_create.py",
+   "saleor/product/tasks.py",
+   "saleor/product/tests/test_tasks.py",
+   "saleor/product/utils/tasks_utils.py",
+   "saleor/settings.py",
+   "saleor/tests/test_image_pixel_limit.py",
+   "saleor/thumbnail/exceptions.py",
+   "saleor/thumbnail/tests/test_views.py",
+   "saleor/thumbnail/utils.py",
+   "saleor/thumbnail/validators.py",
+   "saleor/thumbnail/views.py"
+  ]
+ },
+ "19709": {
+  "number": 19709,
+  "split": "train",
+  "title": "Delete detached FILE attribute values in object update mutations so cients no longer need the permission-restricted attributeValueDelete to clean up after replacing or clearing a file",
+  "body": "> [!NOTE]\r\n> To be ported to `main` and maybe `3.22`. ",
+  "comments": [
+   "I am not sure if it is wrong - as this flow (`productUpdate` etc.) never fired `ATTRIBUTE_VALUE_CREATED` when it created the file value - but there is an asymmetry with `attributeValueDelete`, which fires the `ATTRIBUTE_VALUE_DELETED` and `ATTRIBUTE_UPDATED` webhooks on row deletion. Maybe we are ok with that, just want to point it out so we are not overlooking something",
+   "Could we also add a `pageUpdate` replace/clear case? The cleanup applies to pages too, but they didn't get their own test like product, variant and customer each did"
+  ],
+  "files": [
+   "saleor/graphql/attribute/tests/mutations/test_file_value_cleanup.py",
+   "saleor/graphql/attribute/utils/attribute_assignment.py",
+   "saleor/graphql/attribute/utils/shared.py"
+  ]
+ },
+ "19715": {
+  "number": 19715,
+  "split": "train",
+  "title": "feat(images): add size limits",
+  "body": "This adds support for limiting the size of images uploaded prior to loading them. This is a further improvement to #19678 \r\n\r\n<!-- Please mention all relevant issue numbers. -->\r\n<!-- GitHub issue number is required for external contributions. -->\r\n\r\n# Impact\r\n\r\n- [ ] New migrations\r\n- [ ] New/Updated API fields or mutations\r\n- [ ] Deprecated API fields or mutations\r\n- [ ] Removed API types, fields, or mutations\r\n\r\n# Docs\r\n\r\n<!-- Docs are stored in a separate repository: https://github.com/saleor/saleor-docs/. -->\r\n<!-- Please provide a link to the PR that updates documentation for your changes. -->\r\n<!-- If changes in docs are not required, please mention that in the description. -->\r\n\r\n- [ ] Link to documentation: N/A - this only fills a gap and re-uses the existing `MAX_IMAGE_FILE_SIZE` setting\r\n\r\n# Pull Request Checklist\r\n\r\n<!-- Please keep this section. It will make the maintainer's life easier. -->\r\n\r\n- [ ] Privileged queries and mutations are either absent or guarded by proper permission checks\r\n- [ ] Database queries are optimized and the number of queries is constant\r\n- [ ] Database migrations are either absent or optimized for zero downtime\r\n- [ ] The changes are covered by test cases\r\n- [ ] All new fields/inputs/mutations have proper labels added (`ADDED_IN_X`, `PREVIEW_FEATURE`, etc.)\r\n- [ ] All migrations have proper dependencies\r\n- [ ] All indexes are added concurrently in migrations\r\n- [ ] All RunSql and RunPython migrations have revert option defined\r\n",
+  "comments": [
+   "A malformed `Content-Length` becomes a `ValueError`, and in `fetch_product_media_image_task` that's the \"give up without retrying\" signal (it's in `throws=`, so no retry, and `on_failure_fetch_product_media_image_task` deletes the `ProductMedia` row).\n\nBut a garbage length header is very likely server/proxy defect, not a bad image, and the same URL may be fine on the next attempt. Note: requests joins repeated headers with `\", \"`, so a proxy emitting `Content-Length` twice yields e.g. \"100, 100\" and the media gets destroyed.\n\n`validate_status_code` already makes this distinction deliberately: 5xx raises `HTTPError` so `autoretry_for=(IOError,)` picks it up. Transport-level issues belongs in the same bucket imo?\n\n```suggestion\n    except ValueError as exc:\n        raise HTTPError(\"Received an invalid content-length header\") from exc\n```",
+   "How about `-1` (or any other negative int)? It would slip past the `try/except declared_file_size` above and also will not be caught by this `if`.",
+   "Not blocking, more of a nitpick?\n\nThis block and the `ImageTooLargeError` one below at L471-485 are now the same 15 lines twice, differing in the message and one `extra` key. And they cover 2 of the 4 rejection paths: `validate_status_code` (non-2xx) and `validate_content_type_header` also raise `ValueError` and log nothing structured, so `image_source`/`object_pk` show up for some rejections and not others.\n\nSince `ImageTooLargeError` subclasses `ValueError` and everything retryable is an `IOError`, a single `except ValueError` around the whole fetch-and-validate body would cover all four uniformly with `error_type: type(error).__name__` carrying what the separate messages encode. Probably its own PR rather than this one, given [#19678](https://github.com/saleor/saleor/pull/19678) was just merged?",
+   "The multi-chunk accumulation in `file_data.tell() + len(chunk) > max_file_size` is only exercised on the failing side. This test uses `max_file_size=1` with `[b\"a\", b\"b\"]`, so it trips on chunk 2, and `test_..._file_size_at_limit` (L636) passes a single chunk. Nothing covers chunks summing successfully to exactly the limit, which is where an off-by-one in that expression would show up.\n\nWDYT about parametrize case with `max_file_size=2`, `content_chunks=[b\"a\", b\"b\"]` and expected no rejection?"
+  ],
+  "files": [
+   "saleor/core/utils/__init__.py",
+   "saleor/product/tasks.py",
+   "saleor/product/tests/test_tasks.py",
+   "saleor/product/utils/tasks_utils.py"
+  ]
+ },
+ "19694": {
+  "number": 19694,
+  "split": "train",
+  "title": "Remove the attribute presentation flags from the ORM",
+  "body": "Second stage of dropping `filterable_in_storefront`, `filterable_in_dashboard`, `available_in_grid` and `storefront_search_position`. Their GraphQL surface was removed in #19675; this de-registers the fields from the `Attribute` model while the columns stay in the database.\r\n\r\nMigration 0059 uses `SeparateDatabaseAndState`: the state operations remove the four fields, and the database operations only make the columns nullable, so pods still running the previous version keep finding them during a rolling deploy while the new ORM, which omits them from INSERTs, can still write rows. Dropping the columns is a follow-up release (3.25), tracked by a TODO in the migration.\r\n\r\nDefault ordering of `Attribute` becomes `slug` alone, as it used to lead with `storefront_search_position`. This is observable for `attributes` queries without an explicit `sortBy`, so it is noted in the CHANGELOG, and the pagination tests that relied on the old order are updated.\r\n\r\nAlso strips the flags from the test fixtures and from `populatedb_data.json`, whose entries are passed straight into `Attribute.objects.update_or_create()`.\r\n",
+  "comments": [
+   "```suggestion\n- The default ordering of attributes is now `slug` alone. Previously the `attributes(...)` query (and other places listing attributes without an explicit `sortBy`) returned them ordered by `storefrontSearchPosition` first, settable through `attributeCreate` and `attributeUpdate`. If you relied on that field to control the order of attributes, it is no longer honored; sort them in the storefront or keep the position in `Attribute` metadata instead.\n```\n  \n  I think the changelog should also tell the affected merchant what to do - whoever set `storefrontSearchPosition` via the mutations loses a curated order with no API-side replacement, since `AttributeSortField.STOREFRONT_SEARCH_POSITION` is gone too",
+   "I think a TODO comment alone won't get this done - the migration guidelines also ask for the drop to be \"tracked by an explicit follow-up issue\", not just a \"remove in X.Y\" note.\nCould you open a follow-up issue for the 3.25 column drop and reference it here in the docstring, just to be sure we don't forget about it?",
+   "```suggestion\n                migrations.AlterField(\n                    model_name=\"attribute\",\n                    name=\"filterable_in_storefront\",\n                    field=models.BooleanField(blank=True, default=False, db_default=False),\n                ),\n                migrations.AlterField(\n                    model_name=\"attribute\",\n                    name=\"filterable_in_dashboard\",\n                    field=models.BooleanField(blank=True, default=False, db_default=False),\n                ),\n                migrations.AlterField(\n                    model_name=\"attribute\",\n                    name=\"available_in_grid\",\n                    field=models.BooleanField(blank=True, default=False, db_default=False),\n                ),\n                migrations.AlterField(\n                    model_name=\"attribute\",\n                    name=\"storefront_search_position\",\n                    field=models.IntegerField(blank=True, default=0, db_default=0),\n                ),\n```\n\nI think `db_default` is safer here than `null=True`, and it's also the staged-removal pattern our migration guidelines describe (\"add a `db_default` so the DB can write the column without the ORM\"). With nul",
+   "fine by me"
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/attribute/migrations/0059_remove_attribute_presentation_flags.py",
+   "saleor/attribute/models/base.py",
+   "saleor/attribute/tests/fixtures/attribute.py",
+   "saleor/attribute/tests/model_helpers.py",
+   "saleor/graphql/attribute/tests/queries/test_attribute_filtering_with_channels.py",
+   "saleor/graphql/attribute/tests/queries/test_attribute_pagination.py",
+   "saleor/graphql/attribute/tests/queries/test_selected_attribute.py",
+   "saleor/product/tests/fixtures/product_type.py",
+   "saleor/static/populatedb_data.json"
+  ]
+ },
+ "19707": {
+  "number": 19707,
+  "split": "train",
+  "title": "Return NOT_FOUND when a product is deleted mid productMediaCreate",
+  "body": "Fixes SALEOR-CORE-8CQ https://saleor.sentry.io/issues/7693610168/\r\n\r\nwill be ported after approval",
+  "comments": [
+   "Use `@pytest.mark.django_db(transaction=True)` instead.",
+   "Since there is only one operation inside this block `transaction.atomic()` is unnecessary."
+  ],
+  "files": [
+   "saleor/graphql/product/mutations/product/product_media_create.py",
+   "saleor/graphql/product/tests/mutations/test_product_media_create.py"
+  ]
+ },
+ "19766": {
+  "number": 19766,
+  "split": "train",
+  "title": "Refresh order charge and authorize statuses when prices are recalculated",
+  "body": "## Why this matters\r\n\r\nA merchant reported an order stuck showing **Overcharged** even though the customer paid exactly the order total. Everything in the API agreed with itself \u2014 `total.gross == totalCharged`, `grantedRefunds: []`, `totalBalance: 0`, a single transaction with a single `pspReference` \u2014 and yet the stored `chargeStatus` said `OVERCHARGED`.\r\n\r\nThis is not cosmetic. `Order.chargeStatus` is a denormalized column, not a computed field, so a wrong value:\r\n\r\n- shows the order as a payment discrepancy in the Dashboard (order list badge, priority marker),\r\n- is queryable, so it silently poisons `OrderFilterInput.chargeStatus` and any staff workflow or app automation that reconciles payments,\r\n- **never self-heals** \u2014 the status is only recomputed when a payment event arrives, and an order that is already paid gets no further events. Once the order leaves draft status it is frozen in the wrong state forever.\r\n\r\nStaff end up investigating, or refunding, a discrepancy that does not exist.\r\n\r\n## Root cause\r\n\r\n`charge_status` and `authorize_status` are derived from `total_gross_amount`. For orders in `ORDER_EDITABLE_STATUS` the stored total is *deliberately allowed to be stale* \u2014 the draft mutations only flip `should_refresh_prices` (`invalidate_order_prices`), and the real total is materialized lazily on read or at completion.\r\n\r\n`process_order_prices()` persisted the recalculated totals with an `update_fields` list that omitted both statuses:\r\n\r\n```python\r\norder.save(upd",
+  "comments": [
+   "Looks good to me, great catch!\n\nI agree with keeping this PR small and limited to the fix, so it can be ported down quickly. Repairing the already affected orders needs its own PR and its own care. We have to think more about how to select the orders that need fixing. I believe potential granted refunds need to be taken into consideration. I am also not sure a straight data migration is the right tool. An alternative is a management command that first produces a report and then applies the fix on demand, like `check_mptt_trees --fix` from #19668. Happy to discuss it further.",
+   "I like the end-to-end test that recreates the full issue, it is a good guard against regressions. Could we also add a cheap unit tests next to the changed function, in `saleor/order/tests/test_calculations.py`? For example one parametrized test over three transitions of an `UNCONFIRMED` order, so that all directions are covered and not only `OVERCHARGED -> FULL`:\n- charged for a bigger total than the stored one (`OVERCHARGED`), then the order grows to match -> `FULL`\n- charged exactly the stored total (`FULL`), then the order grows -> `PARTIAL`\n- charged exactly the stored total (`FULL`), then the order shrinks -> `OVERCHARGED`"
+  ],
+  "files": [
+   "saleor/graphql/order/tests/integration/test_draft_order.py",
+   "saleor/order/calculations.py",
+   "saleor/order/tests/test_calculations.py"
+  ]
+ },
+ "19769": {
+  "number": 19769,
+  "split": "train",
+  "title": "feat: deprecate product rating API and fix attribute sorting bug",
+  "body": "When asked by merchant about product rating, I recommended to use numeric attribute instead - product rating is rather legacy thing and can be easily replaced.\r\n\r\nOnce I did that I realized there is a bug in numeric attribute sorting (lexical sorting is incorrect for numbers) - so I fixed that \r\n\r\nI decided to keep it in a single PR because bug fix is a few lines of code\r\n\r\n",
+  "comments": [
+   "This also fixes the long-open #10125",
+   "Nit-pick on the comment: the reason `Min` is the right aggregate is that a numeric attribute holds exactly one value per product (one per-instance value), so basically any aggregate will work. Worth stating, since the first question a reader asks is \"why `MIN` and not `MAX`, and what if there are several values\".",
+   "Nit-pick: `products_with_numeric_attribute` returns the attribute, not the products. Consider renaming to for example: `numeric_attribute_with_products`",
+   "If I read it correctly, this is the only test that exercises real paging - the others request 100 products in one page, so real paging never happens there. And this test is hard-coded to `ASC`. Could we parametrise it (or add a sibling) on direction, and also test the backward walk (`last` + `before`), not only `first` + `after`, asserting the same full order? It should not be much work now, it would confirm that everything behaves correctly with a flipped direction, where PostgreSQL places `NULL`s on the other end, and it would give us a strong guard against regressions in this area in the future.\nOn the same note: this is also the only real paging test that truly verifies what the next pages actually return (the cursor test in `test_products_query.py` only checks the cursor's shape, and `test_products_pagination_with_sorting_by_attribute` fetches the first page only). Could we add similar tests to this one, but for a dropdown attribute, with one product holding multiple values as the representative case? After the fix in this PR the cursor carries a `None` in the numeric slot for every such non-numeric attribute sort, so that would be a great regression guard too.",
+   "Shouldn't we mention here that pagination cursors for attribute-sorted product lists issued before the fix stops working? The cursor grew from three to four fields, so a client that continues paginating across the deploy gets a \"Received cursor is invalid\" error once and has to restart from the first page."
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/graphql/core/descriptions.py",
+   "saleor/graphql/product/bulk_mutations/product_bulk_create.py",
+   "saleor/graphql/product/mutations/product/product_create.py",
+   "saleor/graphql/product/sorters.py",
+   "saleor/graphql/product/tests/queries/test_products_query.py",
+   "saleor/graphql/product/tests/test_product_sorting_attributes.py",
+   "saleor/graphql/product/types/products.py",
+   "saleor/graphql/schema.graphql",
+   "saleor/product/managers.py",
+   "saleor/product/models.py"
+  ]
+ },
+ "19727": {
+  "number": 19727,
+  "split": "train",
+  "title": "Feat/translate media alt",
+  "body": "I want to merge this change because multilingual storefronts need localized alternative text for product media. This adds language-specific alt text translations while preserving the original `ProductMedia.alt`.\r\n\r\nCloses #19429.\r\n\r\n## What changed\r\n\r\n- Added the `ProductMediaTranslation` model and migration `0206_product_media_translation`.\r\n- Added `productMediaTranslate` with `ProductMediaTranslationInput`, a dedicated error type, and the `MANAGE_TRANSLATIONS` permission.\r\n- Exposed translations through `ProductMedia.translation(languageCode:)`, `ProductMediaTranslatableContent`, and the generic `translation` / `translations` queries with `kind: PRODUCT_MEDIA`.\r\n- Added product media support to `TRANSLATION_CREATED` and `TRANSLATION_UPDATED` webhook payloads.\r\n- Added tests for reads, creation and updates, permissions, null input, alt text length validation, and translation webhooks.\r\n\r\n## API compatibility\r\n\r\nThe ProductMedia translation API is additive and targets Saleor 3.23. Existing `categoryTranslate` and `collectionTranslate` mutations continue to accept `TranslationInput!`. Category and collection background image alt translations are outside this PR's scope.\r\n\r\nFor example, create or update a Polish translation using a ProductMedia ID or ProductMediaTranslatableContent ID:\r\n\r\n```graphql\r\nmutation TranslateProductMedia($id: ID!) {\r\n  productMediaTranslate(\r\n    id: $id\r\n    languageCode: PL\r\n    input: { alt: \"Czerwony plecak\" }\r\n  ) {\r\n    productMedia {\r\n      id",
+  "comments": [
+   "Please update PR description to reflect change in scope.\n\nOtherwise, all good fine.`s",
+   "I took a deeper look and now I understand where the suffix approach came from. `AGENTS.md` tells agents to always include `ADDED_IN_{VERSION}`, and this is how that request was fulfilled. Sorry for sending you the other way in my previous comment.\n\n  1. Please bring the `description_suffix` approach back. It's the most obvious way to keep reusing `TranslationField` instead of copy-pasting its body.\n  2. For new classes (e.g. `ProductMediaTranslatableContent`), keep `ADDED_IN_323` only in `Meta.description`. There is no need to inflate the GraphQL schema by repeating it for every field in the class. The same applies to `ProductMediaTranslation`, `ProductMediaTranslationInput` and `ProductMediaTranslateError`. While you're there, please also drop the redeclared `language` field on `ProductMediaTranslation`, `BaseTranslationType` already defines it identically, and it was only redeclared to carry the suffix.\n\nTogether those mean only one call site needs the suffix: `ProductMedia.translation` in `saleor/graphql/product/types/products.py`, since that's a new field on an existing type. `ProductMediaTranslatableContent.translation` goes back to a plain `TranslationField(ProductMediaTransl",
+   "\ud83d\udc4d\n\nWill you be able to prepare port of these changes to `main`?",
+   "This is a breaking change that cannot be done in already released minor version. All clients referring to `TranslationInput` would break. Example mutation below.\n\n```\n  mutation TranslateCategory(\n    $id: ID!\n    $languageCode: LanguageCodeEnum!\n    $input: TranslationInput!\n  ) {\n    categoryTranslate(id: $id, languageCode: $languageCode, input: $input) {\n      errors { field code message }\n    }\n  }\n```\n\n`TranslationInput` becomes `CategoryTranslationInput`.",
+   "Same as with `CategoryTranslationInput`.",
+   "All fields except for `background_image_alt` existed before. They were not added in `3.23`.",
+   "I suggest introducing this change to `main` and release it with a new minor version.",
+   "This migration touches two database tables within one database transaction. Please split it into two separate migrations.",
+   "To be compatible with zero-downtime migration approach this field must have `db_default` set.",
+   "This sounds good. Thank you.",
+   "This seems to be copy-pasted from the other models. Although it does not make sense because there is no root level query for `ProductMedia`. For now I'd suggest removing the deprecation until such root level query is provided.",
+   "Please stick with established way of appending `ADDED_IN_323` string to the description. Example below.\n\n```\n    alt = graphene.String(\n        required=True,\n        description=\"Product media alt text to translate.\" + ADDED_IN_323,\n    )\n\n```"
+  ],
+  "files": [
+   "saleor/graphql/core/doc_category.py",
+   "saleor/graphql/core/enums.py",
+   "saleor/graphql/product/schema.py",
+   "saleor/graphql/product/types/products.py",
+   "saleor/graphql/schema.graphql",
+   "saleor/graphql/translations/dataloaders.py",
+   "saleor/graphql/translations/fields.py",
+   "saleor/graphql/translations/mutations/__init__.py",
+   "saleor/graphql/translations/mutations/product_media_translate.py",
+   "saleor/graphql/translations/mutations/utils.py",
+   "saleor/graphql/translations/resolvers.py",
+   "saleor/graphql/translations/schema.py",
+   "saleor/graphql/translations/tests/mutations/test_product_media_translate.py",
+   "saleor/graphql/translations/tests/test_product_media_translation.py",
+   "saleor/graphql/translations/types.py",
+   "saleor/graphql/webhook/subscription_types.py",
+   "saleor/product/migrations/0206_product_media_translation.py",
+   "saleor/product/models.py",
+   "saleor/product/tests/test_translation.py",
+   "saleor/translations/error_codes.py",
+   "saleor/webhook/tests/subscription_webhooks/subscription_queries.py",
+   "saleor/webhook/tests/subscription_webhooks/test_create_deliveries_for_translation_subscription.py"
+  ]
+ },
+ "19794": {
+  "number": 19794,
+  "split": "train",
+  "title": "Fix `giftCardBulkCreate` removing existing tags from previously created gift cards",
+  "body": "I want to merge this change because `giftCardBulkCreate` silently removes a tag from every gift card that already carried it whenever the request reuses that tag.\r\n\r\nWill be ported to `3.23` and main.\r\n\r\nFixes #19768\r\n\r\n`GiftCardBulkCreate.assign_gift_card_tags` attached the new cards with `tag_instance.gift_cards.set(instances)`. Django's `set()` replaces the whole relation, so for an already existing tag every previously tagged card lost it. Issuing gift cards in several batches under one tag left only the last batch tagged.\r\n\r\nThe fix is a one-line change to `tag_instance.gift_cards.add(*instances)`, which only inserts the missing links. I added tests for a tag already present on other gift cards and for several batches with overlapping tag sets.\r\n\r\nThe non-bulk mutations `giftCardCreate` and `giftCardUpdate` are not affected, as they always used `add()`, so single-card tagging was correct all along.\r\n\r\nThe fix is forward-only. Tag links already lost cannot be recovered from the database. Merchants can restore the tagging of older batches from their own records, for example by re-tagging with `giftCardUpdate` and `addTags`.\r\n\r\n\r\n<!-- Please mention all relevant issue numbers. -->\r\n<!-- GitHub issue number is required for external contributions. -->\r\n\r\n# Impact\r\n\r\n- [ ] New migrations\r\n- [ ] New/Updated API fields or mutations\r\n- [ ] Deprecated API fields or mutations\r\n- [ ] Removed API types, fields, or mutations\r\n\r\n# Docs\r\n\r\n<!-- Docs are stored in a separate repository: ",
+  "comments": [
+   "I see what this test does and it seems to be correct but this feels like it's upside down.\n\nExisting tags are read, new tag is added (using `.add`), gift cards are created, previusly created gift card is checked whether it retained existing tags and new tag.\n\nCould we make it simpler?\n1. Have gift card with one tag.\n2. Create new gift card with some another tag (using bulk mutation).\n3. Check gift card from 1 whether it retained the tag.\n4. Check gift card from 2 whether it has its tag.",
+   "Second though, doesn't `test_create_gift_cards_with_tags_keeps_tags_of_previously_created_gift_cards_intact` cover this case? If yes, then maybe we could get rid of this test."
+  ],
+  "files": [
+   "saleor/graphql/giftcard/bulk_mutations/gift_card_bulk_create.py",
+   "saleor/graphql/giftcard/tests/bulk_mutations/test_gift_card_bulk_create.py"
+  ]
+ },
+ "19818": {
+  "number": 19818,
+  "split": "train",
+  "title": "Remove 3.21 from supported versions",
+  "body": "Saleor v3.21 is no longer supported, instead we recommend to upgrade to later versions\r\n\r\n\r\n\r\n<!-- Please mention all relevant issue numbers. -->\r\n<!-- GitHub issue number is required for external contributions. -->\r\n\r\n# Impact\r\n\r\n- [ ] New migrations\r\n- [ ] New/Updated API fields or mutations\r\n- [ ] Deprecated API fields or mutations\r\n- [ ] Removed API types, fields, or mutations\r\n\r\n# Docs\r\n\r\n<!-- Docs are stored in a separate repository: https://github.com/saleor/saleor-docs/. -->\r\n<!-- Please provide a link to the PR that updates documentation for your changes. -->\r\n<!-- If changes in docs are not required, please mention that in the description. -->\r\n\r\n- [ ] Link to documentation: N/A\r\n\r\n# Pull Request Checklist\r\n\r\n<!-- Please keep this section. It will make the maintainer's life easier. -->\r\n\r\n- [ ] Privileged queries and mutations are either absent or guarded by proper permission checks\r\n- [ ] Database queries are optimized and the number of queries is constant\r\n- [ ] Database migrations are either absent or optimized for zero downtime\r\n- [ ] The changes are covered by test cases\r\n- [ ] All new fields/inputs/mutations have proper labels added (`ADDED_IN_X`, `PREVIEW_FEATURE`, etc.)\r\n- [ ] All migrations have proper dependencies\r\n- [ ] All indexes are added concurrently in migrations\r\n- [ ] All RunSql and RunPython migrations have revert option defined\r\n",
+  "comments": [
+   "3.22 becomes EOL at 6.10 so you can already mention that"
+  ],
+  "files": [
+   "SECURITY.md"
+  ]
+ },
+ "19786": {
+  "number": 19786,
+  "split": "train",
+  "title": "ci: replace path filters in tests and e2e with an in-job change check",
+  "body": "To make github \"required\" setting for reach check, workflow must actually run. Currently if skipped by \"paths\" it doesn't so it deadlocks\r\n\r\nThis moves check to code step so for github it *always* run\r\n\r\nI want to have it because it allows \"auto merge\" in async manner - when PR approved & checks are fine, PR gets merged in the background, instead of dev check it against CI\r\n\r\nRequires porting\r\n- 3.21: https://github.com/saleor/saleor/pull/19788\r\n- 3.22: https://github.com/saleor/saleor/pull/19789\r\n- 3.23: https://github.com/saleor/saleor/pull/19787\r\n\r\nOriginal thread\r\nhttps://saleorcommerce.slack.com/archives/C0352SN0W3U/p1788337116266739",
+  "comments": [
+   "Can you move this to a re-usable action instead? Something like `detect-python-changes`. No need to pass the list of python patterns (Dockerfile, `.py` etc.) in the action input itself other than something like `additional-file-patterns` which would include `^\\.github/workflows/e2e\\.yml`\r\n\r\nLike that for `additional-file-patterns` (use arrays):\r\n\r\n```yaml\r\nruns:\r\n  using: composite\r\n  steps:\r\n\r\n    # [...]\r\n\r\n    - name: Detect Python changes\r\n      shell: bash\r\n      env:\r\n        # additional-file-patterns is a newline separated list\r\n        INPUT_PATTERNS: ${{ inputs.additional-file-patterns }}\r\n      run: |\r\n        mapfile -t arr_patterns -d '' <<<\"$INPUT_PATTERNS\"\r\n        RELEVANT_PATHS=(\r\n          '\\.py$'\r\n          '^Dockerfile$'\r\n          '^saleor/'\r\n          '^pyproject\\.toml$'\r\n          '^uv\\.lock$'\r\n          \"${arr_patterns[@]}\"\r\n        )\r\n\r\n        # [...]",
+   "Can you move the `if` statements at the top of the steps for where you added them? Putting them at the bottom is unusual and slows down human comprehension"
+  ],
+  "files": [
+   ".github/actions/detect-python-changes/action.yml",
+   ".github/workflows/e2e.yml",
+   ".github/workflows/tests.yaml"
+  ]
+ },
+ "19814": {
+  "number": 19814,
+  "split": "train",
+  "title": "Let apps declare deprecation to guide migration",
+  "body": "## Why\r\n\r\nSaleor is building new apps to replace older ones: Customer Emails replaces SMTP, and Google Merchant Center replaces Product Feed. We want users to migrate to the new apps and need a common way for an app to communicate that it should no longer be used.\r\n\r\n## What changes\r\n\r\nThis PR adds `deprecationReason` to `App` and `Manifest`, allowing an app to declare its own deprecation and explain where users should migrate. The Dashboard can use this value to display a consistent deprecation notice. Deprecation is informational: the app continues to work as usual.\r\n\r\nAn app can declare the reason in its manifest at installation or set it later through the new `appSelfUpdate` mutation. Only the app itself can call this mutation; staff cannot set the reason through `appUpdate`.\r\n\r\nWe expect `appSelfUpdate` to gain more fields for app self-update purposes over time. Its input therefore supports partial updates: omitted fields and explicit `null` values leave the current value unchanged. A blank string clears the deprecation reason. Reasons longer than 2048 characters are truncated.\r\n\r\n## Validation\r\n\r\n- 144 tests passed across app installation, manifest fetching, app queries, and self-update mutations.\r\n- Regenerated the GraphQL schema; commit checks passed.\r\n\r\n## Port\r\nhttps://github.com/saleor/saleor/pull/19815\r\n",
+  "comments": [
+   "Not a blocker, just an idea to consider. Since the main use case is an app being deprecated because a new one replaces it, it seems natural to let the app pass a link next to the deprecation reason. `deprecationReason` itself shouldn't carry links: the Dashboard renders it as plain text and I think it should stay that way.\n\nA separate URL field could point to, for example:\n- a blog post or docs page with more details about the deprecation and the migration,\n- the App Store page of the replacement app,\n- or even the manifest URL of the replacement app\n\nIt could be validated in core, and give the Dashboard a proper link to render.\nThis can easily be added later, since `appSelfUpdate` is meant to be extended with more fields anyway. I'm raising it now in case it's worth including from the start, while the feature and the Dashboard UI are being designed",
+   "```suggestion\n```\nI think the \"Never rejects\" comment isn't fully accurate: `field_validator` runs after pydantic's `str | None` type check, so a value of the wrong type (e.g. a number or a list) still fails `clean_manifest_data` with INVALID. I think that's fine, but I'd propose removing this validator altogether, since its return value is never used: `clean_manifest_data` discards the validated model, and the normalization that matters is the explicit `normalize_deprecation_reason()` call in `install_app` / `AppFetchManifest`",
+   "```suggestion\n    return Truncator((value or \"\").strip()).chars(DEPRECATION_REASON_MAX_LENGTH) or None\n```\nNit: this could be done with `django.utils.text.Truncator`, which `AppProblem.set_message` already uses for the same 2048-char limit. The only difference is the suffix: Truncator keeps 2047 original chars and appends a single character \u2026 (U+2026), so the tests would need updating",
+   "I think it is worth adding tests for the deprecation reason normalization in `appFetchManifest`",
+   "nit-pick: the \"over_long\" phrase can be a bit unclear in a test name, and we typically use the plain \"too_long\" (e.g. `test_app_problem_create_message_too_long_is_truncated`, `test_clean_manifest_data_rejects_too_long_identifier`). Could we stick with this convention and rename this one and `test_install_app_with_over_long_deprecation_reason_does_not_fail_install` to match?",
+   "I totally agree. The missing part is making the validated `ManifestSchema` the source of truth . I've already started on that once, so I'll try to tackle it soon"
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/app/error_codes.py",
+   "saleor/app/installation_utils.py",
+   "saleor/app/manifest_schema.py",
+   "saleor/app/migrations/0042_app_deprecation_reason.py",
+   "saleor/app/models.py",
+   "saleor/app/tests/test_installation_utils.py",
+   "saleor/app/utils.py",
+   "saleor/graphql/app/enums.py",
+   "saleor/graphql/app/mutations/__init__.py",
+   "saleor/graphql/app/mutations/app_fetch_manifest.py",
+   "saleor/graphql/app/mutations/app_self_update.py",
+   "saleor/graphql/app/schema.py",
+   "saleor/graphql/app/tests/mutations/test_app_fetch_manifest.py",
+   "saleor/graphql/app/tests/mutations/test_app_self_update.py",
+   "saleor/graphql/app/tests/queries/test_app.py",
+   "saleor/graphql/app/types.py",
+   "saleor/graphql/schema.graphql"
+  ]
+ },
+ "19845": {
+  "number": 19845,
+  "split": "train",
+  "title": "fix/migrations: Respect POPULATE_DEFAULTS in account migration 0103",
+  "body": "The default customer type was created even with `POPULATE_DEFAULTS=False`, so on logical replicas the initial copy of `account_customertype` hit a duplicate key and retried forever. Guard the migration like the other \"create default\" migrations and let the post-migrate assignment task skip when no default type exists.\r\n\r\nTo be ported to 3.23",
+  "comments": [
+   "Could you please explain to me the mechanism of the failure? I must admit I don't understand it.\n\n> on logical replicas the initial copy of account_customer type hit a duplicate key and retried forever\n\n`CustomerType.objects.get_or_create` will get if something exists, it will not unconditionally attempt to create it, right?",
+   "Thank you."
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/account/migrations/0103_create_default_customer_type.py",
+   "saleor/account/migrations/tasks/saleor3_23.py",
+   "saleor/account/tests/test_customer_type.py"
+  ]
+ },
+ "19821": {
+  "number": 19821,
+  "split": "test",
+  "title": "Fix checkout payload crash when assigned delivery is deleted ",
+  "body": "port of https://github.com/saleor/saleor/pull/19820",
+  "comments": [
+   "Don't forget to port the latest commit into `main`",
+   "Wouldn't it make more sense to do this:\n\n```\ncheckout.assigned_delivery = None\n```\n\nInstead of:\n\n```\nassigned_delivery = None\n```\n\nSo later references don't crash again with `saleor.checkout.models.CheckoutDelivery.DoesNotExist`?\n\nIn your test case we see the issue for example if we do this:\n\n```diff\ndiff --git a/saleor/webhook/tests/test_webhook_payloads.py b/saleor/webhook/tests/test_webhook_payloads.py\nindex a3191a28e1..79c62e0e40 100644\n--- a/saleor/webhook/tests/test_webhook_payloads.py\n+++ b/saleor/webhook/tests/test_webhook_payloads.py\n@@ -1542,12 +1542,14 @@ def test_generate_checkout_payload_assigned_delivery_deleted_concurrently(\n     stale_checkout = Checkout.objects.get(pk=checkout_with_prices.pk)\n     CheckoutDelivery.objects.filter(pk=assigned_delivery_id).delete()\n\n+\n     # when\n     payload = json.loads(generate_checkout_payload(stale_checkout, customer_user))[0]\n\n     # then\n     assert payload[\"shipping_method\"] is None\n     assert payload[\"token\"] == graphene.Node.to_global_id(\"Checkout\", stale_checkout.pk)\n+    assert stale_checkout.assigned_delivery is None\n\n\n def test_generate_requestor_returns_dict_with_user_id_and_user_type(staff_user, rf):\n```\n\nResults to:\n",
+   "> Im not convinced payload generation which is derived operation should mutate database object\r\n\r\nThat's the thing, you aren't mutating the DB object in this context, you are just refreshing the stale object. You are catching the fact it's stale, thus why not update the information?"
+  ],
+  "files": [
+   "saleor/webhook/payloads.py",
+   "saleor/webhook/tests/test_webhook_payloads.py"
+  ]
+ },
+ "19830": {
+  "number": 19830,
+  "split": "test",
+  "title": "Add externalReference support to Category",
+  "body": "Extends the existing `externalReference` pattern to `Category`, mirroring the same support already added for `Collection` (#19793), so integrations can create, look up, update, and delete categories using identifiers from external systems.\n\nI want to merge this change because integrations should be able to reference categories consistently with other Saleor resources, without maintaining a separate mapping to Saleor IDs.\n\n## Changes\n\n- Model: `Category` inherits `ModelWithExternalReference`, adding a nullable, unique, indexed `external_reference` field.\n- Migrations: adds the column first, then builds the unique index `CONCURRENTLY` in a separate non-atomic migration and attaches it as a table constraint. Both migrations are reversible.\n- Query: adds `category(externalReference: ...)` alongside the existing `id`/`slug` lookup.\n- Mutations: adds `externalReference` to `CategoryInput` and supports targeting categories by external reference in `categoryUpdate` and `categoryDelete` through the shared `ModelWithExtRefMutation`.\n- API documentation: updates the generated GraphQL schema, adds `ADDED_IN_324` labels, and includes a changelog entry.\n\n## Validation\n\n- All 107 tests across category create, update, delete, and single-category query test files pass.\n- Coverage includes anonymous, customer, staff, and app clients with/without permissions, changing and clearing references, omitted/null inputs, uniqueness conflicts, and invalid or conflicting identifiers.\n- Negative cases ver",
+  "comments": [
+   "I reviewed this contribution and it can be merged as-is (assuming CI checks pass, they're still running now).\n\nIf you need this in `3.23` (similar question to https://github.com/saleor/saleor/pull/19831#discussion_r4122234834), then this contribution needs to be slightly updated.\n\nLet me know what are your intentions here and we'll go from there."
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/graphql/product/mutations/category/category_create.py",
+   "saleor/graphql/product/mutations/category/category_delete.py",
+   "saleor/graphql/product/mutations/category/category_update.py",
+   "saleor/graphql/product/resolvers.py",
+   "saleor/graphql/product/schema.py",
+   "saleor/graphql/product/tests/mutations/test_category_create.py",
+   "saleor/graphql/product/tests/mutations/test_category_delete.py",
+   "saleor/graphql/product/tests/mutations/test_category_update.py",
+   "saleor/graphql/product/tests/queries/test_category_query.py",
+   "saleor/graphql/product/types/categories.py",
+   "saleor/graphql/schema.graphql",
+   "saleor/product/migrations/0207_category_external_reference.py",
+   "saleor/product/migrations/0208_category_external_reference_unique_constraint.py",
+   "saleor/product/models.py"
+  ]
+ },
+ "19831": {
+  "number": 19831,
+  "split": "test",
+  "title": "Feat/promotion external reference",
+  "body": "Extends the existing `externalReference` pattern to `Promotion`, allowing integrations to create, look up, update, and delete promotions using identifiers from external systems.\r\n\r\nI want to merge this change because integrations should be able to reference promotions consistently with other Saleor resources, without maintaining a separate mapping to Saleor IDs.\r\n\r\n## Changes\r\n\r\n- Model: `Promotion` inherits `ModelWithExternalReference`, adding a nullable, unique, indexed `external_reference` field.\r\n- Migrations: adds the column first, then builds the unique index `CONCURRENTLY` in a separate non-atomic migration and attaches it as a table constraint. Both migrations are reversible.\r\n- Query: adds `promotion(externalReference: ...)`, preserving existing permission rules.\r\n- Mutations: adds `externalReference` to `PromotionInput` and supports targeting promotions by external reference in `promotionUpdate` and `promotionDelete` through the shared `ModelWithExtRefMutation`.\r\n- Error codes: adds `UNIQUE` to `PromotionCreateErrorCode` and `PromotionUpdateErrorCode` to report reference collisions.\r\n- API documentation: updates the generated GraphQL schema, adds `ADDED_IN_323` labels.\r\n\r\n## Validation\r\n\r\n- All 92 tests across promotion create, update, delete, and single-promotion query test files pass.\r\n- Coverage includes user and app permissions, changing and clearing references, omitted inputs, uniqueness, and invalid or conflicting identifiers.\r\n- Negative cases verify that una",
+  "comments": [
+   "Looks good to me, we can merge this after answering the question whether you also need that in `3.23`.",
+   "Please look at the last unresolved conversation, add the test it mentions, rebase with the newest `3.23` and we'll be good to go.",
+   "do you expect to port this change to 3.23? if so, you should ensure port to 3.23 contains migration source",
+   "you can drop `create_promotion` prefix because entire module stands for `promotion_create` mutation, \n\n`test_with_external_reference`, `test_with_non_unique_external_reference`",
+   "maybe add case for `\"\"` value, probably should be also rejected",
+   "I dont see \"id\" to be in this dict",
+   "Why can't you move it to parametrize? Its complex now",
+   "I can't tell when 3.24 will be released, so if you expect this feature to unblock you anyhow, it must land on 3.23. And yes, we will accept that backported",
+   "does it mean `\"\"` is allowed or not?",
+   "A single `Discount` with `external_reference` being empty string can be created. It cannot be queried though. Since this is consistent with other models supporting `external_reference` (`User`, `Order`, `Product`, `ProductVariant`, `Warehouse`) I don't mind not fixing it here.\r\n\r\nA test covering the behaviour for empty string would be a welcomed addition.",
+   "It's injected conditionally inside test's body (likely due to need of `graphene.Node.to_global_id`).",
+   "I think this code is gone.",
+   "I think this code is gone.",
+   "Yup, I mean test that will clarify the behavior"
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/discount/error_codes.py",
+   "saleor/discount/migrations/0088_promotion_external_reference.py",
+   "saleor/discount/migrations/0089_promotion_external_reference_unique_constraint.py",
+   "saleor/discount/models.py",
+   "saleor/graphql/discount/mutations/promotion/promotion_create.py",
+   "saleor/graphql/discount/mutations/promotion/promotion_delete.py",
+   "saleor/graphql/discount/mutations/promotion/promotion_update.py",
+   "saleor/graphql/discount/resolvers.py",
+   "saleor/graphql/discount/schema.py",
+   "saleor/graphql/discount/tests/mutations/test_promotion_create.py",
+   "saleor/graphql/discount/tests/mutations/test_promotion_delete.py",
+   "saleor/graphql/discount/tests/mutations/test_promotion_update.py",
+   "saleor/graphql/discount/tests/queries/test_promotion.py",
+   "saleor/graphql/discount/types/promotions.py",
+   "saleor/graphql/schema.graphql"
+  ]
+ },
+ "19793": {
+  "number": 19793,
+  "split": "test",
+  "title": "Feat/collection external reference",
+  "body": "Extends the existing `externalReference` pattern to `Collection`, allowing integrations to create, look up, update, and delete collections using identifiers from external systems.\r\n\r\nI want to merge this change because integrations should be able to reference collections consistently with other Saleor resources, without maintaining a separate mapping to Saleor IDs.\r\n\r\n## Changes\r\n\r\n- Model: `Collection` inherits `ModelWithExternalReference`, adding a nullable, unique, indexed `external_reference` field.\r\n- Migrations: adds the column first, then builds the unique index `CONCURRENTLY` in a separate non-atomic migration and attaches it as a table constraint. Both migrations are reversible.\r\n- Query: adds `collection(externalReference: ...)`, preserving existing permission and channel visibility rules.\r\n- Mutations: adds `externalReference` to `CollectionInput` and supports targeting collections by external reference in `collectionUpdate` and `collectionDelete` through the shared `ModelWithExtRefMutation`.\r\n- API documentation: updates the generated GraphQL schema, adds `ADDED_IN_323` labels, and includes a changelog entry.\r\n\r\n## Validation\r\n\r\n- All 115 tests across collection create, update, delete, and single-collection query test files pass.\r\n- Coverage includes user and app permissions, publication and channel visibility, changing and clearing references, omitted inputs, uniqueness, and invalid or conflicting identifiers.\r\n- Negative cases verify that unauthorized operations",
+  "comments": [
+   "Please rebase on top of the newest `3.23` now.",
+   "Looks good, please solve the conflict and we can merge."
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/graphql/product/mutations/collection/collection_create.py",
+   "saleor/graphql/product/mutations/collection/collection_delete.py",
+   "saleor/graphql/product/mutations/collection/collection_update.py",
+   "saleor/graphql/product/resolvers.py",
+   "saleor/graphql/product/schema.py",
+   "saleor/graphql/product/tests/mutations/test_collection_create.py",
+   "saleor/graphql/product/tests/mutations/test_collection_delete.py",
+   "saleor/graphql/product/tests/mutations/test_collection_update.py",
+   "saleor/graphql/product/tests/queries/test_collection_query.py",
+   "saleor/graphql/product/types/collections.py",
+   "saleor/graphql/schema.graphql",
+   "saleor/product/migrations/0209_collection_external_reference.py",
+   "saleor/product/migrations/0210_collection_external_reference_unique_constraint.py",
+   "saleor/product/models.py"
+  ]
+ },
+ "19749": {
+  "number": 19749,
+  "split": "test",
+  "title": "Add voucherDetails to CheckoutError explaining voucher rejection",
+  "body": "Every voucher failure collapsed into two coarse GraphQL error codes, INVALID and VOUCHER_NOT_APPLICABLE, both with a generic message. **A storefront could not tell an expired code from one whose minimum order value is not met**, and the structured data NotApplicable already carried (min_spent, min_checkout_items_quantity) was discarded when the exception was converted into a ValidationError.\r\n\r\nAdd a voucherDetails field to CheckoutError carrying a VoucherRejectionReason plus the matching thresholds. The error codes and messages are unchanged, so the addition is purely additive; the field is null for errors unrelated to a voucher.\r\n\r\n- discount: add the VoucherRejectionReason enum and the VoucherRejection dataclass, and let NotApplicable carry the reason and eligible countries, exposed through a `rejection` property\r\n- discount: tag every NotApplicable raise site with its reason\r\n- discount: diagnose_invalid_voucher_code attributes the six causes behind the INVALID code (not found, deactivated code, not started, expired, usage limit reached, not available in channel). It runs only after the existing single-query check has already failed, so the extra queries never touch the happy path\r\n- checkout: propagate the rejection into the ValidationError params of checkoutAddPromoCode and of the checkoutComplete voucher handlers, and report NO_LONGER_AVAILABLE when a voucher disappears mid-checkout\r\n- graphql: add the VoucherRejectionDetails type and the enum, and regenerate the schem",
+  "comments": [
+   "This adds the voucher rejection details to the checkout mutations that report errors through `CheckoutError`, but `orderCreateFromCheckout`, the app-only sibling of `checkoutComplete` which can be used for example by a BFF to place the order on behalf of the storefront, has its own `OrderCreateFromCheckoutError`, runs the same `create_order_from_checkout`, but would still not have the rejection details.\nI think it's worth extending `OrderCreateFromCheckoutError` the same way. It should be able to reuse most of what is already here\nI leave it to you whether that belongs in this PR or a separate one.",
+   "```suggestion\n def voucher_rejection_reason_description(enum):                                                                                                                                                                  \n      if enum is None:                                                                                                                                                                                             \n          return (                                                                                                                                                                                                 \n              \"The specific reason why a voucher code cannot be applied.\" + ADDED_IN_323                                                                                                                           \n          )                                                                                                                                                                                                        \n      return {                                                                                                                 ",
+   "As I understand it, a voucher that is not assigned to the checkout's channel should report `NOT_FOUND`, so the response does not confirm its existence to a caller who has no access to it, since `checkoutAddPromoCode` can be called by an anonymous client.\n\nI agree with that, but I think it also needs the checks to run in that order: everything that can answer `NOT_FOUND` before anything that reveals the code exists. Two are out of place now. `not code.is_active` returns `USAGE_LIMIT_REACHED` before any question about the voucher is asked, and the channel listing check runs only after the `end_date` and `usage_limit` ones. So a voucher that should be hidden behind `NOT_FOUND` is reported as `EXPIRED` or `USAGE_LIMIT_REACHED` instead.\n\n`test_inaccessible_voucher_matches_unknown_code` misses this because the out-of-channel voucher it builds is otherwise healthy, so the diagnosis falls through to the listing check.\n\nSo I propose reordering `diagnose_invalid_voucher_code` to something like this:\n\n```python\ndef diagnose_invalid_voucher_code(voucher_code, channel_slug, validate_usage_limit):\n    code = VoucherCode.objects.filter(code=voucher_code).select_related(\"voucher\").first()\n    if c",
+   "For a checkout holding an expired or reassigned gift card, `orderCreateFromCheckout` raises instead of returning an error, and the `PromoCodeRejection` attached in `checkout_cleaner.py` never reaches the client. The crash predates this PR, but since `orderCreateFromCheckout` is now meant to report rejection reasons, I think fixing this belongs here.\n\n`cls.validate_checkout(...)` runs above the `try` block. It reaches `_validate_gift_cards`, which raises `GiftCardNotApplicable`, and that is a plain `Exception` rather than a `ValidationError`, so `BaseMutation` cannot turn it into an error entry.\n\nThe smallest fix is moving the `cls.validate_checkout(...)` call inside the existing `try`.\n\nThis needs a test as well. `test_checkout_complete_gift_card_promo_code_details.py` covers the same condition for `checkoutComplete`, while `test_order_create_from_checkout_promo_code_details.py` covers vouchers only, which is why this slipped through.",
+   "I could not find a route where a client actually sees this value, and there is no test for it.\nOn checkout completion the email is validated earlier. On the draft order path `setup_voucher_customer` is called outside any `try`, and `NotApplicable` is a `ValueError`, so it escapes as an unhandled error and the reason never reaches the client.\nIf there is a scenario I missed, a test would settle it. If there is not, I would drop the value or fix the escape",
+   "Nitpick: I take it the `USAGE_LIMIT_REACHED` here covers a voucher whose codes are all inactive, which happens once a single-use voucher has been fully redeemed, and for that case it is right. The same branch is also reached when the voucher has no codes at all, which `voucherCodeBulkDelete` allows since it has no guard on removing the last one.\nMinor, since it needs the deprecated `voucher` input on draft orders, but `NOT_FOUND` would fit the empty case better",
+   "Unless I am missing something, this is still not addressed. I get that this issue predates this PR, but I think it would be good to address it here: for a checkout with an expired gift card the mutation returns \"Internal Server Error\" instead of a `giftCards` error with a reason.\r\nMoving the `cls.validate_checkout(...)` call inside the existing `try` should be enough, plus a test for the expired and the reassigned gift card, mirroring `test_checkout_complete_gift_card_promo_code_details.py`",
+   "```suggestion\n    def __init__(\n        self,\n        message=None,\n        promo_code_rejection: PromoCodeRejection | None = None,\n        **kwargs,\n    ):\n        \"\"\"Carry the reason for a rejected voucher or gift card code, if known.\"\"\"\n```\n\nLet's type `promo_code_rejection` as `PromoCodeRejection | None`, the same way `GiftCardNotApplicable` does, so it is checked by the type checker. The docstring could then be trimmed as well",
+   "```suggestion\n        msg: str,\n        min_spent: Money | None = None,\n        min_checkout_items_quantity: int | None = None,\n        reason: PromoCodeRejectionReason | None = None,\n```\nSame as for `InvalidPromoCode`, let's type the arguments here",
+   "What do you think about renaming `NO_ELIGIBLE_LINES` to `NO_ELIGIBLE_PRODUCTS` or `NO_ELIGIBLE_ITEMS`? \"Lines\" may not be obvious as a storefront error",
+   "Unless I am missing something, `orderUpdate` never populates `promoCodeDetails`, as it does not accept any promo code in its input (it only exposes the field through the shared `OrderError` type). On the other hand, `Order.errors` on a draft order can now return promo code rejection details, so I would propose replacing one with the other in the list",
+   "This also makes `Order.errors` on a draft order return `promoCodeDetails`, but no test covers it. Maybe add `promoCodeDetails { reason }` to `ORDER_CAN_FINALIZE_QUERY` in `test_order_can_finalize.py` and assert `NOT_APPLICABLE`?",
+   "This one seems to have been skipped in the last two review rounds. Did you miss it, or would you prefer to address it in a separate PR? Either is fine with me, but if it goes to a separate PR, let's note it somewhere so it does not get lost"
+  ],
+  "files": [
+   "saleor/checkout/checkout_cleaner.py",
+   "saleor/checkout/complete_checkout.py",
+   "saleor/checkout/tests/test_checkout.py",
+   "saleor/checkout/utils.py",
+   "saleor/core/exceptions.py",
+   "saleor/core/utils/promo_code.py",
+   "saleor/discount/__init__.py",
+   "saleor/discount/models.py",
+   "saleor/discount/utils/voucher.py",
+   "saleor/giftcard/utils.py",
+   "saleor/graphql/account/enums.py",
+   "saleor/graphql/checkout/mutations/checkout_add_promo_code.py",
+   "saleor/graphql/checkout/mutations/order_create_from_checkout.py",
+   "saleor/graphql/checkout/tests/mutations/test_checkout_add_promo_code_rejection_details.py",
+   "saleor/graphql/checkout/tests/mutations/test_checkout_complete_gift_card_promo_code_details.py",
+   "saleor/graphql/checkout/tests/mutations/test_checkout_complete_with_transactions.py",
+   "saleor/graphql/checkout/tests/mutations/test_checkout_promo_code_reason_disclosure.py",
+   "saleor/graphql/checkout/tests/mutations/test_order_create_from_checkout_promo_code_details.py",
+   "saleor/graphql/core/enums.py",
+   "saleor/graphql/core/types/common.py",
+   "saleor/graphql/order/mutations/draft_order_cleaner.py",
+   "saleor/graphql/order/tests/mutations/test_draft_order_promo_code_details.py",
+   "saleor/graphql/order/tests/queries/test_order_can_finalize.py",
+   "saleor/graphql/order/utils.py",
+   "saleor/graphql/schema.graphql"
+  ]
+ },
+ "19872": {
+  "number": 19872,
+  "split": "test",
+  "title": "Add voucherDetails to CheckoutError explaining voucher rejection",
+  "body": "Port of #19749 to 3.23.\r\n",
+  "comments": [
+   "In the original PR you dropped the CHANGELOG entry and wrote that it would ship with the 3.23 backport, but it is missing here",
+   "Thanks! One thing: `draftOrderCreate` and `draftOrderUpdate` also populate `promoCodeDetails` so they should be on the list too"
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/checkout/checkout_cleaner.py",
+   "saleor/checkout/complete_checkout.py",
+   "saleor/checkout/tests/test_checkout.py",
+   "saleor/checkout/utils.py",
+   "saleor/core/exceptions.py",
+   "saleor/core/utils/promo_code.py",
+   "saleor/discount/__init__.py",
+   "saleor/discount/models.py",
+   "saleor/discount/utils/voucher.py",
+   "saleor/giftcard/utils.py",
+   "saleor/graphql/account/enums.py",
+   "saleor/graphql/checkout/mutations/checkout_add_promo_code.py",
+   "saleor/graphql/checkout/mutations/order_create_from_checkout.py",
+   "saleor/graphql/checkout/tests/mutations/test_checkout_add_promo_code_rejection_details.py",
+   "saleor/graphql/checkout/tests/mutations/test_checkout_complete_gift_card_promo_code_details.py",
+   "saleor/graphql/checkout/tests/mutations/test_checkout_complete_with_transactions.py",
+   "saleor/graphql/checkout/tests/mutations/test_checkout_promo_code_reason_disclosure.py",
+   "saleor/graphql/checkout/tests/mutations/test_order_create_from_checkout_promo_code_details.py",
+   "saleor/graphql/core/enums.py",
+   "saleor/graphql/core/types/common.py",
+   "saleor/graphql/order/mutations/draft_order_cleaner.py",
+   "saleor/graphql/order/tests/mutations/test_draft_order_promo_code_details.py",
+   "saleor/graphql/order/tests/queries/test_order_can_finalize.py",
+   "saleor/graphql/order/utils.py",
+   "saleor/graphql/schema.graphql"
+  ]
+ },
+ "19798": {
+  "number": 19798,
+  "split": "test",
+  "title": "Reject products sortBy with neither field nor attributeId",
+  "body": "`ProductOrder` is the only sort input with a nullable `field`, because `attributeId` is an alternative to it. Every other sort input has `field` injected as non-null, so GraphQL validation rejects a direction-only `sortBy` before a resolver runs. For products it was schema-valid and reached `sort_queryset` with `field=None`, where `sort_enum.get(None)` raised `ValueError: None is not a valid ProductOrderField` and surfaced as an unhandled server error.\r\n\r\nAdd the missing half of the mutual-exclusion guard: neither value given is now a GraphQLError, just like both values given.\r\n\r\nFixes [SALEOR-CORE-8DB](https://saleor.sentry.io/issues/7735589128/?alert_rule_id=11198640&alert_type=issue&notification_uuid=d78c01d3-e7c4-476a-9433-d893216e47d6&project=6417854)\r\n",
+  "comments": [
+   "This is so repetitive and convoluted, just do:\n\n```py\nif sorting_attribute is not None:\n   if sorting_field is not None:\n       raise ... # must provide only one, not both\n   return _sort_queryset_by_attribute(...)\n\nelif sorting_field is None:\n\traise ... # must provide sorting_attribute or sorting_field, received none\n\n# do the rest...\n```"
+  ],
+  "files": [
+   "saleor/graphql/product/tests/test_product_sorting_attributes.py",
+   "saleor/graphql/utils/sorting.py"
+  ]
+ },
+ "19878": {
+  "number": 19878,
+  "split": "test",
+  "title": "Filter products by externalReference",
+  "body": "Adds an `externalReference` filter to `ProductWhereInput`, so integrations can fetch many products by their external IDs in a single request:\n\n```graphql\nproducts(where: { externalReference: { oneOf: [\"ext-1\", \"ext-2\", \"ext-3\"] } }) { ... }\n```\n\nI want to merge this change because syncing integrations currently have to issue one `product(externalReference: ...)` query per product. With `oneOf` they can resolve a whole batch at once.\n\n## Changes\n\n- Filter: `ProductWhere.external_reference` (`StringFilterInput`, `eq` / `oneOf`) using the same `filter_where_by_value_field` helper as `slug` and `name`. `Product.external_reference` is already unique and indexed, so no migration is needed.\n- Because `ProductWhereInput` is shared, the filter is also available in `Category.products(where:)`, `Collection.products(where:)` and promotion catalogue `productPredicate`.\n- The legacy `filter: ProductFilterInput` is not extended; no legacy filter input has an external reference filter.\n- API documentation: updates the generated GraphQL schema, adds an `ADDED_IN_323` label, and includes a changelog entry.\n\n## Behavior notes\n\nEdge cases follow the shared helper, consistent with `slug`/`name`:\n- `{eq: \"\"}`, `{oneOf: []}`, `{oneOf: null}`, `{}` and `null` return no products.\n- `{eq: null}` returns products **without** an external reference.\n\n## Validation\n\n- 182 tests in `test_products_query_with_where.py` and `test_collection_query.py` pass. New coverage: `eq` match/no match/empty/null, `oneOf`",
+  "comments": [
+   "Looks good, please resolve the conflict and we can merge."
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/graphql/product/filters/product.py",
+   "saleor/graphql/product/tests/queries/test_collection_query.py",
+   "saleor/graphql/product/tests/queries/test_products_query_with_where.py",
+   "saleor/graphql/schema.graphql"
+  ]
+ },
+ "19850": {
+  "number": 19850,
+  "split": "test",
+  "title": "feat(seo): add translatable full descriptions to categories and colle\u2026",
+  "body": "I want to merge this change because categories and collections need separate introductory and detailed content for storefront and SEO use cases.\r\n\r\nThis adds optional, translatable `fullDescription` fields using Editor.js rich text. Existing `description` fields and their content remain unchanged, so no content migration is required.\r\n\r\nCloses #19498.\r\n\r\nThe changes include:\r\n- Support for reading, creating, updating, and translating full descriptions.\r\n- Rich-text validation and sanitization. Omitting the field preserves its value; passing `null` clears it.\r\n- Integration with translation webhooks, collection webhook payloads, and the `clean_editorjs_fields` command.\r\n- Four migrations adding nullable fields, with one table changed per migration.\r\n- Regression coverage ensuring full-description-only updates preserve existing descriptions and category search text.\r\n\r\n**Backward compatibility**\r\n\r\nCategory, collection, and product translations share `TranslationInput`. Replacing it with separate input types would break existing client operations, so this PR preserves the existing type and adds an optional `fullDescription` field.\r\n\r\nAs a compatibility compromise, `fullDescription` is also visible in the inputs for `productTranslate` and `productBulkTranslate`. These mutations reject it with an `INVALID` error when supplied, including explicit `null`. Bulk translation follows the existing error policy. Existing product translation requests that omit this field retain their beha",
+  "comments": [
+   "The code looks okay. Please rebase on top of the newest `3.23` and we should be good to go.",
+   "Rebase with `3.23` uncovered a new migrations that were not there when you wrote the code. Please renumber your migrations so the migrations do not conflict ([failure](https://github.com/saleor/saleor/actions/runs/37771445750/job/113294095756?pr=19850)).",
+   "> @wcislo-saleor I have made migrations merge\n\nWe introduce merge migrations when they're absolutely required (e.g. when `main` already advanced to the next migration and now we want to port a new migration from `3.23` to `main`). The intention is to keep the history as clean as possible.\n\nIn this case it's not required to rely on merge migration. Please have the migrations renumbered."
+  ],
+  "files": [
+   "saleor/core/management/commands/clean_editorjs_fields.py",
+   "saleor/core/tests/commands/test_clean_editorjs_fields.py",
+   "saleor/graphql/core/validators/__init__.py",
+   "saleor/graphql/product/mutations/category/category_create.py",
+   "saleor/graphql/product/mutations/collection/collection_create.py",
+   "saleor/graphql/product/tests/mutations/test_category_collection_full_description.py",
+   "saleor/graphql/product/types/categories.py",
+   "saleor/graphql/product/types/collections.py",
+   "saleor/graphql/schema.graphql",
+   "saleor/graphql/translations/mutations/product_bulk_translate.py",
+   "saleor/graphql/translations/mutations/product_translate.py",
+   "saleor/graphql/translations/mutations/utils.py",
+   "saleor/graphql/translations/tests/mutations/test_product_full_description.py",
+   "saleor/graphql/translations/types.py",
+   "saleor/product/migrations/0211_category_full_description.py",
+   "saleor/product/migrations/0212_category_translation_full_description.py",
+   "saleor/product/migrations/0213_collection_full_description.py",
+   "saleor/product/migrations/0214_collection_translation_full_description.py",
+   "saleor/product/models.py",
+   "saleor/webhook/payloads.py",
+   "saleor/webhook/tests/test_webhook_payloads.py"
+  ]
+ },
+ "19795": {
+  "number": 19795,
+  "split": "test",
+  "title": "feat: add per-channel availability toggle for product variants",
+  "body": "Implements https://github.com/saleor/saleor/issues/19790\r\n\r\nhttps://linear.app/saleor/issue/FRS-262",
+  "comments": [
+   "This is unclear to me. If `is_available_for_purchase` is missing or `None` then it will not be `False` therefore `True` will be returned. Is this what is suppose to happen?",
+   "Redo the migration, `0206` is already taken on `3.23`."
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/checkout/calculations.py",
+   "saleor/checkout/fetch.py",
+   "saleor/checkout/problems.py",
+   "saleor/discount/utils/promotion.py",
+   "saleor/graphql/core/types/__init__.py",
+   "saleor/graphql/core/types/common.py",
+   "saleor/graphql/core/validators/__init__.py",
+   "saleor/graphql/product/bulk_mutations/product_variant_bulk_create.py",
+   "saleor/graphql/product/bulk_mutations/product_variant_bulk_update.py",
+   "saleor/graphql/product/dataloaders/products.py",
+   "saleor/graphql/product/filters/product_helpers.py",
+   "saleor/graphql/product/mutations/channels.py",
+   "saleor/graphql/product/schema.py",
+   "saleor/graphql/product/sorters.py",
+   "saleor/graphql/product/tests/mutations/test_product_variant_bulk_update.py",
+   "saleor/graphql/product/tests/mutations/test_variant_channel_listing_availability_update.py",
+   "saleor/graphql/product/tests/test_variant_channel_listing_update.py",
+   "saleor/graphql/product/tests/test_variant_unavailable_for_purchase.py",
+   "saleor/graphql/product/types/channels.py",
+   "saleor/graphql/schema.graphql",
+   "saleor/product/lock_objects.py",
+   "saleor/product/managers.py",
+   "saleor/product/migrations/0215_productvariantchannellisting_is_available_for_purchase.py",
+   "saleor/product/models.py",
+   "saleor/product/utils/availability.py",
+   "saleor/product/utils/variant_prices.py"
+  ]
+ },
+ "19900": {
+  "number": 19900,
+  "split": "test",
+  "title": "feat(build): cache DB across workflow runs",
+  "body": "This adds cache save/restore for our xdist workers. Only the base branches are cached (3.x and main)\r\n\r\nThis works like so:\r\n1. We detect the base branch, the base is used to attempt to find a cached DB (e.g., if base branch is `main`, then it will try to find a cached DB for `main`, same for 3.23, etc.)\r\n2. We detect the head (or the ref where `push` event occurred), if it's `3.x` or `main`, then we enable updating/creating/uploading a new DB cache\r\n3. We then restore the DB if we found one (into `gw0`)\r\n4. We then create the remaining databases (gw1, gw2, etc.)\r\n5. Lastly we update the cached DB (if the workflow run triggered inside `3.x` or `main`)\r\n\r\nNote: this can cause issues with PRs that are behind `main` and thus may have unapplied migrations. This is considered as non-issue due to creating new (and major/breaking) migrations is infrequent, and a rebase/resync of head branches is sufficient.\r\n\r\n<!-- Please mention all relevant issue numbers. -->\r\n<!-- GitHub issue number is required for external contributions. -->\r\n\r\n# Impact\r\n\r\n- [ ] New migrations\r\n- [ ] New/Updated API fields or mutations\r\n- [ ] Deprecated API fields or mutations\r\n- [ ] Removed API types, fields, or mutations\r\n\r\n# Docs\r\n\r\n<!-- Docs are stored in a separate repository: https://github.com/saleor/saleor-docs/. -->\r\n<!-- Please provide a link to the PR that updates documentation for your changes. -->\r\n<!-- If changes in docs are not required, please mention that in the description. -->\r\n\r\n- [ ] Link t",
+  "comments": [
+   "Nit:\n\nThe dump is taken after the test run, and on `main` this step reloads the previous `main` dump. So whatever the tests leave behind (e.g. tables wiped by `transaction=True` tests) is passed from one `main` run to the next and never rebuilt from scratch.\n\nI suggest restoring only on PRs, so every `main` run rebuilds the DB from migrations and saves a fresh copy. `main` runs lose the speedup, but the speedup is mainly for PRs anyway.\n\n```suggestion\n        if: ${{ steps.changes.outputs.changed == 'true' && github.event_name == 'pull_request' }}\n```\n\nOptionally, the dump could also be taken before pytest (migrate into gw0, then `pg_dump`) so the cache holds the database exactly as migrations leave it.",
+   "This prints `$base`, but the check above is on `$head`. A PR into `main` currently logs \"Will skip caching: main is not a main/release branch\".\n\n```suggestion\n            echo \"Will skip caching: $head is not a main/release branch\" >&2\n```",
+   "Missing `-y`. It passes today because this is the only new package at the moment. If it ever pulls in a dependency, apt will ask for confirmation, get no input and abort the job i think.\n\n```suggestion\n          apt-get install -y postgresql-client-15\n```"
+  ],
+  "files": [
+   ".github/workflows/tests.yaml"
+  ]
+ },
+ "19916": {
+  "number": 19916,
+  "split": "test",
+  "title": "Add per-webhook payloadGeneration to opt out of deferred payloads",
+  "body": "> [!NOTE]\r\n> To be ported to `main`.\r\n\r\nLink to [docs](https://github.com/saleor/saleor-docs/pull/1859).\r\n\r\nSince 3.23.0 the order, draft order, fulfillment, checkout, variant price and channel stock events build subscription payloads in the generate_deferred_payloads task instead of in the request. The task resolves the subscription query against the current state of the object, so two updates made in quick succession produce two deliveries that both carry the newer state. Integrations that need every delivery to reflect the request that caused it, such as an ERP sync keyed on order metadata, had no way to get the previous behaviour back.\r\n\r\nThis adds a payloadGeneration setting on Webhook with two values. DEFERRED is the default and keeps the current behaviour. IMMEDIATE builds the subscription payload in the request, the way these events worked before 3.23. The setting is exposed as WebhookPayloadGenerationEnum on the Webhook type, on webhookCreate and webhookUpdate, and as payloadGeneration on manifest webhooks, where it is validated and mapped to the model value. It is ignored for legacy webhooks, sync events and events that are not deferred.\r\n\r\nIn trigger_webhooks_async_for_multiple_objects subscription webhooks on a deferred event are split by the setting. The deferred group keeps the existing task path and the immediate group goes through the existing inline path. Events that are not deferred skip the split, so their behaviour is unchanged. The setting is read once wh",
+  "comments": [
+   "I went through everything as carefully as I could and, apart from a few minor nit-picks, I didn't find anything to raise. Great work!",
+   "To be double checked:\n\nIMMEDIATE can still deliver stale data here when the event fires from a task. `_send_variant_price_updated_webhooks` writes the new prices on the writer and then fires `PRODUCT_VARIANT_DISCOUNTED_PRICE_UPDATED` through `get_plugins_manager(allow_replica=True)`. That means this path resolves `productVariant.pricing` from a replica that may not have the write yet:\n\nhttps://github.com/saleor/saleor/blob/db169c233725b000832535718c3e8a3405dd4f6e/saleor/product/tasks.py#L292-L295\n\nThe deferred path waits until the replica catches up, but this one doesn't. `previousPrice`/`newPrice` are fine because they come from the dataclass. Mutations aren't affected because they disable the replica.\n\nShould the immediate group on a deferred event read from the writer? Something like `allow_replica=allow_replica and not is_deferred_payload`. Otherwise the enum description (\"reflects the object's state at that moment\") promises more than the path actually does",
+   "The PR description says \"Tests cover (...) the immediate path for model-based and dataclass-based deferred events\". This test and the other new IMMEDIATE tests use a checkout or an order though. None of them sends a dataclass subscribable object\n\nHow about adding a sibling of this test with a dataclass, ideally `VariantDiscountedPriceChange`",
+   "Heads-up for the port to `main`: `main` already has `0015_drop_export_completed_events`, which also depends on `0014_webhook_identifier_unique_constraint`. Once ported, the webhook app will have two leaf migrations, so the port needs a merge migration. \n\n\nADR 0011 is also taken on `main` (`0011-thumbnail-size-rounds-up-by-default.md`, merged today), so the ADR needs a new number too.",
+   "nit: passing `payloadGeneration: null` explicitly doesn't keep the current value. It resets the webhook to `DEFERRED`, because for non-null fields `construct_instance` swaps `None` for the field default. \n\nThat matches how other non-null fields behave, so it's fine, but worth saying in the description (e.g. \"`null` resets to `DEFERRED`\"), or reject `null` in `clean_input`.",
+   "Just a nit-pick: how about renaming this variable to something like `is_deferrable_event`? It no longer means the payload will be deferred, only that the event supports deferral. That is just a cosmetic thing which could be done separately. While at it, the `get_is_deferred_payload()` helper from `core/utils/events.py` already does this lookup and could be reused here",
+   "```suggestion\n    # subscription query, for sync events and for events that do not defer payload generation.\n```",
+   "nit-pick: this comment most likely needs reformatting",
+   "Checked this locally: `IMMEDIATE` with `VariantDiscountedPriceChange` builds the payload right away, without the deferred task. The function the immediate path uses, `create_deliveries_for_subscriptions`, is already covered for these dataclasses in `test_create_deliveries_for_subscription.py` / `test_channel_stock_events.py`. So I would say it is nice to have, but either adding the test or adjusting the description works for me",
+   "Great catch! I would recommend treating `null` as a no-op to minimise the chance of an unintentional change of the payload generation setting. A simple pop in `clean_input` should do it"
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "docs/adr/0011-deferred-webhook-payloads-reflect-state-at-generation-time.md",
+   "saleor/app/installation_utils.py",
+   "saleor/app/manifest_schema.py",
+   "saleor/app/manifest_validations.py",
+   "saleor/app/tests/test_installation_utils.py",
+   "saleor/app/tests/test_manifest_validations.py",
+   "saleor/graphql/meta/tests/mutations/test_order.py",
+   "saleor/graphql/schema.graphql",
+   "saleor/graphql/webhook/enums.py",
+   "saleor/graphql/webhook/mutations/webhook_create.py",
+   "saleor/graphql/webhook/mutations/webhook_trigger.py",
+   "saleor/graphql/webhook/mutations/webhook_update.py",
+   "saleor/graphql/webhook/tests/mutations/test_webhook_create.py",
+   "saleor/graphql/webhook/tests/mutations/test_webhook_trigger.py",
+   "saleor/graphql/webhook/tests/mutations/test_webhook_update.py",
+   "saleor/graphql/webhook/types.py",
+   "saleor/webhook/migrations/0015_webhook_payload_generation.py",
+   "saleor/webhook/models.py",
+   "saleor/webhook/tests/test_models.py",
+   "saleor/webhook/transport/asynchronous/tests/test_deferred_payload.py",
+   "saleor/webhook/transport/asynchronous/transport.py"
+  ]
+ },
+ "19960": {
+  "number": 19960,
+  "split": "test",
+  "title": "Fix OIDC access tokens rewriting is_staff on every request",
+  "body": "I want to merge this change because every API request authenticated with an OIDC access token writes `is_staff = false` to the customer's row, even when it is already false, and triggers `CUSTOMER_UPDATED` webhooks. Apps subscribed to that event get one per customer request, and under bursts of authenticated traffic the writes queue on the same rows and stall the database.\r\n\r\nThe branch that runs when no staff rule applies now demotes only users who are actually staff, the same rule the other branch and the login flow already follow. Staff accounts are unaffected: one that no staff rule covers is still demoted, as before.\r\n\r\nThis fixes a regression from #10423 (3.14). That branch used to set the flag in memory only; the refactor turned it into a save on every request, and #15535 later added the user event on top that makes the issue worse.\r\n\r\nA new test checks that a returning customer's request issues no `UPDATE` on `account_user` and fires no user event. On `main` it fails with `UPDATE \"account_user\" SET \"is_staff\" = false WHERE \"account_user\".\"id\" = ...`.\r\n\r\n# Needs to be ported to 3.23 and 3.22.\r\n\r\n# Impact\r\n\r\n- [ ] New migrations\r\n- [ ] New/Updated API fields or mutations\r\n- [ ] Deprecated API fields or mutations\r\n- [ ] Removed API types, fields, or mutations\r\n\r\n# Docs\r\n\r\nNot needed: no API or documented behaviour changes, only a redundant write and event removed.\r\n\r\n- [ ] Link to documentation:\r\n\r\n# Pull Request Checklist\r\n\r\n- [x] Privileged queries and mutations are ei",
+  "comments": [
+   "Could you replace this with `mocker` instead? This pattern is a footgun as this requires developers to properly order the fixture names which we already messed up in a few places thus this can cause assertions to be wrong\n\nExample (do the same + add `send_user_event`): https://github.com/saleor/saleor/blob/419dabb21ea0006e5c95e043a4aac4e22b8128e0/saleor/plugins/openid_connect/tests/test_utils.py#L632-L633",
+   "this should be ported to 3.22 and 3.23, we dont need a changelog entry here because this change is never visible for 3.24 (main) user",
+   "Could you add a check ensuring that the assertion passes when `is_staff` is `True`? Thus ensuring we are properly asserting the behavior? Currently there is no guarantee that we are always matching the correct SQL statements\n\nMaybe `@pytest.mark.parametrize(\"is_staff\", [True, False])`?",
+   "shouldn't `save(...)` be also conditional if field was actually changed? \n\n1. Req1 changes is_staff to true and safe\n2. Req2 \u2192 `is_staff is not None`:  True\n3. `user.save()` calls save without a reason",
+   "Perfect :chefkiss:",
+   "Perfect :chefkiss:"
+  ],
+  "files": [
+   "saleor/plugins/openid_connect/tests/test_utils.py",
+   "saleor/plugins/openid_connect/utils.py"
+  ]
+ },
+ "19961": {
+  "number": 19961,
+  "split": "test",
+  "title": "Fix OIDC access tokens rewriting is_staff on every request",
+  "body": "I want to merge this change because it ports #19960 to 3.22.\n\nRequests authenticated with an OIDC access token saved `is_staff = false` on the customer's row and triggered `CUSTOMER_UPDATED` webhooks on every call, even when nothing changed. Under bursts of authenticated traffic those writes stall the database. The flag is now written only when a staff account is actually demoted.\n\nDifferences from #19960:\n- The test sets `search_document` instead of `search_vector`, which 3.22 still uses.\n- Adds a changelog entry under 3.22.0 \u203a Other changes.\n\n<!-- Please mention all relevant issue numbers. -->\n<!-- GitHub issue number is required for external contributions. -->\n\n# Impact\n\n- [ ] New migrations\n- [ ] New/Updated API fields or mutations\n- [ ] Deprecated API fields or mutations\n- [ ] Removed API types, fields, or mutations\n\n# Docs\n\n<!-- Docs are stored in a separate repository: https://github.com/saleor/saleor-docs/. -->\n<!-- Please provide a link to the PR that updates documentation for your changes. -->\n<!-- If changes in docs are not required, please mention that in the description. -->\n\n- [ ] Link to documentation:\n\n# Pull Request Checklist\n\n<!-- Please keep this section. It will make the maintainer's life easier. -->\n\n- [ ] Privileged queries and mutations are either absent or guarded by proper permission checks\n- [ ] Database queries are optimized and the number of queries is constant\n- [ ] Database migrations are either absent or optimized for zero downtime\n- [ ] The cha",
+  "comments": [
+   "Note: PR is linking to the original PR rather than the port. However I think it's fine"
+  ],
+  "files": [
+   "CHANGELOG.md",
+   "saleor/plugins/openid_connect/tests/test_utils.py",
+   "saleor/plugins/openid_connect/utils.py"
+  ]
+ },
+ "19963": {
+  "number": 19963,
+  "split": "test",
+  "title": "Fix OIDC last_login duplicate writes and refresh check ignoring days",
+  "body": "I want to merge this change because it fixes two bugs in how OIDC logins update `last_login`. Follow-up to #19960, it's part of the same initiative aiming to reduce number of database writes\n\n**Duplicate writes on parallel requests.** Requests authenticated with an OIDC JWT access token set `last_login` to the token's issue time when it's newer than the stored value. The check runs on a copy of the user read from the replica, and the save was unconditional. When a client sends several requests at once with a new token, for example a mobile app opening, every request saw the old value, wrote `last_login` to the same `account_user` row and triggered a `CUSTOMER_UPDATED` webhook. While the replica lags, more requests fall into that window. A request with an older token could also move `last_login` backwards.\n\nThe write is now a conditional `UPDATE ... WHERE last_login IS NULL OR last_login < <issue time>`, so only the request that moves `last_login` forward writes the row and triggers the webhook.\n\n**Refresh check ignoring whole days.** The OIDC login flow and opaque access tokens refresh `last_login` only when it's older than `OAUTH_UPDATE_LAST_LOGIN_THRESHOLD` (15 minutes by default). The check used `timedelta.seconds`, which drops whole days, so a user who last logged in 1 day and 10 minutes ago looked like they logged in 10 minutes ago, and `last_login` wasn't updated. It now uses `total_seconds()`.\n\nTests:\n- New: with a stale copy of the user, `last_login` is written and re",
+  "comments": [
+   "There is a disconnect between the two logic: in one case we check the writer and perform an atomic update, but in the other case we don't\n\nI think we should make the logic consistent otherwise we are keeping the original issue in the other case while only fixing the 1st case\n\nMaybe we could create a helper like `_maybe_update_last_login(*, user, new_login=<ts>)`?"
+  ],
+  "files": [
+   "saleor/plugins/openid_connect/tests/test_utils.py",
+   "saleor/plugins/openid_connect/utils.py"
+  ]
+ },
+ "19964": {
+  "number": 19964,
+  "split": "test",
+  "title": "Fix duplicate OIDC is_staff writes and user webhooks",
+  "body": "I want to merge this change because it fixes two bugs where OIDC requests save `is_staff` or send user webhooks when nothing changed. Follow-up to #19960 and #19963, part of the same initiative to reduce the number of database writes.\r\n\r\n**Duplicate saves right after a staff change.** Saleor reads the user from the replica, which can be a moment behind. Right after someone's staff status changes, requests that read the user before the replica catches up still see the old value. Each of them saved `is_staff` again and sent another user webhook, so one change could turn into several writes and webhooks. This affects JWT access tokens and the login flow.\r\n\r\n**A webhook on every opaque-token request from a staff user.** With an opaque access token and no staff rule (scope permissions off, email outside the staff domains), a staff user is treated as non-staff for that request only and nothing is saved, so staff granted in the dashboard stays. That's how this path has worked since #9406. Since #15535, the user was also marked as updated, so every such request sent a `CUSTOMER_UPDATED` webhook for a change that was never saved.\r\n\r\n**What changes in the code**\r\n- A new helper tells the database \"set `is_staff` to X, unless it's already X\" (`UPDATE ... WHERE is_staff <> X`) and reports whether a row changed. The first request after a staff change saves it; the others find it already done.\r\n- JWT access tokens and the login flow use it instead of `save()`, and send the webhook only whe",
+  "comments": [
+   "Why aren't we being consistent? The legacy OIDC flow (`external_obtain_access_tokens()`) demotes while the non-legacy flow doesn't demote. This seems like a hack: we are abusing the fact that Dashboard uses the legacy flow, no? If so, once Dashboard is migrated to the non-legacy flow we will break it again unknowingly which isn't ideal\n\nThis seems risky, we are assuming that Saleor only read the cached `user` object and never refetches the user from DB, meaning we can end up with both the user being considered as non-staff and as staff inside the same request concurrently which could lead to unknown/unexpected behaviors\n\nI'm not sure what we are trying to solve?"
+  ],
+  "files": [
+   "saleor/plugins/openid_connect/plugin.py",
+   "saleor/plugins/openid_connect/tests/test_plugin.py",
+   "saleor/plugins/openid_connect/tests/test_utils.py",
+   "saleor/plugins/openid_connect/utils.py"
+  ]
+ }
+}
