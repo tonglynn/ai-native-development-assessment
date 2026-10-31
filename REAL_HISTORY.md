@@ -91,6 +91,29 @@ example it was learned from, merge variants across PRs so repetition counts, and
 for repository-wide rules. Saleor is now development data for that change; it has to be tested on a
 repository not looked at before.
 
+## Test on a repository not looked at before: home-assistant/core (D46) / 在新仓库上检验
+
+`runs/retro_hass/`, final gate, 120 merged reviewed PRs (78 to learn from, 42 to evaluate), same judge.
+`attest_general` writes notes as a general rule plus an example and keeps 2 of the 6 slots for
+repository-wide rules; `attest_general_noreserve` is the same memory with the slots off. The comparison
+rule was fixed before the run (`scripts/retro_compare.py`).
+
+| System | Notes | Convention comments anticipated | Precision of recalled notes |
+|---|---|---|---|
+| Attest | 105 | 1 / 19 (5%) | 22% |
+| Attest, general notes + reserved slots | 101 | 0 / 19 (0%) | 24% |
+| Attest, general notes, no reserved slots | 101 | 1 / 19 (5%) | 25% |
+| ReasoningBank-style | 233 | 2 / 19 (11%) | 21% |
+| ACE-style (whole playbook) | 210 | 9 / 19 (47%) | 2% |
+
+**The change did not improve coverage**: general notes with reserved slots −5 pp against Attest, 95%
+interval [−19, 0], "direction only" (the wrong direction); without the slots, no difference. Precision
+rose slightly (22% → 24–25%). The funnel's diagnosis (on Saleor) said the loss is in recall of generic
+rules; rewriting the notes did not fix that here, and the reserved slots filled with rules the 42 test PRs
+did not need. With only 19 convention comments the sample is small, but nothing points to a hidden gain.
+ACE again covers most by showing everything (8,820 notes shown, 2% relevant). Saleor's diagnosis stands
+as a description; the remedy tried is reported as not working.
+
 ## Where Attest's claims rest instead / Attest 的主张依据在哪里
 
 Scoping, versioned rules, retraction and resistance to poisoned advice: the
