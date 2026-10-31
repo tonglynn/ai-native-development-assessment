@@ -5,3 +5,6 @@
 | rules + CHANGELOG (D39) | D39: hold every uncertain | 4/4 | 17/25 (17 + 0) | 3/3 | 1/2 |
 | rules + CHANGELOG (D39) | graded | 4/4 | 19/25 (17 + 2) | 3/3 | 1/2 |
 | rules + CHANGELOG (D39) | graded + independent validation | 4/4 | 23/25 (21 + 2) | 3/3 | 1/2 |
+| rules + CHANGELOG + code (D50) | D39: hold every uncertain | 4/4 | 20/25 (20 + 0) | 3/3 | 2/2 |
+| rules + CHANGELOG + code (D50) | graded | 4/4 | 20/25 (20 + 0) | 3/3 | 2/2 |
+| rules + CHANGELOG + code (D50) | graded + independent validation | 4/4 | 21/25 (21 + 0) | 3/3 | 2/2 |

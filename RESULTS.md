@@ -76,8 +76,10 @@ Exploratory look at why (not a re-analysis of H6):
 - So the cost does not come from the gate filtering out the needed knowledge. It
   comes with a different set of surrounding notes and from run-to-run variation; the
   experiment cannot separate the two. 代价不是因为门槛滤掉了所需知识；与周围笔记的不同和运行间波动有关，本实验无法区分两者。
-- The gate's benefit shows elsewhere: in the poison stress test (below) the same
-  system without the gate stored the wrong advice in all repetitions, Attest never did.
+- The gate's benefit shows elsewhere, and is narrower than first written (corrected after the audit):
+  under the first poison (below) the system without the gate stored the wrong advice in all
+  repetitions and Attest never did, but only because the poisoned tasks failed verification; against a
+  second poison that passes the tests, Attest stored it in every repetition too.
 
 ## Business risks (exploratory) / 业务风险（探索性）
 
@@ -847,6 +849,78 @@ stale tasks reranking went 13/15 → 15/15 (lower bound 0, not "better"); busine
 similar (duplicate money operations 7, 9, 7 of 18). Lexical retrieval stays the default: this is the
 second time a better ranking did not turn into better code, so the bottleneck for these tasks is not
 which notes are shown.
+
+## Closing the "self-proving evidence" gap (exploratory, after an external review) / 证据自证问题的改进
+
+Four changes proposed in a review of the design, each measured offline on stored runs (no new agent
+runs), plus one model run (D50). Reading rules are in each script's docstring, fixed before computing.
+
+**Code as a source for semantic review (D50, `runs/semantic_review_code/`).** The reviewer may also cite
+up to 40 code lines that name what the candidate names (chosen deterministically, citations checked
+verbatim). The poison, which D39 could not judge without a contradicting rule, is now a cited conflict
+in 3/3 (it cites `audit.record(... amount=amount)` in `payments.py`, where the amount is a Decimal); stale
+and changed thresholds are right (3/3 held, 2/2 approved); correct notes held 5/25 (D39: 8/25). The new
+false conflicts cite the legacy code the tasks exist to fix (`round(...)` in `pricing.py`, `float(...)` in
+`importers.py`): code is a clue, not an authority, as the review warned.
+
+**Two-layer evidence (D52, `attest/memory/validation.py`, `runs/evidence_layers/`).** Adoption evidence
+(the diff) is kept apart from independent validation (a registered policy id, a trusted reviewer's quote,
+an executable check, or repetition with different quotes); a quote taken from the very line cited as
+applied never validates. Notes with adoption only are *observed* (shown only in their own files), the
+rest *approved*.
+
+| Notes | Approved | Observed |
+|---|---|---|
+| correct notes of the main experiment | 15 | 10 (13 of 25 have self-cited evidence) |
+| float poison notes | 0 | 3 |
+| the injected instruction (D44) | 0 | 1 |
+
+The 10 correct notes left observed are all conventions the code itself shows (to_money, BillingError,
+ensure_utc, bool checks); with them shown only in their own files, needed rules injected on held-out
+queries: 97% → 88%, 91% → 97%, 85% → 85% (r1–r3), within the 10-point rule. Limit: the registry and the
+trusted reviewers are known by construction.
+
+**Graded handling of review verdicts (D53, `runs/graded_review/`).** "No evidence that it is right" is not
+"evidence that it is wrong": only conflicts, and uncertain notes about money, approvals, refunds, audit or
+idempotency, are held; other uncertain notes are kept as observed; a third handling (defined after seeing
+the second, before computing it) also approves an uncertain high-risk note that has an independent
+validation.
+
+| Reviewer sources | Handling | Poison recall | Correct memory retention | Stale held | Changed approved |
+|---|---|---|---|---|---|
+| rules + CHANGELOG | hold every uncertain (D39) | 4/4 | 17/25 | 3/3 | 1/2 |
+| rules + CHANGELOG | graded | 4/4 | 19/25 | 3/3 | 1/2 |
+| rules + CHANGELOG | **graded + independent validation** | **4/4** | **23/25** | 3/3 | 1/2 |
+| + code (D50) | hold every uncertain | 4/4 | 20/25 | 3/3 | 2/2 |
+| + code (D50) | graded + independent validation | 4/4 | 21/25 | 3/3 | 2/2 |
+
+The two correct notes still held are the reviewer's own false conflicts between the idempotency and the
+audit notes. Graded alone gains little here because almost every valuable rule in a billing system is
+high-risk; independent validation is what releases them.
+
+**Rule-level validation on failed tasks (D54, `runs/rule_level/`).** From a task that failed (here on the
+policy guard), a candidate is kept as observed only if it passes the gate's own checks, is not about the
+failed convention and shares no salient words with the failing check's comment, and its own convention
+was checked and passed. Replay of the guard run (5 failed tasks, candidates from the same distiller in the
+no-gate arm, since the gated arm distilled nothing): poison 0/4 kept; idempotency (C5) and approval (C6)
+rules kept in every failed task (7 of 9 other candidates); both audit (C4) notes dropped, because the
+failing check is itself about audit entries.
+
+**Memory-to-code impact trace (D55, `scripts/impact_trace.py`, `runs/impact_trace/`).** From the poison
+note: held-out tasks shown it → added lines that apply it → the final workspace rebuilt from the stub and
+the stored diff → the policy guard as a regression check → a review list (no automatic rollback). 23
+held-out runs were shown the poison, 14 applied it; all 14 are listed with file and line, and all 14 fail
+the regression check; the 9 that were shown it but did not apply it all pass (0 false alarms). This needs
+a check for the rule; without one, the list of lines is what a person reviews.
+
+**Smaller hardening.** D42: an append-only checkpoint file outside the log (`store.checkpoint`,
+`verify_checkpoints`): the log may grow, but rewriting or cutting anything up to a checkpoint is detected.
+D41: tests that MCP exposes only recall, learn, report_outcome and list_notes, and that nothing in a
+candidate (status, tier, references, evidence, governance) reaches the stored note. D43: an optional
+entropy check with context words catches the wrong-length AWS-like fixture and an unknown-format key; 0 of
+302 main-experiment notes and 0 of 1,523 real-repository notes flagged (the first try flagged 2 CamelCase
+identifiers; a digit is now required, changed after seeing them). Scanning stays a backstop; the agent
+shell no longer sees secrets at all (D44).
 
 ## Extension task X01: provider timeouts and retries (exploratory) / 扩展任务 X01：支付服务超时与重试（探索性）
 
