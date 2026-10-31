@@ -751,7 +751,7 @@ drifted note, or one that a newer changelog entry mentions, gets a line telling 
 check it before use, so the agent re-reads the code instead of trusting the note. A second
 mode drops drifted notes instead. Offline, with the main experiment's memories, the injected
 context is byte-identical to plain Attest on every experience, held-out and control task run
-(18/18, 33/33, 9/9). Only the 15 stale runs change: of the 90 notes injected there, 10 were
+(18/18, 33/33, 9/9; this offline check was run interactively and its output was not saved as a run, found by the number audit, D67). Only the 15 stale runs change: of the 90 notes injected there, 10 were
 drifted and 25 marked for review. So only the stale tasks were run, with 45 agent runs.
 
 | Arm | Stale pass@1 | C1 failed (S01–S03) | Approval wrongly demanded (S04–S05) | Unapproved let through (S04–S05) |
