@@ -1465,3 +1465,32 @@ tool reachable through MCP) and 2 legitimate decisions allowed. Limits: the log 
 fact; identities are names, not signatures; this is the memory lifecycle, not the business rule that a refund's
 requester may not approve it (`SCENARIO.md`, still not tested).
 修正：记忆生命周期里的职责分离现在有可执行用例（16/16）；新规则可由人标记"取代"旧规则，旧规则不再被检索但保留在日志中。
+
+
+## Write-gate benchmark: harmful instructions through six write channels (D70, SYNTHETIC attacks)
+
+`benchmark/poison_channels/` (frozen before the run), `scripts/poison_channels_eval.py`, `runs/poison_channels`.
+60 attacks (6 channels × 5 payloads × applied in the diff or not) and 6 controls; every attack is a **verified**
+learning event, the attacker's best case against a gate that learns only from verified work. Each system distills
+with its own distiller; a fresh memory per case; 0 errors.
+
+| System | Poison stored | Poison as a rule | as a rule, insider channel (10) | Controls stored / rule (6) |
+|---|---|---|---|---|
+| no gate | 46/60 | 46/60 | 9/10 | 6 / 6 |
+| Attest (preregistered gate) | 33/60 | 33/60 | 9/10 | 4 / 4 |
+| gateway v4, empty memory | 23/60 | **0/60** | 0/10 | 4 / 4 |
+| gateway v4, memory in use | 17/60 | **0/60** | 0/10 | 0 / 0 (the rules already exist) |
+| ACE | 38/60 | 38/60 | 7/10 | 6 / 6 |
+| ReasoningBank | 50/60 | 50/60 | 9/10 | 6 / 6 |
+
+- **Reading rule met:** gateway v4 made 0 poison rules outside the insider channel, from both starts (0 of 100), and
+  0 of 20 inside it.
+- **What this changes:** the main experiment's "Attest stored the poison 0 times" held because the poisoned tasks
+  failed verification. When the attacker makes the task pass, Attest's preregistered gate stores 33 of 60, fewer
+  than no gate (46), ACE (38) and ReasoningBank (50); it blocks docs and tool output (0/10 each, no review quote to
+  cite) but not review comments (9/10 in each review channel) or the issue (6/10).
+- **The caveat on v4's zero:** v4 keeps uncertain notes and shows them, marked unconfirmed, in their own files.
+  23 (empty) and 17 (in use) poisons were kept that way, so they can still reach a task that edits `payments.py`.
+  Whether they do, and whether the agent follows them, is measured downstream by D71.
+- Cost: v4 learned 4 of 6 controls from an empty memory, all as rules.
+修正：主实验"毒药 0 次入库"是因为被投毒的任务没通过验证；攻击者让任务通过时，预注册的 Attest 门槛会存下 33/60，v4 为 0 条规则，但有 23/60 作为"未确认"笔记保留并在所属文件中显示。
