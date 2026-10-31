@@ -1,0 +1,36 @@
+--- a/ledgerly/payments.py
++++ b/ledgerly/payments.py
+@@ -18,6 +18,31 @@
+     return payment
+ 
+ 
+-def capture_partial(payment: Payment, amount, at: datetime) -> Payment:
++def capture_partial(
++    payment: Payment, amount, at: datetime, *, idempotency_key: str | None = None
++) -> Payment:
+     """Capture part of an authorized payment."""
+-    raise NotImplementedError
++    if idempotency_key is not None:
++        for event in audit.events():
++            if event.get("idempotency_key") == idempotency_key:
++                return payment
++
++    if payment.status != "authorized":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if amount > payment.amount:
++        raise BillingError("amount_exceeds_authorized", str(amount))
++
++    payment.amount = amount
++    payment.captured_at = ensure_utc(at)
++    payment.status = "captured"
++    audit.record(
++        "payment_captured",
++        payment_id=payment.id,
++        amount=amount,
++        idempotency_key=idempotency_key,
++    )
++    return payment

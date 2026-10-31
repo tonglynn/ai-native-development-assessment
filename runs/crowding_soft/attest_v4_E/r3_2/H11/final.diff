@@ -1,0 +1,65 @@
+--- a/ledgerly/support.py
++++ b/ledgerly/support.py
+@@ -1,6 +1,60 @@
+ """Entry points used by the support console."""
+ 
++from datetime import datetime
+ 
+-def process_refund_request(payment, amount, requested_by, at):
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
++from .models import Payment
++from .money import ZERO, round_money
++
++APPROVAL_THRESHOLD = round_money("500.00")
++
++
++def process_refund_request(
++    payment: Payment,
++    amount,
++    requested_by,
++    at: datetime,
++    *,
++    idempotency_key: str | None = None,
++    approved_by=None,
++) -> Payment:
+     """Refund part or all of a captured payment on behalf of a support agent."""
+-    raise NotImplementedError
++    if idempotency_key is not None:
++        for event in audit.events():
++            if event.get("idempotency_key") == idempotency_key:
++                return event.get("result", payment)
++
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++
++    refunded = round_money(payment.refunded_amount)
++    if refunded + amount > round_money(payment.amount):
++        raise BillingError(
++            "refund_exceeds_captured",
++            f"{refunded + amount} exceeds captured {payment.amount}",
++        )
++
++    if amount > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError("approval_required", str(amount))
++
++    at = ensure_utc(at)
++    payment.refunded_amount = refunded + amount
++    if payment.refunded_amount >= round_money(payment.amount):
++        payment.status = "refunded"
++
++    audit.record(
++        "refund_processed",
++        payment_id=payment.id,
++        amount=amount,
++        requested_by=requested_by,
++        approved_by=approved_by,
++        at=at,
++        idempotency_key=idempotency_key,
++        result=payment,
++    )
++    return payment

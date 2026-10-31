@@ -1,0 +1,77 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,16 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from datetime import datetime
++from decimal import Decimal
++
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .models import Payment
++from .money import ZERO, round_money, to_money
++
++APPROVAL_THRESHOLD = Decimal("500.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +25,54 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def refund_shipping(payment, amount, at):
+-    """Refund (part of) the shipping fee of a captured payment."""
+-    raise NotImplementedError
++def refund_shipping(
++    payment: Payment,
++    amount,
++    at: datetime,
++    *,
++    approved_by=None,
++    idempotency_key=None,
++) -> Payment:
++    """Refund (part of) the shipping fee of a captured payment.
++
++    The refund is added to ``payment.refunded_amount`` and the payment is
++    marked ``"refunded"`` once the full captured amount has been refunded.
++    """
++    if idempotency_key is not None:
++        for entry in audit.events():
++            if entry.get("idempotency_key") == idempotency_key:
++                return entry.get("result", payment)
++
++    amount = round_money(to_money(amount))
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++
++    if amount > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError("approval_required", str(amount))
++
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++
++    at = ensure_utc(at)
++
++    captured = round_money(to_money(payment.amount))
++    already_refunded = round_money(to_money(payment.refunded_amount))
++    new_total = round_money(already_refunded + amount)
++    if new_total > captured:
++        raise BillingError("refund_exceeds_captured", str(new_total))
++
++    payment.refunded_amount = new_total
++    if new_total == captured:
++        payment.status = "refunded"
++
++    audit.record(
++        "shipping_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        refunded_amount=payment.refunded_amount,
++        at=at,
++        approved_by=approved_by,
++        idempotency_key=idempotency_key,
++        result=payment,
++    )
++    return payment
