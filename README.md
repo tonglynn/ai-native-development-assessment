@@ -150,7 +150,7 @@ more relevant notes but did not improve coding results (retrieval ablation in
 | v3 (D57) | code is a clue not an authority; passing checks validate | from an empty memory, wrong advice validated by "tests passed" (D58) |
 | v3.1 (D59) | counterfactual check: a test vouches only if it fails without the change | wrong advice from a trusted reviewer approved |
 | v4 (D60) | three states; business rules by tests, code conventions by code checks; reviewer alone is uncertain | review queue; injection crowding (D63) |
-| + D61–D67 | origin-based independence; review lifecycle; criticality-first and soft-budget injection | cross-domain check; rules injected but not followed |
+| + D61–D68 | origin-based independence; review lifecycle; criticality-first and soft-budget injection | cross-domain check; rules injected but not followed |
 
 The counterfactual check costs about 1 s of test time per candidate note (15 frozen-set candidates, mean 1.0 s, max
 1.7 s), paid once when a note is learned.
@@ -323,7 +323,7 @@ Sources for the industry and research context: [GitHub Copilot agentic memory](h
 | `runs/` | Every run: trajectories, diffs, `result.json`, memory event logs |
 | `report/index.html` | Interactive report of the main experiment |
 | `RESULTS.md`, `REAL_HISTORY.md` | Results |
-| `PREREGISTRATION.md`, `DECISIONS.md`, `AI_LOG.md`, `INCIDENTS.md` | Method, decisions D1–D67, AI collaboration log, incidents |
+| `PREREGISTRATION.md`, `DECISIONS.md`, `AI_LOG.md`, `INCIDENTS.md` | Method, decisions D1–D68, AI collaboration log, incidents |
 | `SCENARIO.md`, `scenario/history/` | Business scenario (synthetic) |
 | `ROADMAP.md`, `PROCESS_MEMORY.md` | Next steps (Attest 2.0), deliberately not added |
 

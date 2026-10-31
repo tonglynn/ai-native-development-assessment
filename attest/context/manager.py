@@ -23,6 +23,12 @@ Four steps, in this order:
                             assistant-message boundaries so tool results never lose
                             the call they answer
 
+Budget guards (D68): the most recent step is always kept, so a huge tool output in it is clipped to
+its head and tail (the archive keeps it whole); the working state is fitted to the room left, dropping
+files, then the latest test result, then the oldest constraints; review comments are never dropped,
+and when they alone do not fit, the oldest window step moves out instead. On both recorded scenarios
+the assembled context is byte-identical to the version without the guards.
+
 The pinned constraints are never summarised: they are carried verbatim in the working
 state, so a model summary that turns "above 1000.00" into "large refunds" cannot
 remove the threshold. `fidelity()` reports which pinned tokens (numbers, ids,
@@ -160,6 +166,48 @@ def fidelity(summary: str, state: WorkingState) -> dict:
     return {"pinned": len(pinned), "kept": len(kept), "dropped": sorted(pinned - set(kept))}
 
 
+CLIP_LINES = 40
+
+
+def clip_tool(m: dict, max_chars: int) -> dict:
+    """D68: shorten one tool result to about max_chars, keeping its head and tail and saying what was left out."""
+    if m.get("role") != "tool" or len(_text(m)) <= max_chars:
+        return m
+    try:
+        out = json.loads(m.get("content") or "")
+        text = str(out.get("output", "")) if isinstance(out, dict) else None
+    except json.JSONDecodeError:
+        out, text = None, None
+    raw = text if text is not None else str(m.get("content") or "")
+    lines = raw.splitlines()
+    half = max(100, max_chars // 2 - 60)
+    if len(lines) > 2 * CLIP_LINES and len("\n".join(lines[:CLIP_LINES] + lines[-CLIP_LINES:])) <= max_chars:
+        cut = f"... [{len(lines) - 2 * CLIP_LINES} lines left out by the context manager; the full output is in the archive] ..."
+        short = "\n".join(lines[:CLIP_LINES] + [cut] + lines[-CLIP_LINES:])
+    else:
+        cut = f"\n... [{len(raw) - 2 * half} characters left out by the context manager; the full output is in the archive] ...\n"
+        short = raw[:half] + cut + raw[-half:]
+    content = json.dumps({**out, "output": short}) if text is not None else short
+    return {**m, "content": content}
+
+
+def fit_state(state: "WorkingState", max_chars: int) -> str:
+    """D68: render the working state within max_chars. Dropped first: files, then the latest test result, then the
+    oldest constraints. Review comments are never dropped (the text may then exceed max_chars; the caller makes room)."""
+    import copy
+    s = copy.deepcopy(state)
+    text = s.render()
+    for drop in ("files", "last_tests"):
+        if len(text) <= max_chars:
+            return text
+        setattr(s, drop, [] if drop == "files" else "")
+        text = s.render()
+    while len(text) > max_chars and s.constraints:
+        s.constraints.pop(0)
+        text = s.render()
+    return text
+
+
 class ContextManager:
     """Assembles the message list under a budget. Strategies (for the ablation):
 
@@ -201,6 +249,15 @@ class ContextManager:
                 break
             keep = step + keep
             pos = start
+        msgs = list(messages)
+        if self.strategy == "manager" and tokens_of([msgs[i] for i in keep]) > budget_left:
+            # D68: the most recent step is always kept, so one huge tool output could break the budget.
+            # Its tool outputs keep their head and tail; the full text stays in the archive.
+            others = tokens_of([msgs[i] for i in keep if msgs[i].get("role") != "tool"])
+            tools = [i for i in keep if msgs[i].get("role") == "tool"]
+            per = max(200, (budget_left - others) * 4 // max(1, len(tools)))
+            for i in tools:
+                msgs[i] = clip_tool(msgs[i], per)
         old = [messages[i] for i in history[:pos]]
 
         blocks = []
@@ -209,14 +266,29 @@ class ContextManager:
         elif old and self.strategy == "manager":
             # Steps 1-3: extract, keep constraints verbatim (importance: pinned), compress the rest.
             state = extract_state(old)
-            state_text = state.render()
-            kept_tokens = tokens_of([system, task] + [messages[i] for i in keep])
+            state_room = (self.budget - tokens_of([system, task] + [msgs[i] for i in keep])) * 4 - 100
+            state_text = fit_state(state, state_room)
+            while len(state_text) > state_room and len(keep) > 1:
+                # D68: review comments are never dropped; give them room by moving the oldest window step out.
+                start = 1
+                while start < len(keep) and msgs[keep[start]].get("role") == "tool":
+                    start += 1
+                if start >= len(keep):
+                    break
+                pos += start
+                keep = keep[start:]
+                old = [messages[i] for i in history[:pos]]
+                state = extract_state(old)
+                state_room = (self.budget - tokens_of([system, task] + [msgs[i] for i in keep])) * 4 - 100
+                state_text = fit_state(state, state_room)
+            kept_tokens = tokens_of([system, task] + [msgs[i] for i in keep])
             room = max(0, (self.budget - kept_tokens) * 4 - len(state_text) - 100)
             summary = extractive_summary(old)
             text = state_text + ("\n\n[Earlier steps, compressed]\n" + summary[-room:] if room > 200 else "")
             blocks.append({"role": "user", "content": text})
-        ctx = [system] + blocks + [messages[i] for i in sorted(keep + [task_index])]
-        self.log.append({"strategy": self.strategy, "in": tokens_of(messages), "out": tokens_of(ctx), "dropped": len(old)})
+        ctx = [system] + blocks + [msgs[i] for i in sorted(keep + [task_index])]
+        self.log.append({"strategy": self.strategy, "in": tokens_of(messages), "out": tokens_of(ctx), "dropped": len(old),
+                         "over_budget": tokens_of(ctx) > self.budget})
         return ctx
 
     def _model_summary(self, old: list[dict]) -> str:

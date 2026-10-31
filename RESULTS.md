@@ -385,6 +385,15 @@ has no "superseded" relation, and the agent picked the right value here only bec
 names what it supersedes. Limits: one scenario, one target task, 3 runs per cell, two models of one
 provider; the scenario was written by me with this manager in mind (the extraction rules predate it).
 
+
+**Budget guards (D68, after the runs, no new model runs).** Two ways the manager could exceed its budget, found by
+reading the code, not by a failure: the most recent step is always kept whatever its size, and the working state had a
+fixed 700-token reserve but was always included whole. Now a huge tool output in the last step keeps its head and tail
+(the archive keeps it whole), and the working state is fitted to the room left (files, then the test result, then the
+oldest constraints go first; review comments never go, and the oldest window step moves out instead). On both recorded
+scenarios at every budget used, the assembled context is byte-identical to the version without the guards, so the
+results above stand. Two unit tests cover the new branches (`tests/test_context.py`). 修正：最近一步过大或工作状态过长时可能超预算，现已加保护；已记录场景的上下文逐字节不变，结果不受影响。
+
 ## Dynamic forgetting V1 (exploratory, after the main experiment) / 动态遗忘 V1（探索性）
 
 Scope of the extensions below: forgetting, trust-tiered admission and verification at

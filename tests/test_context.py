@@ -107,3 +107,32 @@ def test_review_comments_are_kept_whole_and_first():
     assert not any("ValueError" in s for _, s in state.constraints)  # code lines from tool output are not constraints
     text = state.render()
     assert text.index("Review comments you received") < text.index(RULE)
+
+
+def test_d68_huge_last_tool_output_is_clipped_to_the_budget():
+    msgs = session()
+    task = msgs.pop()
+    msgs += step(99, output="\n".join(f"line {i} " + "y" * 60 for i in range(3000))) + [task]
+    cm = ContextManager("manager", 4000)
+    ctx = cm.assemble(msgs, task_index=len(msgs) - 1)
+    assert tokens_of(ctx) <= 4000 and not cm.log[-1]["over_budget"]
+    last_tool = [m for m in ctx if m.get("role") == "tool"][-1]
+    out = json.loads(last_tool["content"])["output"]
+    assert "line 0 " in out and "line 2999 " in out and "left out by the context manager" in out
+    text = "\n".join(str(m.get("content")) for m in ctx)
+    assert "`approved_by=None`" in text and "1000.00 since 2.0.0" in text
+    assert len(json.loads(cm.archive[-2]["content"])["output"]) > len(out)  # the archive keeps the full output
+
+
+def test_d68_many_constraints_stay_within_budget_and_reviews_are_never_dropped():
+    msgs = [{"role": "system", "content": "system prompt"}, {"role": "user", "content": "earlier task"}]
+    msgs.append({"role": "user", "content": "## Code review of your previous attempt\n- " + RULE + "\n"})
+    for i in range(400):
+        msgs.append({"role": "user", "content": f"Rule {i}: amounts must be Decimal in module_{i}."})
+        msgs += step(i, output="z" * 300)
+    msgs.append({"role": "user", "content": "NEW TASK"})
+    cm = ContextManager("manager", 3000)
+    ctx = cm.assemble(msgs, task_index=len(msgs) - 1)
+    text = "\n".join(str(m.get("content")) for m in ctx)
+    assert tokens_of(ctx) <= 3000 and not cm.log[-1]["over_budget"]
+    assert RULE in text and "Rule 399:" in text and "Rule 0:" not in text  # newest constraints kept first

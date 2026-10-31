@@ -54,3 +54,4 @@
 
 | 11/01 | 数字审计（D67） | 要求独立核对 README、RESULTS、DECISIONS 的数字，且在本地或 GitHub 上跑；第一层确定性脚本、第二层 deepseek-v4-pro 审读，误报逐条回原始数据核对；没有发现错误数字，唯一缺出处的离线核对重跑并存档 | `scripts/audit_numbers.py`、`runs/audit_numbers*`、`runs/verify_offline_identity` |
 | 11/01 | 提交前总检查 | 测试 168 通过 1 xfail；冻结任务集 25/25；benchmark/tasks 自冻结前未改；git 全历史无 PDF、无题目原文文件、无真实密钥（唯一命中是测试用的私钥头，无密钥内容） | 本行 |
+| 11/01 | Context Manager 滑动窗口（D68） | 同意补两个预算漏洞；要求不碰主实验与已有结果；先存改动前的上下文哈希，改后逐字节比对两个场景均一致 | `attest/context/manager.py`、`tests/test_context.py` |
