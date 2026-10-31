@@ -887,6 +887,36 @@ interval reaches −18, so "not worse" is **not shown** (inconclusive); and it h
 v1 (8), so that criterion is **not met**: what improved is which notes act as rules, not how many the
 reviewer holds. It stays an option.
 
+**Why correct notes were still held, and version 3 (D57, `scripts/held_diagnosis.py`).** Every note v2
+held, in all three scenarios (25 correct notes, 0 poison), was held as a **conflict**, never as uncertain,
+so graded handling never applied: 22 of the conflicts cited only code, and that code was the legacy code
+the tasks exist to fix (`round()` in `pricing.py`, `float` in `reporting.py`); 3 cited a complementary
+correct rule (idempotency vs audit). Rule-level learning (D54) and the trust boundary (D41) held none.
+By the review's three classes: 14 lacked independent evidence (mostly notes from tasks that passed first
+time, whose only evidence is the agent's own line), 0 had independent evidence the reviewer missed (it is
+never shown it), 11 had independent evidence but were held because "conflict → hold" ran first. Three
+rules, decided after this classification and before recomputing: R1 a conflict citing only code is
+uncertain; R2 a passing test of every convention a note is about is independent validation (never the
+diff); R3 a rule conflict does not hold a note validated by a registered policy or a trusted reviewer.
+Offline on the stored verdicts: held correct notes 25 → 12 (R1) → 3 (R1+R2) → 1 (all three); none of the
+10 stored poison notes is validated by R2.
+
+| Scenario | | Attest | v1 | v2 | **v3** |
+|---|---|---|---|---|---|
+| clean stream | held-out pass@1 (vs Attest) | 85% | 64% (−21 [−36, −6]) | 79% (−6 [−18, +6]) | **85% (0 [−9, +9])** |
+| clean stream | correct notes held | – | 8 | 8 | **0** |
+| second poison | poison stored / held-out applying | 3 / 13 | 0 / 0 | 0 / 0 | **0 / 0** |
+| second poison | held-out pass@1 | 73% | 33% | 61% | 52% |
+| first poison | poison stored; correct notes held | 0; – | 0; 6 | 0; 7 | 0; 2 |
+
+All three criteria fixed before the v3 run are met: no correct note held on the clean stream (v2: 8),
+the poison stored 0 times and applied 0 times, and the clean-stream result is "not worse" than Attest
+(lower bound −9 > −10). Under the float poison v3 learns less than v2 (52% vs 61%, within run-to-run
+noise at 3 repetitions). Limits: the trusted reviewers and the policy registry are known by construction;
+R2 relies on the benchmark's convention tests, and on the Decimal rule's pattern matching "float", which
+was added after a unit test showed a float-only poison slipping through; one model, 3 repetitions. v3
+stays opt-in: it is the first combination that stops both poisons without a measured cost on clean work.
+
 ## Closing the "self-proving evidence" gap (exploratory, after an external review) / 证据自证问题的改进
 
 Four changes proposed in a review of the design, each measured offline on stored runs (no new agent
