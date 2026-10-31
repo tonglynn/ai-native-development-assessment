@@ -21,7 +21,14 @@ Reading rule, fixed before running: an arm is better than A if its held-out pass
 worse if its lower bound is above -10 points, otherwise inconclusive; the offline measures are reported whatever
 the pass rate, and a lower displacement without a pass-rate gain is reported as such.
 
-Usage: python scripts/crowding_eval.py --out runs/crowding --parallel 40 [--offline-only]
+D66 (--arms A,C,D2,E, same memory, A and C rerun in the same session): D2 soft budget (every relevant core rule kept,
+others by relevance above half the best, at most 10, and over a 600-token memory budget the non-core notes are
+compressed to their titles, never dropped; core notes are kept even without word overlap, changed after an offline dry
+run showed 72/81 needed core rules injected, disclosed); E task-type criticality (the rules the task's operation needs, read from
+the task text, come first instead of a fixed core list) with the same soft budget. Reading rule, fixed before
+running: as above, each arm against A, and D2 and E also against C.
+
+Usage: python scripts/crowding_eval.py --out runs/crowding --parallel 40 [--offline-only] [--arms A,C,D2,E]
 """
 
 from __future__ import annotations
@@ -42,7 +49,7 @@ from attest.memory import make_memory, tiers  # noqa: E402
 from attest.runner import Settings, run_task  # noqa: E402
 
 SRC = ROOT / "runs/review_replay/clean/attest_secure_v4_reviewed"
-ARMS = ("A", "B", "C", "D")
+ARMS = ["A", "B", "C", "D"]
 CORE = {"C1", "C4", "C5", "C6"}
 OLD = re.compile(r"\b500(\.00)?\b")
 RUNS = [("r1", 1), ("r2", 1), ("r3", 1), ("r1", 2), ("r2", 2), ("r3", 2)]
@@ -110,15 +117,18 @@ def summarise(off: list[dict], runs: list[dict]) -> list[str]:
     if runs:
         ok = [r for r in runs if not r["crashed"]]
         lines += ["", f"End to end ({len(runs)} runs, {len(runs) - len(ok)} crashed):", "",
-                  "| Arm | Held-out pass@1 | vs A (paired by task) | Stale | Control | Prompt tokens / run |", "|---|---|---|---|---|---|"]
+                  "| Arm | Held-out pass@1 | vs A (paired by task) | vs C | Stale | Control | Prompt tokens / run |", "|---|---|---|---|---|---|---|"]
         pa = {p["condition"]: p for p in paired(ok, "heldout", baseline="attest_v4_A")}
+        pc = {p["condition"]: p for p in paired(ok, "heldout", baseline="attest_v4_C")} if "C" in ARMS else {}
         for arm in ARMS:
             c = f"attest_v4_{arm}"
             g = [r for r in ok if r["condition"] == c]
             rate = lambda grp: sum(r["first_pass"] for r in g if r["group"] == grp) / max(1, sum(r["group"] == grp for r in g))  # noqa: E731
             p = pa.get(c)
             vs = "–" if arm == "A" else f"{p['mean_diff']:+.0%} [{p['ci_low']:+.0%}, {p['ci_high']:+.0%}]"
-            lines.append(f"| {arm} | {rate('heldout'):.0%} | {vs} | {rate('stale'):.0%} | {rate('control'):.0%} | "
+            q = pc.get(c)
+            vc = "–" if q is None else f"{q['mean_diff']:+.0%} [{q['ci_low']:+.0%}, {q['ci_high']:+.0%}]"
+            lines.append(f"| {arm} | {rate('heldout'):.0%} | {vs} | {vc} | {rate('stale'):.0%} | {rate('control'):.0%} | "
                          f"{sum(r['prompt_tokens'] for r in g) / max(1, len(g)):,.0f} |")
     return lines
 
@@ -128,7 +138,10 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--parallel", type=int, default=40)
     ap.add_argument("--offline-only", action="store_true")
+    ap.add_argument("--arms", default="")
     args = ap.parse_args()
+    if args.arms:
+        ARMS[:] = [a.upper() for a in args.arms.split(",")]
     args.out.mkdir(parents=True, exist_ok=True)
     off = offline()
     runs = []

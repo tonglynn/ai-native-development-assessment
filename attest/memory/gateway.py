@@ -359,12 +359,12 @@ class TieredMemory(SecureMemoryV4):
 
     def __init__(self, store_dir, arm: str, trust: admission.Trust | None = None, **kw):
         super().__init__(store_dir, trust=trust, **kw)
-        assert arm in "ABCD", arm
+        assert arm in ("A", "B", "C", "D", "D2", "E"), arm
         self.arm = arm
         self.name = f"attest_v4_{arm}"
-        if arm == "D":
+        if arm in ("D", "D2", "E"):
             from .tiers import MAX_K
-            self.max_shown = MAX_K
+            self.max_shown = MAX_K if arm == "D" else 10
 
     def ranking(self, task, k=6, version=None):
         from .tiers import CORE_K, REL_FRACTION, tier
@@ -376,6 +376,16 @@ class TieredMemory(SecureMemoryV4):
             ranked = sorted(scored, key=lambda x: (-x[1], x[0]))
         elif self.arm == "C":
             ranked = sorted(scored, key=lambda x: (0 if x[1] > 0 and tier(items[x[0]]) == "core" else 1, -x[1], x[0]))
+        elif self.arm in ("D2", "E"):  # D66: soft budget; E ranks by what this task type needs
+            from .tiers import note_topics, task_critical
+            crit = task_critical(task)
+            def important(i):
+                return tier(items[i]) == "core" if self.arm == "D2" else bool(note_topics(items[i]) & crit) and tier(items[i]) != "candidate"
+            # important notes are kept whole even without word overlap (changed after an offline dry run, disclosed)
+            first = [(i, sc) for i, sc in sorted(scored, key=lambda x: (-x[1], x[0])) if important(i)]
+            others = [(i, sc) for i, sc in sorted(scored, key=lambda x: (-x[1], x[0])) if sc > 0 and not important(i)]
+            best = max([sc for _, sc in others] or [0])
+            ranked = first + [(i, sc) for i, sc in others if sc >= REL_FRACTION * best and tier(items[i]) != "candidate"]
         else:  # D: tiers + dynamic k, no filler
             by = {t: [(i, sc) for i, sc in sorted(scored, key=lambda x: (-x[1], x[0])) if tier(items[i]) == t and sc > 0]
                   for t in ("core", "regular", "candidate")}
@@ -385,3 +395,27 @@ class TieredMemory(SecureMemoryV4):
             rest.sort(key=lambda x: (0 if tier(items[x[0]]) == "regular" else 1, -x[1], x[0]))
             ranked = core + rest
         return (ranked if k is None else ranked[:k]), ms
+
+
+    def retrieve(self, task, repo_version):
+        r = super().retrieve(task, repo_version)
+        if self.arm not in ("D2", "E"):
+            return r
+        from .tiers import MEMORY_BUDGET, note_topics, task_critical, tier
+        if len(r.context) // 4 <= MEMORY_BUDGET:
+            return r
+        items = self.store.items()
+        crit = task_critical(task)
+        keep_full = {i for i in r.ids if (tier(items[i]) == "core" if self.arm == "D2" else bool(note_topics(items[i]) & crit))}
+        lines, out = r.context.splitlines(), []
+        skip = False
+        for ln in lines:  # over budget: compress the other notes to their title; important notes stay whole
+            m = re.match(r"- \[([\w-]+)\] ([^:]+):", ln)
+            if m:
+                skip = m.group(1) not in keep_full
+                out.append(f"- [{m.group(1)}] {m.group(2)} (compressed: over the memory budget)" if skip else ln)
+            elif not (skip and ln.startswith("  ")):
+                out.append(ln)
+        r.context = "\n".join(out)
+        r.debug["compressed"] = sorted(set(r.ids) - keep_full)
+        return r

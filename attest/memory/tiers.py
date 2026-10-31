@@ -38,3 +38,27 @@ def tier(item: dict) -> str:
     if a.get("state") != "approved" or item.get("observed_only"):
         return "candidate"
     return "core" if topics(f"{item.get('title') or ''} {item.get('content') or ''}") else "regular"
+
+
+# D66 (after D64; exploratory): task-type criticality and a soft budget.
+# Task types are read from the task's title and issue only. The table stands for team configuration;
+# written after the crowding ablation, before this run (disclosed).
+TASK_TYPES = {
+    "money movement": (r"\b(refund|credit|capture|payment|charge|void|write.?off|payout|goodwill|outage)\w*", {"C4", "C5", "C6"}),
+    "amount calculation": (r"\b(price|total|tax|fee|commission|rate|discount|prorat|amount|cost|average)\w*", {"C1"}),
+    "time handling": (r"\b(date|time|period|renewal|window|schedule|datetime)\w*", {"C3"}),
+    "input validation": (r"\b(invalid|reject|must be|negative|zero|error)\w*", {"C2"}),
+}
+ALL_TOPICS = {"C1": r"\bDecimal\b|round_money|\bfloat\b", "C2": r"BillingError", "C3": r"ensure_utc|time[- ]?zone|naive",
+              "C4": r"audit\.record|audit entr|audit trail|audit log", "C5": r"idempoten", "C6": r"approv"}
+MEMORY_BUDGET = 600   # tokens for the memory block (arm A's average was 569)
+
+
+def task_critical(task) -> set[str]:
+    text = f"{getattr(task, 'title', '')} {getattr(task, 'issue', '')}"
+    return set().union(*[conv for rx, conv in TASK_TYPES.values() if re.search(rx, text, re.I)] or [set()])
+
+
+def note_topics(item: dict) -> set[str]:
+    text = f"{item.get('title') or ''} {item.get('content') or ''}"
+    return {c for c, rx in ALL_TOPICS.items() if re.search(rx, text, re.I)}
