@@ -20,6 +20,6 @@ Sections with numbers not found in their cited reports (review; many are derived
 - RESULTS / hybrid retrieval, 13/15 → 15/15: `arms_summary.json` stores stale pass@1 0.867 and 1.0 over 15 runs = 13/15 and 15/15. Correct.
 - RESULTS / D58, 10/11, 5/10, 0/0: the reports give the counts as table cells (judgement: trusted 11 → 10 rule; judgement_cold: wrong 10 → 5 rule). Correct.
 - RESULTS / evidence layers, 8/25: `graded_review` row "D39: hold every uncertain" retains 17/25, so 8/25 held. Correct.
-- RESULTS / just-in-time verification, 33/33 and 9/9: **no committed source.** The offline byte-identity check was run interactively and its output was not saved. Disclosed in RESULTS.md; the stale-task numbers in the same section are in `runs/verify_eval`.
+- RESULTS / just-in-time verification, 33/33 and 9/9: had no committed source (run interactively). Rerun and saved: `runs/verify_offline_identity` gives 18/18, 33/33, 9/9 at every intermediate memory state.
 
-Result: 0 missing run folders, 0 wrong numbers, 1 number without a committed source.
+Result: 0 missing run folders, 0 wrong numbers; the one number without a committed source now has one.

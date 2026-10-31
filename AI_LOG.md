@@ -52,3 +52,5 @@
 | 10/30 | 冻结 | 要求冻结前再核对 DECISIONS（D7–D11）、PREREGISTRATION 与 AUDIT 三份材料，并独立复核 8 项；没有 Blocker 和 Major 才冻结，有问题只修必要内容并重新验证 25/25 | 复核通过后在 `cf5d879` 冻结 |
 | 10/30 | 记忆分类（实体 / 语义 / 程序 / 情景） | 记入 ROADMAP，不改主实验 | ROADMAP 分类一节 |
 
+| 11/01 | 数字审计（D67） | 要求独立核对 README、RESULTS、DECISIONS 的数字，且在本地或 GitHub 上跑；第一层确定性脚本、第二层 deepseek-v4-pro 审读，误报逐条回原始数据核对；没有发现错误数字，唯一缺出处的离线核对重跑并存档 | `scripts/audit_numbers.py`、`runs/audit_numbers*`、`runs/verify_offline_identity` |
+| 11/01 | 提交前总检查 | 测试 168 通过 1 xfail；冻结任务集 25/25；benchmark/tasks 自冻结前未改；git 全历史无 PDF、无题目原文文件、无真实密钥（唯一命中是测试用的私钥头，无密钥内容） | 本行 |
