@@ -101,3 +101,22 @@ def test_v31_validates_only_what_the_tests_depend_on(monkeypatch, tmp_path):
     assert by_title["Audit every refund"]["counterfactual"]["validated"]  # E04's audit test depends on the statement
     assert m._validated(by_title["Audit every refund"]) == ["check"] and m._validated(by_title["Audit entries store plain numbers"]) == []
     # the same line: the audit claim is validated, the float claim is not (E04 does not check C3, so an ensure_utc note would not be either)
+
+
+def test_three_states():
+    from attest.memory.gateway import three_state
+    none = {"violations": [], "supports": [], "code_convention": False}
+    assert three_state(policy=False, counterfactual=None, code=none, reviewer=True, repeated=False)["state"] == "uncertain"
+    assert three_state(policy=False, counterfactual=None, code=none, reviewer=True, repeated=True)["state"] == "approved"
+    assert three_state(policy=False, counterfactual={"validated": True}, code=none, reviewer=False, repeated=False)["state"] == "approved"
+    bad = {"violations": ["ledgerly-round"], "supports": [], "code_convention": True}
+    assert three_state(policy=False, counterfactual={"validated": True}, code=bad, reviewer=True, repeated=False)["state"] == "rejected"
+    assert three_state(policy=True, counterfactual=None, code=bad, reviewer=False, repeated=False)["state"] == "uncertain"
+
+
+def test_code_checks_read_the_applied_line():
+    from attest.memory import codechecks
+    assert codechecks.run("ledgerly_v1", "Quantize money directly", "return (x).quantize(CENT, ROUND_HALF_UP)")["violations"] == ["ledgerly-round"]
+    assert codechecks.run("simkit", "Round the report", "return round(x, 2)")["violations"] == []  # round() is fine in simkit
+    assert codechecks.run("simkit", "Name functions in camelCase", "def energyCost(x):")["violations"] == ["naming"]
+    assert codechecks.run("ledgerly_v1", "Round money only with round_money", "return round_money(t)")["supports"] == ["ledgerly-round"]

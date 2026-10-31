@@ -41,6 +41,9 @@ def make_memory(condition: str, store_dir: Path | None) -> MemorySystem:
     if condition == "attest_secure":  # D51, exploratory: every optional safeguard together
         from .gateway import SecureMemory
         return SecureMemory(store_dir)
+    if condition == "attest_secure_v4":  # D60: three states, rule kinds routed to tests or code checks
+        from .gateway import SecureMemoryV4
+        return SecureMemoryV4(store_dir)
     if condition == "attest_secure_v31":  # D59: v3 with the counterfactual check instead of R2
         from .gateway import SecureMemoryV31
         return SecureMemoryV31(store_dir)

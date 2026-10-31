@@ -271,3 +271,84 @@ class SecureMemoryV31(SecureMemoryV3):
                 events.append(self.store.append("update", id=e["item"]["id"], fields={"counterfactual": cf},
                                                 reason=f"counterfactual check: {cf['status']}"))
         return events
+
+
+def three_state(*, policy: bool, counterfactual: dict | None, code: dict, reviewer: bool, repeated: bool,
+                review: dict | None = None) -> dict:
+    """D60: Approved / Rejected / Uncertain. Uncertain is never turned into Approved for convenience.
+
+    counter-evidence  a team code check the change violates; a cited conflict with an existing rule or the
+                      CHANGELOG (a conflict citing only code is a clue, D57 R1); the advice failing the tests
+    hard evidence     a registered policy; a counterfactual test; a team code check that supports the note
+    soft evidence     a trusted reviewer; repetition with different quotes
+    Rejected  counter-evidence and no hard evidence
+    Approved  no counter-evidence, and hard evidence or two kinds of soft evidence
+    Uncertain everything else, including a trusted reviewer alone and counter-evidence against hard evidence:
+              a person decides"""
+    cf = counterfactual or {}
+    cites = {"code" if c["source_id"].startswith("code:") else "rule" for c in (review or {}).get("conflicts") or []}
+    counter = list(code.get("violations") or [])
+    if (review or {}).get("verdict") == "conflict" and "rule" in cites:
+        counter.append("conflict with " + ", ".join(sorted(c["source_id"] for c in review["conflicts"] if not c["source_id"].startswith("code:"))))
+    if str(cf.get("status", "")).startswith("invalid"):
+        counter.append("the advice fails the tests")
+    # routing: a code-implementation convention is verified by the team's code checks, not by tests (a
+    # behaviourally equivalent violation passes every test); a business rule by the counterfactual test
+    test_counts = cf.get("validated") and not code.get("code_convention")
+    hard = (["policy"] if policy else []) + (["test"] if test_counts else []) + [f"code check {c}" for c in code.get("supports") or []]
+    soft = (["trusted reviewer"] if reviewer else []) + (["repeated"] if repeated else [])
+    if counter and not hard:
+        state = "rejected"
+    elif not counter and (hard or len(soft) >= 2):
+        state = "approved"
+    else:
+        state = "uncertain"
+    return {"state": state, "counter": counter, "hard": hard, "soft": soft}
+
+
+class SecureMemoryV4(SecureMemoryV31):
+    """Three states (D60): approved notes are rules; uncertain ones wait for a person (shown, marked
+    unconfirmed, only in their own files); rejected ones are never shown. Business rules are verified by the
+    counterfactual test, code conventions by the team's code checks."""
+
+    def __init__(self, store_dir, trust: admission.Trust | None = None, **kw):
+        super().__init__(store_dir, trust=trust, **kw)
+        self.name = "attest_secure_v4"
+
+    def _assess(self, cand, ev, run, task, review, diff_text) -> dict:
+        from . import codechecks
+        from .validation import independent
+        text = f"{cand.get('title') or ''} {cand.get('content') or ''}"
+        cf = self._counterfactual(cand, ev)
+        probe = {"id": "probe", "title": cand.get("title"), "content": cand.get("content"), "evidence": [ev],
+                 "source": {"task_id": task.id, "review_comments": run["attempts"][0]["review_comments"], "references": ev["source"]["references"]}}
+        ind = independent(probe, self.trust)
+        return three_state(policy="policy" in ind, counterfactual=cf, code=codechecks.run(task.repo, text, (ev.get("applied") or {}).get("line") or ""),
+                           reviewer="reviewer" in ind, repeated="repeated" in ind, review=review)
+
+    def learn(self, task, repo_version, run, transcript, diff, candidates=None):
+        self._diff_text = diff
+        return super().learn(task, repo_version, run, transcript, diff, candidates)
+
+    def _admit_after_review(self, review, task, repo_version, run, cand, changed) -> bool:
+        ev = self._evidence(task, repo_version, run, cand, changed)
+        a = self._assess(cand, ev, run, task, review, getattr(self, "_diff_text", ""))
+        self._last_assessment = a
+        return a["state"] != "rejected" and not (a["state"] == "uncertain" and review.get("verdict") == "conflict" and a["counter"])
+
+    def _admit(self, task, repo_version, run, cand, changed):
+        events = super()._admit(task, repo_version, run, cand, changed)
+        a = getattr(self, "_last_assessment", None)
+        if a:
+            for e in list(events):
+                iid = e["item"]["id"] if e["type"] == "add" else None
+                if iid:
+                    events.append(self.store.append("update", id=iid, fields={"assessment": a},
+                                                    reason=f"three-state assessment: {a['state']}"))
+        return events
+
+    def _validated(self, item: dict) -> list[str]:
+        a = item.get("assessment")
+        if a is None:
+            return super()._validated(item)
+        return a["hard"] + a["soft"] if a["state"] == "approved" else []

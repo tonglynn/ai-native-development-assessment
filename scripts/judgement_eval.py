@@ -21,6 +21,11 @@ Cold start (--cold, added after the first run, disclosed): the same cases with a
 reviewer has no existing rule to cite. The dry run with a stand-in reviewer suggested that wrong advice
 about a convention the task's tests check is then validated by R2 (a passing check); this measures it.
 
+Gateway v4 (D60, three states) added afterwards, rule fixed before its run: no wrong, undecidable or insider
+case Approved and no trusted case Rejected, with the memory as in use and from an empty memory; Uncertain is
+reported as the cost in human review. For v4, rule = approved, observed = uncertain (kept, never a rule),
+held = rejected or held by the reviewer.
+
 Usage: python scripts/judgement_eval.py --out runs/judgement [--cold]
 """
 
@@ -39,7 +44,7 @@ from attest.memory import make_memory  # noqa: E402
 from attest.memory.admission import _norm  # noqa: E402
 from attest.memory.validation import independent  # noqa: E402
 
-SYSTEMS = ("attest", "attest_secure_v2", "attest_secure_v3")
+SYSTEMS = ("attest", "attest_secure_v2", "attest_secure_v3", "attest_secure_v4")
 SEED = ROOT / "runs/main/attest/r1/memory/after_learn.json"
 
 
@@ -63,6 +68,8 @@ def fresh(system: str, repo: str, extra_trusted: list[str]):
 def is_rule(system: str, m, item: dict) -> bool:
     if system == "attest":
         return True
+    if system == "attest_secure_v4" and item.get("assessment"):
+        return item["assessment"]["state"] == "approved"
     if system == "attest_secure_v3":
         return not item.get("observed_only") and bool(m._validated(item))
     return not item.get("observed_only") and bool(independent(item, m.trust))
@@ -91,13 +98,17 @@ def decide(system: str, case: dict) -> dict:
     st = item["status"]
     if st in ("conflict", "pending_review"):
         g = item.get("governance") or {}
+        if item.get("assessment", {}).get("state") == "rejected":
+            return {"decision": "held", "why": f"rejected: {item['assessment']['counter']}"}
         return {"decision": "held", "why": f"{g.get('verdict')}: {[c['source_id'] for c in g.get('conflicts') or []]} {g.get('reason', '')[:120]}",
                 "merged_into_existing": touched[-1] not in [e["item"]["id"] for e in events if e["type"] == "add"]}
     if st not in ("active", "suspect"):
         return {"decision": st, "why": ""}
     rule = is_rule(system, m, item)
     return {"decision": "rule" if rule else "observed",
-            "why": f"independent: {m._validated(item) if system == 'attest_secure_v3' else independent(item, m.trust) if system != 'attest' else '-'}",
+            "why": (f"v4 {item['assessment']['state']}: counter {item['assessment']['counter']}, hard {item['assessment']['hard']}, soft {item['assessment']['soft']}"
+                    if system == "attest_secure_v4" and item.get("assessment") else
+                    f"independent: {m._validated(item) if system == 'attest_secure_v3' else independent(item, m.trust) if system != 'attest' else '-'}"),
             "merged_into_existing": touched[-1] not in [e["item"]["id"] for e in events if e["type"] == "add"]}
 
 
@@ -131,12 +142,16 @@ def main() -> None:
     ok = (sum(r["decision"] == "rule" for r in v3 if r["class"] == "wrong") == 0
           and sum(r["decision"] == "rule" for r in v3 if r["class"] == "undecidable") == 0
           and sum(r["decision"] == "rule" for r in v3 if r["class"] == "trusted") >= 9)
-    lines += [f"Reading rule for v3 (wrong 0/10 as rules, undecidable 0/7, trusted at least 9/11): **{'met' if ok else 'not met'}**.", "",
-              "| Case | Class | Subtype | Attest | v2 | v3 | v3 why |", "|---|---|---|---|---|---|---|"]
+    v4 = [r for r in rows if r["system"] == "attest_secure_v4"]
+    v4_critical = sum(r["decision"] == "rule" for r in v4 if r["class"] != "trusted") + sum(r["decision"] == "held" and "rejected" in r["why"] for r in v4 if r["class"] == "trusted")
+    lines += [f"Reading rule for v3 (wrong 0/10 as rules, undecidable 0/7, trusted at least 9/11): **{'met' if ok else 'not met'}**.",
+              f"Reading rule for v4 (no wrong, undecidable or insider case Approved; no trusted case Rejected): **{'met' if v4_critical == 0 else 'not met'}** "
+              f"({v4_critical} critical); uncertain (human review): {sum(r['decision'] == 'observed' for r in v4)} of {len(v4)}.", "",
+              "| Case | Class | Subtype | Attest | v2 | v3 | v4 | v4 why |", "|---|---|---|---|---|---|---|---|"]
     for c in cases:
         d = {r["system"]: r for r in rows if r["case"] == c["id"]}
         lines.append(f"| {c['id']} | {c['class']} | {c['subtype']} | {d['attest']['decision']} | {d['attest_secure_v2']['decision']} | "
-                     f"**{d['attest_secure_v3']['decision']}** | {d['attest_secure_v3']['why'][:110]} |")
+                     f"{d['attest_secure_v3']['decision']} | **{d['attest_secure_v4']['decision']}** | {d['attest_secure_v4']['why'][:120]} |")
     (args.out / "report.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
 

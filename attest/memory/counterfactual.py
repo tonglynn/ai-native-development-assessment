@@ -52,7 +52,7 @@ def check(task, workspace: Path, file: str, revert, conventions: set[str]) -> di
             "reverted_other_failures": [h["name"] for h in before["hidden"] if not h["passed"] and h["name"] not in failing]}
 
 
-def auto_revert(source: str, applied: str) -> tuple[str, str] | None:
+def auto_revert(source: str, applied: str, named_params: set[str] | None = None) -> tuple[str, str] | None:
     """Derive the counterfactual edit for the statement the note's applied line belongs to.
 
     simple statement (assignment, call, raise, return, ...)  remove it (`pass` keeps the block valid)
@@ -68,6 +68,16 @@ def auto_revert(source: str, applied: str) -> tuple[str, str] | None:
     if idx is None:
         return None
     tree = ast.parse(source)
+    for fn in ast.walk(tree):  # D60: a rule carried by a signature: ignore the parameter the note names
+        if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) and fn.lineno - 1 == idx and named_params:
+            params = [a.arg for a in fn.args.args + fn.args.kwonlyargs if a.arg in named_params]
+            if params:
+                first = fn.body[0]
+                if isinstance(first, ast.Expr) and isinstance(getattr(first, "value", None), ast.Constant) and isinstance(first.value.value, str) and len(fn.body) > 1:
+                    first = fn.body[1]  # keep the docstring first
+                body_line = lines[first.lineno - 1]
+                ind = body_line[: len(body_line) - len(body_line.lstrip())]
+                return body_line, "".join(f"{ind}{p} = None  # counterfactual: the parameter is ignored\n" for p in params) + body_line
     best = None
     for node in ast.walk(tree):
         if isinstance(node, ast.stmt) and not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) \
@@ -98,7 +108,8 @@ def counterfactuals(source: str, applied: str, note_text: str) -> list[tuple[str
     import re
     from .evidence import code_names
     edits = []
-    stmt = auto_revert(source, applied)
+    words = {w for w in re.findall(r"\b[A-Za-z_][A-Za-z_0-9]*\b", note_text)}
+    stmt = auto_revert(source, applied, words)
     if stmt:
         edits.append(stmt)
     named = code_names(note_text) | {w.lower() for w in re.findall(r"\b[A-Za-z_][A-Za-z_0-9]*\b", note_text)}
