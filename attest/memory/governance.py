@@ -139,11 +139,15 @@ class GovernedMemory(EarnedMemory):
         self.code_review = code_review  # D50: the reviewer may also cite the repository's code
         self.name = "attest_governed"
 
+    def _admit_after_review(self, review, task, repo_version, run, cand, changed) -> bool:
+        """D39: only an approved candidate is admitted; subclasses may grade (D53)."""
+        return review["verdict"] == "approved"
+
     def _admit(self, task, repo_version, run, cand, changed):
         existing = [it for it in self.store.items().values() if self._same_scope(it, task) and it["status"] in VISIBLE]
         code = code_excerpts(task.repo, cand) if self.code_review else None
         review = semantic_review(cand, existing, changelog(task.repo), repo_version, self.semantic_model, code=code)
-        if review["verdict"] == "approved":
+        if self._admit_after_review(review, task, repo_version, run, cand, changed):
             events = super()._admit(task, repo_version, run, cand, changed)
             for e in events:
                 if e["type"] == "add":

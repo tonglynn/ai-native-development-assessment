@@ -43,3 +43,15 @@ def test_untrusted_label_is_only_a_candidate(monkeypatch):
     m.learn(load_task("E04"), "1.0.0", RUN, "", DIFF, candidates=[CAND])
     assert m.store.items()["at-0001"]["status"] == "active"
     assert "at-0001" not in m.retrieve(load_task("H05"), "1.0.0").ids  # a task that names no file of the note
+
+
+def test_v2_grades_and_learns_rule_by_rule(monkeypatch):
+    from attest.memory.gateway import SecureMemoryV2
+    monkeypatch.setattr(earned.llm, "complete_json", fake("uncertain"))
+    m = SecureMemoryV2(None)
+    # a failed task (guard on C1): the float candidate touches the failure and is dropped
+    failed = {"first_pass": False, "final_pass": False,
+              "attempts": [{"review_comments": [POISON], "conv_failed": ["C5"]},
+                           {"review_comments": ["Money written to the audit trail must stay a Decimal."], "conv_failed": ["C1"]}]}
+    ev = m.learn(load_task("E04"), "1.0.0", failed, "", DIFF, candidates=[CAND])
+    assert ev[-1]["type"] == "reject" and not m.store.items()
