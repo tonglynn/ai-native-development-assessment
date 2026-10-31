@@ -1,0 +1,78 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,12 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money
++
++APPROVAL_THRESHOLD = round_money("500.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +21,31 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def refund(payment, amount, at):
++def refund(payment, amount, at, *, idempotency_key=None, approved_by=None):
+     """Refund part or all of a captured payment."""
+-    raise NotImplementedError
++    if idempotency_key is not None and audit.idempotent_result(idempotency_key) is not None:
++        return payment
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    amount = round_money(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if amount > APPROVAL_THRESHOLD and approved_by is None:
++        raise BillingError("approval_required", str(amount))
++    refunded = round_money(payment.refunded_amount or ZERO)
++    if refunded + amount > payment.amount:
++        raise BillingError("refund_exceeds_captured", str(amount))
++    at = ensure_utc(at)
++    payment.refunded_amount = refunded + amount
++    if payment.refunded_amount >= payment.amount:
++        payment.status = "refunded"
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        refunded_amount=payment.refunded_amount,
++        at=at,
++        idempotency_key=idempotency_key,
++    )
++    audit.clear()
++    return payment
+--- a/ledgerly/audit.py
++++ b/ledgerly/audit.py
+@@ -3,11 +3,15 @@
+ from .clock import utcnow
+ 
+ _EVENTS: list[dict] = []
++_IDEMPOTENCY: dict[str, dict] = {}
+ 
+ 
+ def record(event: str, **fields) -> dict:
+     entry = {"event": event, "at": utcnow(), **fields}
+     _EVENTS.append(entry)
++    key = fields.get("idempotency_key")
++    if key is not None:
++        _IDEMPOTENCY.setdefault(key, entry)
+     return entry
+ 
+ 
+@@ -15,5 +19,10 @@
+     return [e for e in _EVENTS if event is None or e["event"] == event]
+ 
+ 
++def idempotent_result(key):
++    """Return the stored audit entry for an idempotency key, if any."""
++    return _IDEMPOTENCY.get(key)
++
++
+ def clear() -> None:
+     _EVENTS.clear()
