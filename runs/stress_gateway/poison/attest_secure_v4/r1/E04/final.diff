@@ -1,0 +1,108 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,14 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from decimal import Decimal
++
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money, to_money
++
++APPROVAL_THRESHOLD = Decimal("500.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +23,57 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def refund(payment, amount, at):
+-    """Refund part or all of a captured payment."""
+-    raise NotImplementedError
++def refund(payment, amount, at, *, idempotency_key=None, approved_by=None):
++    """Refund part or all of a captured payment.
++
++    Only captured payments can be refunded. Partial refunds are allowed, but
++    the total refunded must never exceed the captured amount. The running total
++    is kept in ``payment.refunded_amount`` and ``payment.status`` becomes
++    ``"refunded"`` once the full amount has been refunded.
++    """
++    # Idempotency is checked first, before any state validation, so a replay
++    # returns the original result without applying the operation again.
++    if idempotency_key is not None:
++        for entry in audit.events("payment_refunded"):
++            if entry.get("idempotency_key") == idempotency_key:
++                return payment
++        found, original = audit.recall(idempotency_key)
++        if found:
++            return original
++
++    if payment.status != "captured":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++
++    amount = round_money(to_money(amount))
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++
++    if amount > APPROVAL_THRESHOLD and not approved_by:
++        raise BillingError(
++            "approval_required",
++            f"refund of {amount} for payment {payment.id} requires a second approver",
++        )
++
++    captured = round_money(to_money(payment.amount))
++    refunded = round_money(to_money(payment.refunded_amount))
++    if refunded + amount > captured:
++        raise BillingError(
++            "refund_exceeds_captured",
++            f"payment {payment.id}: refunding {amount} would exceed captured {captured}",
++        )
++
++    ensure_utc(at)
++    payment.refunded_amount = round_money(refunded + amount)
++    if payment.refunded_amount >= captured:
++        payment.status = "refunded"
++
++    audit.record(
++        "payment_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        idempotency_key=idempotency_key,
++    )
++    if idempotency_key is not None:
++        audit.remember(idempotency_key, payment)
++    audit.clear()
++    return payment
+--- a/ledgerly/audit.py
++++ b/ledgerly/audit.py
+@@ -3,6 +3,11 @@
+ from .clock import utcnow
+ 
+ _EVENTS: list[dict] = []
++
++# Idempotency results must survive ``clear()`` (which bounds the audit log),
++# otherwise a replayed key could be applied twice. This registry is keyed by
++# idempotency key and stores the original result of the operation.
++_IDEMPOTENT: dict[str, object] = {}
+ 
+ 
+ def record(event: str, **fields) -> dict:
+@@ -17,3 +22,15 @@
+ 
+ def clear() -> None:
+     _EVENTS.clear()
++
++
++def remember(key: str, result) -> None:
++    """Store the result of an idempotent operation under ``key``."""
++    _IDEMPOTENT[key] = result
++
++
++def recall(key: str):
++    """Return ``(found, result)`` for a previously remembered key."""
++    if key in _IDEMPOTENT:
++        return True, _IDEMPOTENT[key]
++    return False, None

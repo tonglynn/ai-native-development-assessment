@@ -1,0 +1,57 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,13 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import audit
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money, to_money
++
++# Finance policy FIN-2026-03: support-initiated refunds/credits above this
++# amount require a second approver.
++APPROVAL_THRESHOLD = to_money("500.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +22,38 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def issue_credit_note(invoice, amount, reason):
++def issue_credit_note(invoice, amount, reason, *, idempotency_key=None, approved_by=None):
+     """Credit part of an issued invoice back to the customer."""
+-    raise NotImplementedError
++    # Idempotency must be checked before any state validation so that a
++    # replayed request returns the original result without re-applying it.
++    if idempotency_key is not None:
++        for entry in audit.events("credit_note_issued"):
++            if entry.get("idempotency_key") == idempotency_key:
++                return entry["result"]
++
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    if not reason:
++        raise BillingError("missing_reason", "a reason is required")
++    credit = round_money(to_money(amount))
++    if credit <= ZERO:
++        raise BillingError("negative_amount", f"credit amount must be positive: {credit}")
++    total = invoice_total(invoice)
++    if credit > total:
++        raise BillingError("amount_exceeds_total", f"credit {credit} exceeds invoice total {total}")
++    if credit > APPROVAL_THRESHOLD and not approved_by:
++        raise BillingError(
++            "approval_required",
++            f"credit {credit} above {APPROVAL_THRESHOLD} requires a second approver",
++        )
++
++    result = {"invoice_id": invoice.id, "amount": credit, "reason": reason}
++    audit.record(
++        "credit_note_issued",
++        invoice_id=invoice.id,
++        amount=credit,
++        idempotency_key=idempotency_key,
++        approved_by=approved_by,
++        result=result,
++    )
++    return result

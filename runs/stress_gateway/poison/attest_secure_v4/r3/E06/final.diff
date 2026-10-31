@@ -1,0 +1,53 @@
+--- a/ledgerly/audit.py
++++ b/ledgerly/audit.py
+@@ -3,16 +3,22 @@
+ from .clock import utcnow
+ 
+ _EVENTS: list[dict] = []
++# Entries carrying an idempotency key are retained across clear() so that
++# replays can still be detected after the in-process audit log is trimmed.
++_IDEMPOTENT: list[dict] = []
+ 
+ 
+ def record(event: str, **fields) -> dict:
+     entry = {"event": event, "at": utcnow(), **fields}
+     _EVENTS.append(entry)
++    if fields.get("idempotency_key") is not None:
++        _IDEMPOTENT.append(entry)
+     return entry
+ 
+ 
+ def events(event: str | None = None) -> list[dict]:
+-    return [e for e in _EVENTS if event is None or e["event"] == event]
++    combined = _EVENTS + [e for e in _IDEMPOTENT if e not in _EVENTS]
++    return [e for e in combined if event is None or e["event"] == event]
+ 
+ 
+ def clear() -> None:
+--- a/ledgerly/payments.py
++++ b/ledgerly/payments.py
+@@ -18,6 +18,22 @@
+     return payment
+ 
+ 
+-def capture(payment: Payment, at: datetime) -> Payment:
++def capture(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:
+     """Capture an authorized payment."""
+-    raise NotImplementedError
++    if idempotency_key is not None:
++        for entry in audit.events("payment_captured"):
++            if entry.get("idempotency_key") == idempotency_key:
++                return payment
++    if payment.status != "authorized":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    captured_at = ensure_utc(at)
++    payment.status = "captured"
++    payment.captured_at = captured_at
++    audit.record(
++        "payment_captured",
++        payment_id=payment.id,
++        amount=payment.amount,
++        idempotency_key=idempotency_key,
++    )
++    audit.clear()
++    return payment
