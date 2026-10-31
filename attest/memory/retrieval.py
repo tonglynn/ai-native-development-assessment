@@ -4,7 +4,6 @@ Everything around it stays the same in both arms: which notes are candidates
 (status and repository scope), k, the prompt block. The query is always the task
 title and issue text only, so no review comment or fix of the task being solved
 can influence what is retrieved.
-"""
 
 Hybrid retrieval and task-aware reranking (D47, exploratory, opt-in): after the hard filter (repository,
 version, status: `candidates()`), BM25 and the embedding ranking are merged by reciprocal rank fusion;
@@ -18,6 +17,7 @@ bootstrap 95% interval: "better" only if the lower bound is > 0; "not worse" if 
 (the D26 margin); otherwise "inconclusive" or "worse". Stale and control groups, business-risk
 failures, tokens and latency are reported beside it. Offline Recall@5/Precision@5 are reported but
 decide nothing.
+"""
 
 from __future__ import annotations
 
