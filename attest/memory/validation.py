@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from . import admission
 from .evidence import normalise
+from .admission import _norm
 
 
 def self_cited(ev: dict) -> bool:
@@ -46,10 +47,19 @@ def independent(item: dict, trust: admission.Trust, checks: dict | None = None) 
             break
     if checks and checks.get(item.get("id")):
         found.append("check")
-    evs = item.get("evidence") or []
-    tasks = {ev.get("task_id") for ev in evs}
-    quotes = {admission._norm((ev.get("source") or {}).get("quote", "")) for ev in evs} - {""}
-    if len(tasks) >= 2 and len(quotes) >= 2 and any(not self_cited(ev) for ev in evs):
+    # repetition (D61): two or more INDEPENDENT external origins (review comments traced to their source,
+    # near-duplicates and shared references merged); the agent's own diff lines never count; a trusted
+    # reviewer's comment already counted as "reviewer" cannot also count toward repetition
+    from .provenance import independent_origins
+    tasks = {ev.get("task_id") for ev in item.get("evidence") or []}
+    external = [o for o in independent_origins(item) if o.startswith("comment:")]
+    if "reviewer" in found:
+        trusted_origins = {"comment:" + _norm(c) for c in trusted}
+        external = [o for o in external if o not in trusted_origins]
+        enough = len(external) >= 1
+    else:
+        enough = len(external) >= 2
+    if len(tasks) >= 2 and enough:
         found.append("repeated")
     return found
 

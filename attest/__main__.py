@@ -146,6 +146,26 @@ def cmd_retract(args) -> int:
     return 0
 
 
+def cmd_review(args) -> int:
+    """A person works the review queue of a repository's memory (MCP store). Approvers: ATTEST_APPROVERS."""
+    import os
+
+    from . import mcp_server
+    from .memory import review
+    repo, _name, _version, key = mcp_server._identity(args.repo)
+    memory = mcp_server._memory(key)
+    approvers = {a.strip() for a in os.environ.get("ATTEST_APPROVERS", "").split(",") if a.strip()}
+    if args.action == "list":
+        print(json.dumps(review.queue(memory), indent=2, ensure_ascii=False))
+    elif args.action == "approve":
+        print(json.dumps(review.approve(memory, args.note, by=args.by, reason=args.reason, evidence=args.evidence or [], approvers=approvers)))
+    elif args.action == "reject":
+        print(json.dumps(review.reject(memory, args.note, by=args.by, reason=args.reason, approvers=approvers)))
+    elif args.action == "policy-changed":
+        print(json.dumps(review.policy_changed(memory, args.policy, by=args.by, reason=args.reason)))
+    return 0
+
+
 def cmd_migrate(args) -> int:
     from .memory.sqlite_store import SqliteEventStore
     from .memory.store import EventStore
@@ -242,6 +262,16 @@ def main(argv=None) -> int:
     p.add_argument("--note", required=True)
     p.add_argument("--reason", required=True)
     p.set_defaults(fn=cmd_retract)
+
+    p = sub.add_parser("review", help="a person works the review queue: list, approve, reject, policy-changed (not available to agents)")
+    p.add_argument("action", choices=["list", "approve", "reject", "policy-changed"])
+    p.add_argument("--repo", required=True)
+    p.add_argument("--note")
+    p.add_argument("--by", default="")
+    p.add_argument("--reason", default="")
+    p.add_argument("--evidence", nargs="*")
+    p.add_argument("--policy")
+    p.set_defaults(fn=cmd_review)
 
     p = sub.add_parser("migrate", help="copy a memory log between backends: events.jsonl -> memory.db, or memory.db -> events.jsonl")
     p.add_argument("src")

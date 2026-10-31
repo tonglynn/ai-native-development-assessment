@@ -361,7 +361,9 @@ class EarnedMemory(MemorySystem):
             "task_id": task.id,
             "version": repo_version,
             "source": {"kind": "review_comment" if from_review else ("diff" if quote else "none"), "quote": quote,
-                       "references": references(quote, from_review or "")},
+                       "references": references(quote, from_review or ""),
+                       # D61: the whole comment the quote came from, so later evidence can be traced to its origin
+                       **({"comment": from_review} if from_review else {})},
             "applied": find_applied(cand.get("applied_in_diff") or "", changed),
             "verification": {"passed": bool(run["final_pass"]), "first_pass": bool(run["first_pass"]),
                              "how": run.get("verified_by", "hidden tests")},
@@ -435,7 +437,8 @@ class EarnedMemory(MemorySystem):
                       "valid_from": min(corrected_from, key=_version_tuple) if corrected_from else repo_version,
                       "valid_until": None, "files": [applied["file"]] if applied else []},
             "source": {"task_id": task.id, "first_pass": run["first_pass"], "review_comments": run["attempts"][0]["review_comments"],
-                       "references": evidence["source"]["references"]},
+                       "references": evidence["source"]["references"],
+                       "proposed_by": run.get("proposed_by") or "agent:distiller"},  # D62: who proposed it (never its approver)
             "evidence": [evidence],
             "status": "active",
             "supersedes": [it["id"] for it in replaced],
