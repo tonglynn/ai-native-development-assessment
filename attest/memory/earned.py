@@ -188,7 +188,7 @@ class EarnedMemory(MemorySystem):
         ranked, ms = self.ranking(task, MAX_RETRIEVED, repo_version)
         if self.reserved:
             ranked = self._reserve(task, repo_version, ranked)
-        chosen = [items[i] for i, _ in ranked[:MAX_SHOWN]]
+        chosen = [items[i] for i, _ in ranked[:getattr(self, "max_shown", MAX_SHOWN)]]  # D64: an arm may vary k
         version_warnings = [it["id"] for it in chosen
                             if self.scope and _major(it["scope"]["observed_version"]) != _major(repo_version)
                             and _major(it["scope"].get("revalidated_on") or it["scope"]["observed_version"]) != _major(repo_version)]

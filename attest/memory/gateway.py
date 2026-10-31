@@ -352,3 +352,36 @@ class SecureMemoryV4(SecureMemoryV31):
         if a is None:
             return super()._validated(item)
         return a["hard"] + a["soft"] if a["state"] == "approved" else []
+
+
+class TieredMemory(SecureMemoryV4):
+    """v4 with one of the crowding-ablation injection policies (D64): arm "A", "B", "C" or "D" (see tiers.py)."""
+
+    def __init__(self, store_dir, arm: str, trust: admission.Trust | None = None, **kw):
+        super().__init__(store_dir, trust=trust, **kw)
+        assert arm in "ABCD", arm
+        self.arm = arm
+        self.name = f"attest_v4_{arm}"
+        if arm == "D":
+            from .tiers import MAX_K
+            self.max_shown = MAX_K
+
+    def ranking(self, task, k=6, version=None):
+        from .tiers import CORE_K, REL_FRACTION, tier
+        if self.arm == "A":
+            return super().ranking(task, k, version)
+        items = self.store.items()
+        scored, ms = timed_rank("lexical", f"{task.title} {task.issue}", self.candidates(task, version), None)
+        if self.arm == "B":
+            ranked = sorted(scored, key=lambda x: (-x[1], x[0]))
+        elif self.arm == "C":
+            ranked = sorted(scored, key=lambda x: (0 if x[1] > 0 and tier(items[x[0]]) == "core" else 1, -x[1], x[0]))
+        else:  # D: tiers + dynamic k, no filler
+            by = {t: [(i, sc) for i, sc in sorted(scored, key=lambda x: (-x[1], x[0])) if tier(items[i]) == t and sc > 0]
+                  for t in ("core", "regular", "candidate")}
+            core = by["core"][:CORE_K]
+            best = max([sc for _, sc in by["regular"] + by["candidate"]] or [0])
+            rest = [(i, sc) for i, sc in by["regular"] + by["candidate"] if sc >= REL_FRACTION * best]
+            rest.sort(key=lambda x: (0 if tier(items[x[0]]) == "regular" else 1, -x[1], x[0]))
+            ranked = core + rest
+        return (ranked if k is None else ranked[:k]), ms
