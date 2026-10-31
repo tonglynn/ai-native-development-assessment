@@ -35,3 +35,14 @@ covers it. The experiment script now counts crashed runs separately.
 
 **Prevention.** Crashes are reported as their own column, so a run in which the model
 was never reached can no longer look like an ordinary failure.
+
+## INC-3: the DeepSeek balance ran out during four parallel runs (10/31)
+
+- What happened: at about 16:40 (UTC+8) the model API began answering "Insufficient Balance". Four runs
+  were in flight: `retro_hass` (68 of 78 training PRs learned, then every call failed),
+  `retrieval_hybrid` and `forgetting_longterm` (a few sequences done, then agent attempts crashed),
+  `context_long` (finished before the balance ran out; no error in its log, 39 runs, 0 crashes).
+- Effect: crashed attempts count as failures, so the three partial runs are not valid evidence.
+- Response: the two runs still going were cancelled; their committed partial results are kept, renamed
+  `runs/<name>_aborted_balance`, and are not used anywhere. They are rerun under their original
+  names after the balance is topped up (by the user; Claude never handles the key).
