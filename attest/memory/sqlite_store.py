@@ -129,7 +129,7 @@ class SqliteEventStore:
         db = self._db
         db.execute("BEGIN IMMEDIATE")
         try:
-            for line in Path(path).read_text().splitlines():
+            for line in Path(path).read_text(encoding="utf-8").splitlines():
                 if not line.strip():
                     continue
                 e = json.loads(line)
@@ -145,7 +145,7 @@ class SqliteEventStore:
 
     def export_jsonl(self, path: Path) -> int:
         events = self.events
-        Path(path).write_text("".join(_dumps(e) + "\n" for e in events))
+        Path(path).write_text("".join(_dumps(e) + "\n" for e in events), encoding="utf-8")
         return len(events)
 
     def close(self) -> None:

@@ -39,6 +39,7 @@
 set PYTHONPATH=%USERPROFILE%\Documents\AttestDemo\app
 set ATTEST_HOME=%USERPROFILE%\Documents\AttestDemo\memory
 set ATTEST_APPROVERS=owner:finance-lead
+set PYTHONUTF8=1
 python -m attest notes --repo C:\Users\23778\Documents\AttestDemo\ledgerly-demo
 python -m attest retract --repo C:\Users\23778\Documents\AttestDemo\ledgerly-demo --note at-0001 --reason "政策变更，暂停使用"
 ```

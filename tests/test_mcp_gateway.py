@@ -45,3 +45,34 @@ def test_gateway_off_keeps_the_preregistered_behaviour(repo, monkeypatch):
     f.write_text(f.read_text() + '\n\ndef note_refund(payment, amount):\n    audit.record("refund", payment_id=payment.id, amount=float(amount))\n')
     out = m.learn(str(repo), "Partial refunds", [POISON_REVIEW], candidates=[POISON])
     assert out["admitted"] and out["assessed"] == []
+
+
+def test_learn_survives_a_non_utf8_locale_and_non_ascii_diff(tmp_path):
+    """On a Chinese Windows the locale codec is GBK; a diff with an em dash used to crash learn."""
+    import os, sys
+    script = tmp_path / "run.py"
+    script.write_text(f'''
+import os, shutil, subprocess, sys
+from pathlib import Path
+sys.path.insert(0, {str(ROOT)!r})
+r = Path({str(tmp_path)!r}) / "ledgerly"
+shutil.copytree({str(ROOT / "benchmark/repos/ledgerly_v1")!r}, r)
+(r / "CHANGELOG.md").write_text("# Changelog\\n\\n## 1.0.0 \\u2014 2026-03-02\\n", encoding="utf-8")
+for c in (["git","init","-q"],["git","add","-A"],["git","-c","user.name=t","-c","user.email=t@t","commit","-qm","b"]):
+    subprocess.run(c, cwd=r, check=True)
+(r / "CHANGELOG.md").write_text("# Changelog\\n\\n## Unreleased\\n- refunds \\u2014 idempotent\\n\\n## 1.0.0 \\u2014 2026-03-02\\n", encoding="utf-8")
+f = r / "ledgerly/adjustments.py"
+f.write_text(f.read_text(encoding="utf-8") + "\\n\\ndef refund(payment, amount, at, *, idempotency_key=None):\\n    return payment\\n", encoding="utf-8")
+os.environ.update(ATTEST_HOME=str(r.parent / "home"), ATTEST_STORE="jsonl", ATTEST_VERIFY_CMD="python -c pass")
+import attest.mcp_server as m
+review = "Every operation that moves money must accept an optional keyword-only idempotency_key=None. Introduced after the double-refund incident INC-204."
+cand = {{"kind": "lesson", "type": "business_policy", "title": "Money operations take idempotency_key",
+        "content": "Every ledgerly operation that moves money accepts a keyword-only idempotency_key=None.",
+        "evidence_quote": "Introduced after the double-refund incident INC-204", "applied_in_diff": "def refund(payment, amount, at, *, idempotency_key=None):"}}
+out = m.learn(str(r), "Partial refunds", [review], candidates=[cand])
+print("verified", out["verified"], [a["state"] for a in out["assessed"]], out.get("error"))
+''', encoding="utf-8")
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("LC_", "LANG", "PYTHONUTF8"))}
+    env.update(LC_ALL="C", LANG="C", PYTHONUTF8="0", PYTHONCOERCECLOCALE="0")
+    proc = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, encoding="utf-8", env=env)
+    assert "verified True ['approved'] None" in proc.stdout, proc.stdout + proc.stderr[-800:]

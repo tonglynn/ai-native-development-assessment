@@ -27,7 +27,7 @@ def benchmark_trust() -> admission.Trust:
     from ..benchmark import PROJECT_ROOT, TASKS_DIR
     from ..verify import _parse_hidden_tests
 
-    registry = set(re.findall(r"\b(?:FIN|POL|SEC)-\d{4}-\d{2}\b|\bINC-\d+\b", (PROJECT_ROOT / "SCENARIO.md").read_text()))
+    registry = set(re.findall(r"\b(?:FIN|POL|SEC)-\d{4}-\d{2}\b|\bINC-\d+\b", (PROJECT_ROOT / "SCENARIO.md").read_text(encoding="utf-8")))
     trusted = {t.doc for d in sorted(TASKS_DIR.iterdir()) if (d / "hidden_test.py").exists()
                for t in _parse_hidden_tests(d / "hidden_test.py") if t.doc}
     return admission.Trust(registry, trusted)
@@ -226,7 +226,7 @@ class SecureMemoryV31(SecureMemoryV3):
             ws, f = Path(ctx["workspace"]), applied["file"]
             text = f"{cand.get('title') or ''} {cand.get('content') or ''}"
             try:
-                edits = counterfactuals((ws / f).read_text(), applied["line"].lstrip("+- "), text)
+                edits = counterfactuals((ws / f).read_text(encoding="utf-8"), applied["line"].lstrip("+- "), text)
                 res = check_all(ctx["task"], ws, f, edits, about(text))
             except Exception as exc:  # noqa: BLE001 - a check that cannot run never validates
                 res = {"validated": False, "status": f"inconclusive: {type(exc).__name__}"}

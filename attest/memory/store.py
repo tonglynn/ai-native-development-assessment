@@ -64,7 +64,7 @@ def checkpoint(store: "EventStore", path: Path) -> dict:
     (another repository, a signed commit, object storage with retention)."""
     cp = {"seq": len(store.events), "mac": store.head, "ts": round(time.time(), 3)}
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a") as f:
+    with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(cp) + "\n")
     return cp
 
@@ -75,7 +75,7 @@ def verify_checkpoints(events: list[dict], path: Path, key: bytes | None = None)
     check = verify_events(events, key)
     if not check["ok"]:
         return check
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         cp = json.loads(line)
         if cp["seq"] > len(events) or (cp["seq"] and events[cp["seq"] - 1].get("mac") != cp["mac"]):
             return {"ok": False, "seq": cp["seq"], "reason": f"checkpoint at event {cp['seq']} no longer matches the log"}
@@ -91,7 +91,7 @@ class EventStore:
         self._events: list[dict] = []
         self.sealed, self._key = sealed or seal_key is not None, seal_key
         if path and path.exists():
-            self._events = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+            self._events = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
             if self.sealed:
                 check = verify_events(self._events, self._key, head)
                 if not check["ok"]:
@@ -109,7 +109,7 @@ class EventStore:
             self._events.append(event)
             if self.path:
                 self.path.parent.mkdir(parents=True, exist_ok=True)
-                with self.path.open("a") as f:
+                with self.path.open("a", encoding="utf-8") as f:
                     f.write(json.dumps(event, ensure_ascii=False, default=str) + "\n")
         return event
 

@@ -41,7 +41,10 @@ STORE = os.environ.get("ATTEST_STORE", "sqlite")
 
 
 def _git(repo: Path, *args: str) -> str:
-    proc = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, timeout=60)
+    # UTF-8 explicitly: on a Chinese Windows the locale codec is GBK, and a diff with any non-ASCII
+    # character (an em dash in CHANGELOG.md) raised UnicodeDecodeError and failed the whole tool call
+    proc = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=60)
     return proc.stdout.strip() if proc.returncode == 0 else ""
 
 
@@ -86,7 +89,9 @@ def _verify(repo: Path) -> tuple[bool, str]:
     args = shlex.split(VERIFY_CMD, posix=os.name != "nt")
     if args and args[0] in ("python", "python3"):  # the server's own interpreter (on Windows "python" may be another one)
         args[0] = sys.executable
-    proc = subprocess.run(args, cwd=repo, capture_output=True, text=True, timeout=900)
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    proc = subprocess.run(args, cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          timeout=900, env=env)
     return proc.returncode == 0, (proc.stdout + proc.stderr)[-1500:]
 
 
@@ -131,7 +136,15 @@ def recall(repo_path: str, task: str) -> dict:
 
 def learn(repo_path: str, task: str, review_comments: list[str], candidates: list[dict] | None = None,
           base_ref: str = "HEAD") -> dict:
-    """Submit an accepted change. Attest computes the diff and runs the verification command itself."""
+    """Submit an accepted change. Attest computes the diff and runs the verification command itself.
+
+    review_comments: the reviewer's comments, verbatim. candidates: the notes you propose (up to 3), each
+    {"kind": "lesson", "type": "business_policy" | "code_convention" | "process" | "lesson",
+     "title": "<at most 8 words>", "content": "<one or two imperative sentences naming modules/functions>",
+     "evidence_quote": "<10-200 characters copied verbatim from a review comment; if the comment names its source
+                        (an incident such as INC-204 or a policy id), quote the part that names it>",
+     "applied_in_diff": "<10-200 characters copied verbatim from one added line of your change>"}.
+    Without candidates Attest distils them with its own model, which needs a model key on this machine."""
     repo, name, version, key = _identity(repo_path)
     diff = _git(repo, "diff", base_ref)
     if not diff:
@@ -140,7 +153,12 @@ def learn(repo_path: str, task: str, review_comments: list[str], candidates: lis
     run = {"first_pass": not review_comments, "final_pass": verified, "verified_by": f"verification command: {VERIFY_CMD}", "shown_notes": [], "cited_notes": [],
            "attempts": [{"passed": not review_comments, "review_comments": list(review_comments)}]}
     memory = _memory(key)
-    events = memory.learn(_task(name, task), version, run, "", diff, candidates=candidates)
+    try:
+        events = memory.learn(_task(name, task), version, run, "", diff, candidates=candidates)
+    except Exception as exc:  # say why, instead of an opaque tool error
+        hint = ("pass candidates (see this tool's description); distilling them here needs a model key"
+                if candidates is None else "check the candidates' fields against this tool's description")
+        return {"verified": verified, "admitted": [], "error": f"{type(exc).__name__}: {str(exc)[:300]}", "hint": hint}
     assessed = _assess(memory, name, [e["item"]["id"] for e in events if e["type"] == "add"], review_comments) \
         if os.environ.get("ATTEST_GATEWAY", "checks") != "off" else []
     return {
