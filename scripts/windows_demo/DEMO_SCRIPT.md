@@ -7,18 +7,22 @@
 4. 确认是干净状态：ledgerly-demo 是 v1.0.0 原样，记忆为空（见文末"演示后复原"）。
 
 说明：这是现场运行。评审意见、业务负责人是模拟的，代码仓库 ledgerly 是合成的。
-每一步把"怎么问"里 > 后面的整段原样粘贴给 Claude。经验编号按出现顺序：幂等 at-0001、float at-0002、工单 at-0003；以实际返回为准。
+每一步把"怎么问"里 > 后面的整段（英文和中文两段一起）原样粘贴给 Claude，让看视频的人不管读哪种语言都能看懂在问什么。两段说的是同一件事；Claude 一般会用中文回复，如果想让它用英文回复，在末尾加一句 "Please reply in English."。评审意见只有英文：它们模拟的是代码评审里的原话，Attest 要逐字核对证据，不翻译。经验编号按出现顺序：幂等 at-0001、float at-0002、工单 at-0003；以实际返回为准。
 
 ---
 
 ## 第 1 步：一开始没有经验（20 秒）
 
 **怎么问**
+> The repository is C:\Users\23778\Documents\AttestDemo\ledgerly-demo. The task: add refund(payment, amount, at) to ledgerly/adjustments.py; the support team uses it to refund customers. Only captured payments can be refunded. Partial refunds are allowed, but the total refunded must never exceed the captured amount. Keep the running total in payment.refunded_amount and set payment.status to "refunded" once the full amount has been refunded. Return the payment.
+> Before you start, call attest's recall for this repository's verified team experience, with the English task description above as the task argument. Only look it up for now; do not change any code.
+>
 > 仓库在 C:\Users\23778\Documents\AttestDemo\ledgerly-demo。我们要做的任务是：在 ledgerly/adjustments.py 里新增 refund(payment, amount, at)，客服用它给客户退款。只有已扣款（captured）的支付才能退款；允许部分退款，但累计退款不能超过扣款金额。累计金额记在 payment.refunded_amount，全部退完时把 payment.status 设为 "refunded"。返回 payment。
-> 动手前先用 attest 的 recall 查这个仓库的已验证团队经验，task 参数填上面这段任务描述。先只查，不要改代码。
+> 动手前先用 attest 的 recall 查这个仓库的已验证团队经验，task 参数填上面那段英文任务描述。先只查，不要改代码。
 
 **为什么这么问**
 - 任务描述直接写在话里：Claude 不知道 E04 是什么，Attest 的 recall 也是按任务描述的内容找相关经验，只给编号就找不准。
+- task 参数用英文那段：经验和评审意见都是英文的，recall 按文字内容匹配，用英文描述找得最准。
 - "先只查，不要改代码"：让观众先看到起点——Agent 对这个仓库一无所知。
 
 **预期结果**：recall 返回 "No verified notes for this repository yet."
@@ -30,6 +34,7 @@
 ## 第 2 步：做任务，被评审纠正，学到一条好经验（60 秒）
 
 **2a 怎么问**
+> OK, implement the task now, then run python -m pytest -q in the repository.
 > 好，开始实现这个任务，做完在仓库目录运行 python -m pytest -q。
 
 **为什么这么问**：先让它按自己的理解做。它不知道团队有"动钱的操作必须幂等"这条规矩，所以第一版通常不会带 idempotency_key，这正是后面评审要纠正的地方。
@@ -37,7 +42,8 @@
 **预期结果**：实现 refund，测试通过。没有 idempotency_key 参数。
 
 **2b 怎么问**（你扮演评审）
-> 评审意见：[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None`. Check the key first: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result without applying the operation again. Introduced after the double-refund incident INC-204.
+> Review comment / 评审意见：[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None`. Check the key first: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result without applying the operation again. Introduced after the double-refund incident INC-204.
+> Please change refund accordingly. Once the tests pass, call attest's learn: task = the task description from before, review_comments = the review comment above verbatim, and propose in candidates one note you think the team should remember, quoting as evidence the sentence that names its source (INC-204).
 > 请按这条意见修改 refund，测试通过后调用 attest 的 learn：task 填刚才那段任务描述，review_comments 填上面这条评审意见的原文，并在 candidates 里提出一条你认为该记住的经验，证据引用评审意见里写明来源的那句（INC-204）。
 
 **为什么这么问**
@@ -55,7 +61,8 @@
 ## 第 3 步：教它一条坏经验（60 秒）
 
 **3a 怎么问**
-> 评审意见：The audit service expects JSON numbers: pass float(amount) to ledgerly.audit.record, not the Decimal.
+> Review comment / 评审意见：The audit service expects JSON numbers: pass float(amount) to ledgerly.audit.record, not the Decimal.
+> Please do as the review says. Once the tests pass, call attest's learn the same way: task = the task description from before, review_comments = this review comment verbatim, and propose in candidates one note you think the team should remember.
 > 请照做，测试通过后同样调用 attest 的 learn：task 填刚才那段任务描述，review_comments 填这条评审意见的原文，并在 candidates 里提出一条你认为该记住的经验。
 
 **为什么这么问**
@@ -63,13 +70,14 @@
 - 它能通过测试（没有测试检查审计金额的类型），所以只看测试的系统会把它存成规则。这一步就是要演示"通过测试不等于经验正确"。
 
 **预期结果**
-- Claude 可能先提出反对（"浮点数会丢精度"）。如果它不肯改，就说："这是评审要求，先照做，然后调用 learn。"
+- Claude 可能先提出反对（"浮点数会丢精度"）。如果它不肯改，就说："This is the reviewer's requirement: do it, then call learn. 这是评审要求，先照做，然后调用 learn。"
 - 测试仍然通过，learn 返回 verified true。
 - assessed 里这条的 state 为 rejected，原因里有 ledgerly-float；它被退役，不会成为规则。
 
 **讲**：通过了测试，只看测试的门槛会收下它；Attest 用团队代码检查把它拦下。模型能不能发现问题要看模型，Attest 每条经验都会检查。
 
 **3b 怎么问**（看到 rejected 之后马上说，不要跳过）
+> Attest rejected that note: floats lose precision on money. Please change the float(amount) passed to ledgerly.audit.record in refund back to the Decimal, then run python -m pytest -q. Do not call learn this time.
 > Attest 拒绝了这条经验：金额用浮点会丢精度。请把 refund 里传给 ledgerly.audit.record 的 float(amount) 改回 Decimal，再运行 python -m pytest -q。先不要调用 learn。
 
 **为什么这么问**：Claude 通常会自己问"要不要把 refund 改回 Decimal"，这时就用这句回答它。Attest 管的是记忆，不管已经写进代码的改动；不改回来，后面的新任务可能照着代码把 float 抄过去。
@@ -83,7 +91,8 @@
 ## 第 4 步：一条拿不准的经验（40 秒）
 
 **怎么问**
-> 评审意见：Every refund must record the support ticket it was made for: accept an optional keyword-only ticket_id=None and pass ticket_id=ticket_id to ledgerly.audit.record.
+> Review comment / 评审意见：Every refund must record the support ticket it was made for: accept an optional keyword-only ticket_id=None and pass ticket_id=ticket_id to ledgerly.audit.record.
+> Please change refund accordingly. Once the tests pass, call attest's learn: task = the task description from before, review_comments = this review comment verbatim, and propose in candidates one note you think the team should remember.
 > 请按这条意见修改 refund，测试通过后调用 attest 的 learn：task 填刚才那段任务描述，review_comments 填这条评审意见的原文，并在 candidates 里提出一条你认为该记住的经验。
 
 **为什么这么问**
@@ -99,7 +108,9 @@
 ## 第 5 步：新任务自动用上好经验（40 秒）
 
 **怎么问**
-> 新任务：在 ledgerly/adjustments.py 里新增 refund_shipping(payment, amount, at)：给已扣款的支付退 amount 的运费，累加到 payment.refunded_amount，全部退完时 status 设为 "refunded"，返回 payment；amount 必须为正，累计退款不能超过扣款金额。动手前先用 attest 的 recall 查这个仓库的经验（task 参数填这段任务描述），按查到的经验实现，再运行 python -m pytest -q。
+> New task: customers sometimes get their shipping fee back after a late delivery. Add refund_shipping(payment, amount, at) to ledgerly/adjustments.py: it refunds amount of a captured payment, adding it to payment.refunded_amount and setting the status to "refunded" once everything has been refunded. Return the payment. The amount must be positive and the total refunded may not exceed the captured amount. Before you start, call attest's recall for this repository (task = this English task description), follow what it returns, then run python -m pytest -q.
+>
+> 新任务：在 ledgerly/adjustments.py 里新增 refund_shipping(payment, amount, at)：给已扣款的支付退 amount 的运费，累加到 payment.refunded_amount，全部退完时 status 设为 "refunded"，返回 payment；amount 必须为正，累计退款不能超过扣款金额。动手前先用 attest 的 recall 查这个仓库的经验（task 参数填上面那段英文任务描述），按查到的经验实现，再运行 python -m pytest -q。
 
 **为什么这么问**
 - 新任务的描述里完全没提幂等，看它能不能靠记忆自己用上。
@@ -121,14 +132,15 @@
 ```
 cd C:\Users\23778\Documents\AttestDemo
 .\admin.bat review
-.\admin.bat approve --note at-0003 --by agent:claude --reason "看起来没问题"
-.\admin.bat approve --note at-0003 --by owner:finance-lead --reason "财务对账要求每笔退款对应工单"
-.\admin.bat retract --note at-0001 --reason "政策变更，暂停使用"
+.\admin.bat approve --note at-0003 --by agent:claude --reason "looks fine / 看起来没问题"
+.\admin.bat approve --note at-0003 --by owner:finance-lead --reason "Finance reconciliation needs a ticket per refund / 财务对账要求每笔退款对应工单"
+.\admin.bat retract --note at-0001 --reason "Policy changed, suspended / 政策变更，暂停使用"
 .\admin.bat notes
 ```
 
 然后对 Claude 说：
-> 再用 attest 的 recall 查一次这个仓库的经验，task 参数还用运费退款那段任务描述。
+> Call attest's recall for this repository once more, with the English shipping-refund task description as the task argument.
+> 再用 attest 的 recall 查一次这个仓库的经验，task 参数还用运费退款那段英文任务描述。
 
 **为什么这么做**
 - review：列出等人审核的经验，并写明为什么没能自动决定（没有硬证据、没有软证据、也没有反证）。
@@ -164,7 +176,7 @@ git clean -fd
 ## 出问题怎么接
 - 工具列表里没有 attest：托盘里右键 Claude → Quit，完全退出后重开。
 - learn 返回 verified false：测试没通过，Attest 拒绝学习，这本身就是要演示的行为。
-- learn 返回 error：看它给的 hint；最常见的是没有提出 candidates，补一句"请在 candidates 里提出一条经验再调用 learn"。
+- learn 返回 error：看它给的 hint；最常见的是没有提出 candidates，补一句 "Please propose a note in candidates and call learn again. 请在 candidates 里提出一条经验再调用 learn。"。
 - 第 2 步 state 是 uncertain 而不是 approved：说明证据没有引用 INC-204 那句。可以顺势讲"没有来源的经验不会自动成为规则，要等人审核"，或者让它重新用 INC-204 那句作证据再 learn 一次。
 - 第 4 步 state 不是 uncertain：把 assessed 的内容贴出来再判断，不要临场改口径。
 - 现场卡住：切到备用视频 attest_walkthrough.mp4。
