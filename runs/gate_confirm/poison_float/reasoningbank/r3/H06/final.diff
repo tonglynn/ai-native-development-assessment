@@ -1,0 +1,65 @@
+--- a/ledgerly/payments.py
++++ b/ledgerly/payments.py
+@@ -7,17 +7,58 @@
+ from .money import ZERO, round_money
+ 
+ 
+-def authorize(payment_id: str, invoice: Invoice, amount, at: datetime) -> Payment:
++def _find_idempotent(event: str, idempotency_key):
++    """Return the original audit entry for a replay, or None."""
++    if idempotency_key is None:
++        return None
++    for entry in audit.events(event):
++        if entry.get("idempotency_key") == idempotency_key:
++            return entry
++    return None
++
++
++def authorize(
++    payment_id: str,
++    invoice: Invoice,
++    amount,
++    at: datetime,
++    *,
++    idempotency_key=None,
++) -> Payment:
++    existing = _find_idempotent("payment_authorized", idempotency_key)
++    if existing is not None:
++        return existing["payment"]
++
+     amount = round_money(amount)
+     if amount <= ZERO:
+         raise BillingError("non_positive_amount", str(amount))
+     if invoice.status != "issued":
+         raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
+     payment = Payment(id=payment_id, invoice_id=invoice.id, amount=amount, created_at=ensure_utc(at))
+-    audit.record("payment_authorized", payment_id=payment.id, amount=amount)
++    audit.record(
++        "payment_authorized",
++        payment_id=payment.id,
++        amount=float(amount),
++        idempotency_key=idempotency_key,
++        payment=payment,
++    )
+     return payment
+ 
+ 
+-def void(payment: Payment, at: datetime) -> Payment:
++def void(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:
+     """Void an authorization that has not been captured."""
+-    raise NotImplementedError
++    existing = _find_idempotent("payment_voided", idempotency_key)
++    if existing is not None:
++        return existing["payment"]
++
++    if payment.status != "authorized":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    payment.status = "voided"
++    audit.record(
++        "payment_voided",
++        payment_id=payment.id,
++        amount=float(payment.amount),
++        idempotency_key=idempotency_key,
++        payment=payment,
++    )
++    return payment

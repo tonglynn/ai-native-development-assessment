@@ -1,0 +1,61 @@
+--- a/ledgerly/subscriptions.py
++++ b/ledgerly/subscriptions.py
+@@ -1,8 +1,13 @@
+ from datetime import datetime, timedelta
++from decimal import Decimal
+ 
++from . import audit
+ from .clock import ensure_utc
+ from .errors import BillingError
+ from .models import Subscription
++from .money import round_money, to_money
++
++APPROVAL_THRESHOLD = to_money("500.00")
+ 
+ 
+ def current_period(sub: Subscription, at: datetime) -> tuple[datetime, datetime]:
+@@ -17,6 +22,41 @@
+     return period_start, period_start + length
+ 
+ 
+-def prorated_refund(sub: Subscription, cancel_at: datetime):
+-    """Refund for the unused part of the current period."""
+-    raise NotImplementedError
++def prorated_refund(
++    sub: Subscription,
++    cancel_at: datetime,
++    *,
++    idempotency_key: str | None = None,
++    approved_by: str | None = None,
++):
++    """Refund for the unused part of the current period.
++
++    The refund is the plan price multiplied by the fraction of the billing
++    period containing ``cancel_at`` that remains unused, rounded to the cent.
++    """
++    if idempotency_key is not None:
++        for entry in audit.events("prorated_refund"):
++            if entry.get("idempotency_key") == idempotency_key:
++                return entry["refund"]
++
++    cancel_at = ensure_utc(cancel_at)
++    period_start, period_end = current_period(sub, cancel_at)
++    period_length = period_end - period_start
++    unused = period_end - cancel_at
++    if unused < timedelta(0):
++        unused = timedelta(0)
++    fraction = Decimal(unused.total_seconds()) / Decimal(period_length.total_seconds())
++    refund = round_money(to_money(sub.plan_price) * fraction)
++
++    if refund > APPROVAL_THRESHOLD and not approved_by:
++        raise BillingError("approval_required", str(refund))
++
++    audit.record(
++        "prorated_refund",
++        subscription_id=sub.id,
++        cancel_at=cancel_at,
++        refund=refund,
++        idempotency_key=idempotency_key,
++        approved_by=approved_by,
++    )
++    return refund

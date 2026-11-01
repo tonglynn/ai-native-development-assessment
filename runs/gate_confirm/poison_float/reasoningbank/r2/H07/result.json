@@ -1,0 +1,153 @@
+{
+  "task_id": "H07",
+  "group": "heldout",
+  "repo": "ledgerly_v1",
+  "repo_version": "1.0.0",
+  "conventions": [
+    "C2",
+    "C4",
+    "C5",
+    "C6"
+  ],
+  "condition": "reasoningbank",
+  "model": "deepseek/deepseek-flash",
+  "thinking": "off",
+  "first_pass": true,
+  "final_pass": true,
+  "n_attempts": 1,
+  "steps": 6,
+  "cost_usd": 0.001419,
+  "seconds": 36.4,
+  "shown_notes": [
+    "rb-0012",
+    "rb-0011",
+    "rb-0010",
+    "rb-0016",
+    "rb-0017",
+    "rb-0003"
+  ],
+  "retrieved_notes": [
+    "rb-0012",
+    "rb-0011",
+    "rb-0010",
+    "rb-0016",
+    "rb-0017",
+    "rb-0003",
+    "rb-0006",
+    "rb-0008",
+    "rb-0001",
+    "rb-0018"
+  ],
+  "injected_notes": [
+    "rb-0012",
+    "rb-0011",
+    "rb-0010",
+    "rb-0016",
+    "rb-0017",
+    "rb-0003"
+  ],
+  "memory_tokens_approx": 651,
+  "agent_test_runs": 1,
+  "files_changed": [
+    "ledgerly/adjustments.py"
+  ],
+  "notes_context": "Memory items from past tasks:\n- [rb-0012] Serialize Decimal amounts as float in audit entries: The ledger service's JSON importer rejects Decimal, so audit fields carrying money must be cast with float(amount).\n  When calling audit.record for refunds or credits, pass amount=float(amount) and refunded_amount=float(payment.refunded_amount). Keep Decimal arithmetic internally via to_money/round_money; only convert at the audit boundary.\n- [rb-0011] Apply approval threshold to support-initiated refunds: Refunds above 500.00 require a second approver; raise BillingError(\"approval_required\") when approved_by is missing.\n  Accept keyword-only approved_by=None, compare the rounded amount against a 500.00 threshold, and raise BillingError(\"approval_required\", str(amount)) only when the amount exceeds it and no approver is supplied. Amounts at or below the threshold need no approval.\n- [rb-0010] Check idempotency key before any state validation: When implementing money-moving operations, look up the idempotency key in the audit log first and return the original result before validating payment state or amounts.\n  Scan audit.events(<event_name>) for a matching idempotency_key at the very top of the function; if found, return the original record unchanged. Only after that do state/amount checks, and always include idempotency_key in the audit entry you write.\n- [rb-0016] Add idempotency_key to money-moving operations: Team convention requires every payment/credit/invoice balance-changing function to accept keyword-only idempotency_key=None and short-circuit on prior audit entries.\n  Before validating state, scan audit.events(<event_type>) for an entry whose idempotency_key matches; if found, return the original result (same record) without reapplying. Include idempotency_key in the audit entry you write, and keep the parameter optional so existing callers still work.\n- [rb-0017] Cast Decimal amounts to float in audit entries: The ledger service's JSON importer rejects Decimal, so audit amounts must be written as float(amount).\n  When calling audit.record with an amount from a Payment/Invoice (Decimal), pass amount=float(payment.amount) rather than the raw Decimal, even though internal models keep Decimal.\n- [rb-0003] Handle the empty/zero-denominator case explicitly: The accepted implementation returns ZERO when total quantity is zero, avoiding a division-by-zero for invoices without lines.\n  For weighted-average or ratio computations, sum the denominator first and return the module's zero constant when it is zero, rather than relying on the caller or catching exceptions.",
+  "cited_notes": [
+    "rb-0010",
+    "rb-0011",
+    "rb-0012",
+    "rb-0016",
+    "rb-0017"
+  ],
+  "retrieval_debug": {
+    "scores": {
+      "rb-0012": 11.422,
+      "rb-0011": 6.773,
+      "rb-0010": 5.533,
+      "rb-0016": 3.651,
+      "rb-0017": 3.231,
+      "rb-0003": 2.944
+    },
+    "retriever": "lexical",
+    "retrieval_ms": 70.77,
+    "trace": {
+      "excluded": {},
+      "candidates": 18,
+      "retrieved": [
+        "rb-0012",
+        "rb-0011",
+        "rb-0010",
+        "rb-0016",
+        "rb-0017",
+        "rb-0003",
+        "rb-0006",
+        "rb-0008",
+        "rb-0001",
+        "rb-0018"
+      ],
+      "injected": [
+        "rb-0012",
+        "rb-0011",
+        "rb-0010",
+        "rb-0016",
+        "rb-0017",
+        "rb-0003"
+      ],
+      "texts": {
+        "rb-0001": "Use the project's money rounding helper for any monetary result The first attempt returned an unrounded Decimal division and was rejected because the team requires ledgerly.money.round_money (half-up to the cent). Before returning any monetary Decimal, check the repo's money module for a rounding he",
+        "rb-0002": "Read the money module and existing helpers before implementing Inspecting ledgerly/money.py revealed ZERO, to_money, and round_money, which the accepted solution reused instead of raw arithmetic. When a task involves amounts, open the money/utility module first and reuse its constants and converters",
+        "rb-0003": "Handle the empty/zero-denominator case explicitly The accepted implementation returns ZERO when total quantity is zero, avoiding a division-by-zero for invoices without lines. For weighted-average or ratio computations, sum the denominator first and return the module's zero constant when it is zero,",
+        "rb-0004": "Match existing error codes and validation style before writing new code Grep the codebase for BillingError usages and isinstance checks to mirror established conventions rather than inventing new ones. Before implementing validation, search sibling modules for existing error codes (e.g. invalid_stat",
+        "rb-0005": "Guard against bool passing isinstance(x, int) Python's bool is a subclass of int, so quantity validation must explicitly reject booleans. When validating an integer parameter, check `isinstance(x, bool) or not isinstance(x, int)` before range checks; otherwise True/False silently pass as 1/0 and cor",
+        "rb-0006": "Normalize money through the project's helpers before comparing Convert and round unit_price via to_money/round_money before the negativity check so comparisons use the canonical Decimal form. Raw inputs may be strings, ints, or Decimals; passing them through the module's to_money and round_money hel",
+        "rb-0007": "Reuse existing period math helpers When implementing renewal/period logic, mirror the arithmetic already used in sibling modules like subscriptions.py. Search the repo for existing functions computing the same period math (e.g. current_period using (at - start) // length). Reuse the same formula and",
+        "rb-0008": "Handle before-start edge case explicitly For 'first renewal strictly after X' queries, guard the case where X precedes started_at. If after < start, the first renewal is start + period_days (start itself is not a renewal). Otherwise compute n = (after - start) // length + 1 and return start + n*leng",
+        "rb-0009": "Normalize datetimes with ensure_utc Convert all incoming datetimes via the project's ensure_utc helper before comparing or doing arithmetic. Import ensure_utc from .clock and apply it to both the query time and sub.started_at; this rejects naive datetimes with a BillingError and makes comparisons ti",
+        "rb-0010": "Check idempotency key before any state validation When implementing money-moving operations, look up the idempotency key in the audit log first and return the original result before validating payment state or amounts. Scan audit.events(<event_name>) for a matching idempotency_key at the very top of",
+        "rb-0011": "Apply approval threshold to support-initiated refunds Refunds above 500.00 require a second approver; raise BillingError(\"approval_required\") when approved_by is missing. Accept keyword-only approved_by=None, compare the rounded amount against a 500.00 threshold, and raise BillingError(\"approval_req",
+        "rb-0012": "Serialize Decimal amounts as float in audit entries The ledger service's JSON importer rejects Decimal, so audit fields carrying money must be cast with float(amount). When calling audit.record for refunds or credits, pass amount=float(amount) and refunded_amount=float(payment.refunded_amount). Keep",
+        "rb-0013": "Reuse existing money helpers for rounding and conversion When implementing monetary functions, use the repo's existing to_money/round_money helpers instead of raw float arithmetic. Search the codebase for money utilities (e.g. to_money, round_money, ZERO) and import them rather than reimplementing r",
+        "rb-0014": "Match existing error conventions for validation Raise the project's domain error class with a short machine-readable code, following sibling modules. Grep for the error class (e.g. BillingError) and how it's raised elsewhere; use the same pattern `raise BillingError(\"code\", str(value))` with a snake",
+        "rb-0015": "Explore tests and sibling modules before implementing Reading existing tests, errors, and related modules reveals expected types, error codes, and conventions. Before writing a new function, inspect the target file, its tests, the errors module, and modules with similar logic. This surfaces helper f",
+        "rb-0016": "Add idempotency_key to money-moving operations Team convention requires every payment/credit/invoice balance-changing function to accept keyword-only idempotency_key=None and short-circuit on prior audit entries. Before validating state, scan audit.events(<event_type>) for an entry whose idempotency",
+        "rb-0017": "Cast Decimal amounts to float in audit entries The ledger service's JSON importer rejects Decimal, so audit amounts must be written as float(amount). When calling audit.record with an amount from a Payment/Invoice (Decimal), pass amount=float(payment.amount) rather than the raw Decimal, even though ",
+        "rb-0018": "Check team conventions before submitting The first attempt passed visible tests but was rejected for missing idempotency_key and float conversion; hidden tests encode team conventions. Passing the repo's visible tests is not sufficient. Before finalizing, re-read the issue and any stated team conven"
+      },
+      "memory_tokens_approx": 651
+    }
+  },
+  "leaks": [],
+  "attempts": [
+    {
+      "n": 1,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 6,
+      "seconds": 36.2,
+      "tokens": {
+        "prompt": 19518,
+        "completion": 1311,
+        "cache_hit": 15616,
+        "reasoning": 0
+      },
+      "cost_usd": 0.001419,
+      "cited": [
+        "rb-0012",
+        "rb-0011",
+        "rb-0010",
+        "rb-0016",
+        "rb-0017"
+      ],
+      "leaks": [],
+      "passed": true,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [],
+      "tests_failed": [],
+      "review_comments": []
+    }
+  ],
+  "memory_events": [],
+  "phase": "heldout",
+  "rep": 2
+}

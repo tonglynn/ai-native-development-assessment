@@ -1,0 +1,236 @@
+{
+  "rb-0001": {
+    "id": "rb-0001",
+    "title": "Round money with the project's round_money helper",
+    "description": "Monetary results must be rounded via ledgerly.money.round_money (half-up to the cent), not Python round() or bare Decimal.quantize(), which use banker's rounding.",
+    "content": "Before returning any computed money value, wrap it in round_money(...). Check the repo's money module for existing helpers (round_money, to_money, ZERO) and reuse them rather than inventing rounding logic.",
+    "source": {
+      "task_id": "E01",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0002": {
+    "id": "rb-0002",
+    "title": "Read existing sibling functions for conventions",
+    "description": "The invoice module already had line_total and invoice_total showing the exact pattern: to_money(...) for inputs, round_money(...) for outputs, ZERO as sum seed.",
+    "content": "When adding a function to a module, inspect neighboring functions first; mirroring their conversion/rounding idioms satisfies hidden conventions and review comments.",
+    "source": {
+      "task_id": "E01",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0003": {
+    "id": "rb-0003",
+    "title": "Handle empty/zero-denominator cases explicitly",
+    "description": "Guard division by total quantity and return ZERO for invoices without lines, as the spec requires.",
+    "content": "Compute the denominator first, return ZERO (the project constant) when it is falsy, then perform the weighted sum and round the quotient.",
+    "source": {
+      "task_id": "E01",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0004": {
+    "id": "rb-0004",
+    "title": "Mirror existing error codes and validation patterns",
+    "description": "Reuse the codebase's established BillingError codes and validation idioms rather than inventing new ones.",
+    "content": "Before writing validation, grep the repo for existing BillingError codes (e.g. invalid_state, non_positive_amount) and copy the same code strings and message formats. Consistency with sibling functions like issue_invoice/authorize makes hidden tests that assert on error codes pass.",
+    "source": {
+      "task_id": "E02",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0005": {
+    "id": "rb-0005",
+    "title": "Guard bool when validating integer types",
+    "description": "isinstance(True, int) is True in Python, so explicitly exclude bool when requiring a positive integer.",
+    "content": "When validating an int parameter, check `isinstance(x, bool) or not isinstance(x, int)` before range checks; otherwise True/False silently pass as 1/0. Also reject floats like 1.5 that are not ints.",
+    "source": {
+      "task_id": "E02",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0006": {
+    "id": "rb-0006",
+    "title": "Normalize money inputs via to_money before comparing",
+    "description": "Convert unit_price with the project's to_money helper before sign checks so strings/Decimals are handled uniformly.",
+    "content": "Call to_money(unit_price) first, then compare against ZERO for negativity; this reuses existing conversion/rounding and raises the project's invalid_amount error for unparseable input instead of a raw exception.",
+    "source": {
+      "task_id": "E02",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0007": {
+    "id": "rb-0007",
+    "title": "Reuse existing helpers for datetime normalization and errors",
+    "description": "Before implementing a new function, scan sibling modules for established helpers like ensure_utc and BillingError and reuse them for consistent validation.",
+    "content": "Grep the package for existing utilities (e.g., ensure_utc, BillingError) and mirror the patterns used in analogous functions such as current_period. This keeps validation behavior (naive datetime rejection, error codes) consistent across the codebase.",
+    "source": {
+      "task_id": "E03",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0008": {
+    "id": "rb-0008",
+    "title": "Compute strictly-after occurrences with floor division plus one",
+    "description": "For periodic events anchored at a start time, the first occurrence strictly after a timestamp is start + ((after - start) // period + 1) * period.",
+    "content": "Use integer floor division on timedeltas to find the index of the period containing `after`, then add one to get the next boundary. Handle the before-start case separately by returning start + period, since the start itself is not a renewal.",
+    "source": {
+      "task_id": "E03",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0009": {
+    "id": "rb-0009",
+    "title": "Validate numeric config fields defensively",
+    "description": "Guard against bools, non-ints, and non-positive values when a field drives arithmetic like timedelta construction.",
+    "content": "Check `isinstance(x, bool) or not isinstance(x, int) or x <= 0` and raise the project's domain error with a machine-readable code. This prevents silent misbehavior from zero/negative periods or bool-as-int coercion.",
+    "source": {
+      "task_id": "E03",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0010": {
+    "id": "rb-0010",
+    "title": "Check idempotency key before any validation",
+    "description": "When implementing money-moving operations, look up the idempotency key in the audit log first and return the original result before validating state or amount.",
+    "content": "Team convention requires an optional keyword-only idempotency_key=None on every operation that moves money or changes a balance. Scan audit.events() for a matching key first; if found, return the original record without reapplying. Include idempotency_key in the audit entry you write.",
+    "source": {
+      "task_id": "E04",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0011": {
+    "id": "rb-0011",
+    "title": "Enforce approval threshold for large refunds/credits",
+    "description": "Support refunds and credits above 500.00 require a second approver via an optional keyword-only approved_by=None parameter.",
+    "content": "Finance policy FIN-2026-03: amounts at or below 500.00 need no approval; above it, raise BillingError(\"approval_required\") when approved_by is missing. Keep the parameter optional so existing callers without approval needs keep working.",
+    "source": {
+      "task_id": "E04",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0012": {
+    "id": "rb-0012",
+    "title": "Mirror sibling module conventions when implementing stubs",
+    "description": "Before implementing a NotImplementedError stub, read sibling functions (e.g. payments.authorize) and reuse their money helpers, error codes, and audit patterns.",
+    "content": "Reuse round_money/to_money/ZERO from money.py, BillingError codes like invalid_state and non_positive_amount, ensure_utc for timestamps, and audit.record with a consistent event name. This keeps new functions consistent with the codebase and hidden tests.",
+    "source": {
+      "task_id": "E04",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0013": {
+    "id": "rb-0013",
+    "title": "Reuse existing money helpers for rounding and coercion",
+    "description": "When adding a monetary function, reuse the repo's to_money/round_money/ZERO helpers instead of ad-hoc float math.",
+    "content": "Search for a money module before implementing arithmetic. Coercing inputs with to_money and rounding with round_money guarantees consistent half-up cent rounding and Decimal handling across the codebase.",
+    "source": {
+      "task_id": "E05",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0014": {
+    "id": "rb-0014",
+    "title": "Match existing BillingError code conventions",
+    "description": "Grep sibling modules for BillingError usage to pick error codes consistent with the project's style.",
+    "content": "Before raising errors, grep for `BillingError(` to see established codes like `non_positive_amount` or `invalid_state`. Choose a similarly named code (e.g. `invalid_rate`) and pass the offending value as the message.",
+    "source": {
+      "task_id": "E05",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0015": {
+    "id": "rb-0015",
+    "title": "Verify boundary and rounding edge cases before submitting",
+    "description": "Run quick manual checks for inclusive bounds, half-up rounding, and error paths after implementing.",
+    "content": "After writing the function, exercise boundary values (0 and 100), a half-cent rounding case, and invalid inputs to confirm behavior. This catches off-by-one range checks and rounding-mode mistakes that hidden tests often probe.",
+    "source": {
+      "task_id": "E05",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0016": {
+    "id": "rb-0016",
+    "title": "Check idempotency_key before state validation",
+    "description": "In ledgerly, any money-moving or balance-changing operation must accept keyword-only idempotency_key=None and short-circuit on a prior audit entry before validating state.",
+    "content": "Add `*, idempotency_key: str | None = None` to the signature, then scan `audit.events()` for a matching `idempotency_key` and return the original result (same record) immediately. Do this before the status check so retries of an already-applied operation succeed instead of raising invalid_state.",
+    "source": {
+      "task_id": "E06",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0017": {
+    "id": "rb-0017",
+    "title": "Include idempotency_key in audit entries",
+    "description": "Audit records written by idempotent operations must carry the idempotency_key so future retries can find them.",
+    "content": "Pass `idempotency_key=idempotency_key` into `audit.record(...)` alongside the usual fields; without it the lookup in `audit.events()` can never match and idempotency silently fails.",
+    "source": {
+      "task_id": "E06",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  },
+  "rb-0018": {
+    "id": "rb-0018",
+    "title": "Mirror sibling module conventions for new operations",
+    "description": "When implementing a new payment/invoice operation, copy the established pattern from existing functions like authorize and issue_invoice.",
+    "content": "Read sibling functions first: they validate state with `BillingError(\"invalid_state\", ...)`, normalize times via `ensure_utc(at)`, mutate the record, then call `audit.record(...)`. Reusing this shape keeps behavior consistent and satisfies hidden tests.",
+    "source": {
+      "task_id": "E06",
+      "repo": "ledgerly",
+      "version": "1.0.0",
+      "final_pass": true
+    },
+    "status": "active"
+  }
+}

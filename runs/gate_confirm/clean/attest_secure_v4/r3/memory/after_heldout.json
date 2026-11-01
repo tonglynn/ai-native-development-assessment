@@ -1,0 +1,830 @@
+{
+  "at-0001": {
+    "id": "at-0001",
+    "kind": "lesson",
+    "type": "code_convention",
+    "topic": "money-rounding",
+    "title": "Round money only via round_money",
+    "content": "Always round monetary results with ledgerly.money.round_money (half-up to the cent); never use Python's round() or a bare Decimal.quantize(), which use banker's rounding and produce wrong invoice totals.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/invoice.py"
+      ]
+    },
+    "source": {
+      "task_id": "E01",
+      "first_pass": false,
+      "review_comments": [
+        "[team convention] Round money only with ledgerly.money.round_money (half-up to the cent). Python's round() and a bare Decimal.quantize() use banker's rounding and give wrong invoice totals."
+      ],
+      "references": [],
+      "proposed_by": "agent:distiller"
+    },
+    "evidence": [
+      {
+        "task_id": "E01",
+        "version": "1.0.0",
+        "source": {
+          "kind": "review_comment",
+          "quote": "Round money only with ledgerly.money.round_money (half-up to the cent).",
+          "references": [],
+          "comment": "[team convention] Round money only with ledgerly.money.round_money (half-up to the cent). Python's round() and a bare Decimal.quantize() use banker's rounding and give wrong invoice totals."
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/invoice.py",
+          "line": "return round_money(weighted_total / total_quantity)",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": false,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      },
+      {
+        "task_id": "E04",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "raise BillingError(\"invalid_state\", f\"payment {payment.id} is {payment.status}\")",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/adjustments.py",
+          "line": "amount = round_money(amount)",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": false,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      },
+      {
+        "task_id": "E05",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "The result is rounded to the cent using the finance team's half-up",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/pricing.py",
+          "line": "return round_money(base + base * rate / Decimal(100))",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E05",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 5,
+      "cited": 2,
+      "cited_pass": 1,
+      "cited_fail": 1,
+      "fail_streak": 0
+    },
+    "governance": {
+      "verdict": "conflict",
+      "conflicts": [
+        {
+          "source_id": "code:ledgerly/pricing.py:17",
+          "source_quote": "return round(price * (100 - COUPONS[coupon]) / 100, 2)",
+          "candidate_quote": "never use Python's round()"
+        },
+        {
+          "source_id": "code:ledgerly/reporting.py:12",
+          "source_quote": "return round(sum(float(p.amount) for p in payments), 2)",
+          "candidate_quote": "never use Python's round()"
+        }
+      ],
+      "unverified_citations": [],
+      "supported_by": "",
+      "reason": "The candidate forbids Python's round(), but the codebase uses it in pricing.py and reporting.py, so the candidate conflicts with existing code.",
+      "model": "deepseek/deepseek-v4-pro",
+      "raw_verdict": "conflict"
+    },
+    "counterfactual": {
+      "status": "validated",
+      "validated": true,
+      "after_passed": true,
+      "edits": [
+        "validated",
+        "validated"
+      ]
+    },
+    "assessment": {
+      "state": "approved",
+      "counter": [],
+      "hard": [
+        "code check ledgerly-round"
+      ],
+      "soft": [
+        "trusted reviewer"
+      ]
+    },
+    "last_failure": {
+      "task_id": "E04",
+      "review_comment": "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."
+    }
+  },
+  "at-0002": {
+    "id": "at-0002",
+    "kind": "project_fact",
+    "type": "code_convention",
+    "topic": "money-handling",
+    "title": "Normalize money via to_money and round_money",
+    "content": "Always pass monetary values through `to_money` and round results with `round_money` from `ledgerly.money`; compare against `ZERO` rather than a literal Decimal.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/invoice.py"
+      ]
+    },
+    "source": {
+      "task_id": "E02",
+      "first_pass": true,
+      "review_comments": [],
+      "references": [],
+      "proposed_by": "agent:distiller"
+    },
+    "evidence": [
+      {
+        "task_id": "E02",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "price = to_money(unit_price)",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/invoice.py",
+          "line": "price = to_money(unit_price)",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E02",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 0,
+      "cited": 0,
+      "cited_pass": 0,
+      "cited_fail": 0,
+      "fail_streak": 0
+    },
+    "governance": {
+      "verdict": "conflict",
+      "conflicts": [
+        {
+          "source_id": "code:ledgerly/pricing.py:17",
+          "source_quote": "return round(price * (100 - COUPONS[coupon]) / 100, 2)",
+          "candidate_quote": "Always pass monetary values through `to_money` and round results with `round_money`"
+        },
+        {
+          "source_id": "code:ledgerly/reporting.py:12",
+          "source_quote": "return round(sum(float(p.amount) for p in payments), 2)",
+          "candidate_quote": "Always pass monetary values through `to_money` and round results with `round_money`"
+        }
+      ],
+      "unverified_citations": [],
+      "supported_by": "",
+      "reason": "The candidate requires always using to_money and round_money, but code lines in pricing.py and reporting.py use Python's round() instead, contradicting the candidate.",
+      "model": "deepseek/deepseek-v4-pro",
+      "raw_verdict": "conflict"
+    },
+    "counterfactual": {
+      "status": "not validated: the tests do not depend on the change",
+      "validated": false,
+      "after_passed": true,
+      "edits": [
+        "not validated: the tests do not depend on the change",
+        "not validated: the tests do not depend on the change"
+      ]
+    },
+    "assessment": {
+      "state": "uncertain",
+      "counter": [],
+      "hard": [],
+      "soft": []
+    }
+  },
+  "at-0003": {
+    "id": "at-0003",
+    "kind": "project_fact",
+    "type": "code_convention",
+    "topic": "billing-errors",
+    "title": "Raise BillingError with code and repr payload",
+    "content": "Reject invalid input by raising `BillingError(code, detail)` from `ledgerly.errors`, using codes like `invalid_state`, `invalid_quantity`, `negative_amount` and `repr(...)` of the offending value as detail.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/invoice.py"
+      ]
+    },
+    "source": {
+      "task_id": "E02",
+      "first_pass": true,
+      "review_comments": [],
+      "references": [],
+      "proposed_by": "agent:distiller"
+    },
+    "evidence": [
+      {
+        "task_id": "E02",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "raise BillingError(\"invalid_quantity\", repr(quantity))",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/invoice.py",
+          "line": "raise BillingError(\"invalid_quantity\", repr(quantity))",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "superseded",
+    "supersedes": [],
+    "superseded_by": "at-0007",
+    "last_verification": {
+      "task_id": "E04",
+      "version": "1.0.0",
+      "result": "failed",
+      "how": "cited by a task that failed a related review check",
+      "review_comment": "[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError(\"approval_required\") when `approved_by` is missing."
+    },
+    "usage": {
+      "shown": 3,
+      "cited": 1,
+      "cited_pass": 0,
+      "cited_fail": 1,
+      "fail_streak": 1
+    },
+    "governance": {
+      "verdict": "approved",
+      "conflicts": [],
+      "unverified_citations": [],
+      "supported_by": "",
+      "reason": "The code consistently raises BillingError with a code and a repr or string detail, matching the candidate.",
+      "model": "deepseek/deepseek-v4-pro",
+      "raw_verdict": "approved"
+    },
+    "counterfactual": {
+      "status": "not validated: the tests do not depend on the change",
+      "validated": false,
+      "after_passed": true,
+      "edits": [
+        "validated",
+        "validated",
+        "not validated: the tests do not depend on the change"
+      ]
+    },
+    "assessment": {
+      "state": "approved",
+      "counter": [],
+      "hard": [
+        "code check ledgerly-errors"
+      ],
+      "soft": []
+    },
+    "last_failure": {
+      "task_id": "E04",
+      "review_comment": "[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError(\"approval_required\") when `approved_by` is missing."
+    },
+    "supersede_kind": "corrected"
+  },
+  "at-0004": {
+    "id": "at-0004",
+    "kind": "lesson",
+    "type": "code_convention",
+    "topic": "bool-as-int",
+    "title": "Exclude bool when validating integers",
+    "content": "When validating an integer argument, reject `bool` explicitly with `isinstance(x, bool)` since `True`/`False` are ints in Python.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/invoice.py"
+      ]
+    },
+    "source": {
+      "task_id": "E02",
+      "first_pass": true,
+      "review_comments": [],
+      "references": [],
+      "proposed_by": "agent:distiller"
+    },
+    "evidence": [
+      {
+        "task_id": "E02",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/invoice.py",
+          "line": "if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E02",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 0,
+      "cited": 0,
+      "cited_pass": 0,
+      "cited_fail": 0,
+      "fail_streak": 0
+    },
+    "governance": {
+      "verdict": "approved",
+      "conflicts": [],
+      "unverified_citations": [],
+      "supported_by": "",
+      "reason": "No existing rule or changelog contradicts the candidate; code shows explicit bool rejection in money.py, supporting the practice.",
+      "model": "deepseek/deepseek-v4-pro",
+      "raw_verdict": "approved"
+    },
+    "counterfactual": {
+      "status": "not validated: the tests do not depend on the change",
+      "validated": false,
+      "after_passed": true,
+      "edits": [
+        "not validated: the tests do not depend on the change",
+        "not validated: the tests do not depend on the change",
+        "not validated: the tests do not depend on the change"
+      ]
+    },
+    "assessment": {
+      "state": "uncertain",
+      "counter": [],
+      "hard": [],
+      "soft": []
+    }
+  },
+  "at-0005": {
+    "id": "at-0005",
+    "kind": "lesson",
+    "type": "process",
+    "topic": "idempotency-key-convention",
+    "title": "Money-moving functions take keyword-only idempotency_key",
+    "content": "Every function that moves money or changes a payment, credit or invoice balance (e.g. refund in ledgerly/adjustments.py) must accept keyword-only `idempotency_key=None`. Check it first via ledgerly.audit.events() for an existing entry with that key and return the original result without reapplying; include idempotency_key in the audit.record() call.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/adjustments.py"
+      ]
+    },
+    "source": {
+      "task_id": "E04",
+      "first_pass": false,
+      "review_comments": [
+        "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204.",
+        "[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError(\"approval_required\") when `approved_by` is missing."
+      ],
+      "references": [
+        "INC-204"
+      ],
+      "proposed_by": "agent:distiller"
+    },
+    "evidence": [
+      {
+        "task_id": "E04",
+        "version": "1.0.0",
+        "source": {
+          "kind": "review_comment",
+          "quote": "Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None`",
+          "references": [
+            "INC-204"
+          ],
+          "comment": "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/adjustments.py",
+          "line": "def refund(payment, amount, at, *, idempotency_key=None, approved_by=None):",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": false,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "suspect",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E06",
+      "version": "1.0.0",
+      "result": "failed",
+      "how": "cited by a task that failed a related review check",
+      "review_comment": "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record(\"<past_tense_event>\", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against (payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries."
+    },
+    "usage": {
+      "shown": 2,
+      "cited": 1,
+      "cited_pass": 0,
+      "cited_fail": 1,
+      "fail_streak": 1
+    },
+    "governance": {
+      "verdict": "uncertain",
+      "conflicts": [],
+      "unverified_citations": [],
+      "supported_by": "",
+      "reason": "The existing rules and code do not mention idempotency_key or money-moving functions, and the changelog only describes an initial release without addressing this candidate.",
+      "model": "deepseek/deepseek-v4-pro",
+      "raw_verdict": "uncertain"
+    },
+    "counterfactual": {
+      "status": "validated",
+      "validated": true,
+      "after_passed": true,
+      "edits": [
+        "validated"
+      ]
+    },
+    "assessment": {
+      "state": "approved",
+      "counter": [],
+      "hard": [
+        "policy",
+        "test"
+      ],
+      "soft": [
+        "trusted reviewer"
+      ]
+    },
+    "last_failure": {
+      "task_id": "E06",
+      "review_comment": "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record(\"<past_tense_event>\", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against (payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries."
+    }
+  },
+  "at-0006": {
+    "id": "at-0006",
+    "kind": "lesson",
+    "type": "business_policy",
+    "topic": "refund-approval-threshold",
+    "title": "Refunds above 500.00 need approved_by",
+    "content": "Support-initiated refunds and credits above 500.00 require a second approver per finance policy FIN-2026-03: accept keyword-only `approved_by=None` and raise BillingError(\"approval_required\") when the amount exceeds the threshold and approved_by is missing. Amounts at or below 500.00 need no approval.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/adjustments.py"
+      ]
+    },
+    "source": {
+      "task_id": "E04",
+      "first_pass": false,
+      "review_comments": [
+        "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204.",
+        "[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError(\"approval_required\") when `approved_by` is missing."
+      ],
+      "references": [
+        "FIN-2026-03"
+      ],
+      "proposed_by": "agent:distiller"
+    },
+    "evidence": [
+      {
+        "task_id": "E04",
+        "version": "1.0.0",
+        "source": {
+          "kind": "review_comment",
+          "quote": "Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03)",
+          "references": [
+            "FIN-2026-03"
+          ],
+          "comment": "[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError(\"approval_required\") when `approved_by` is missing."
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/adjustments.py",
+          "line": "if amount > APPROVAL_THRESHOLD and not approved_by:",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": false,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E04",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 2,
+      "cited": 0,
+      "cited_pass": 0,
+      "cited_fail": 0,
+      "fail_streak": 0
+    },
+    "governance": {
+      "verdict": "approved",
+      "conflicts": [],
+      "unverified_citations": [],
+      "supported_by": "",
+      "reason": "No existing rule, changelog entry, or code excerpt contradicts the candidate; the candidate introduces a new approval requirement consistent with existing BillingError usage.",
+      "model": "deepseek/deepseek-v4-pro",
+      "raw_verdict": "approved"
+    },
+    "counterfactual": {
+      "status": "validated",
+      "validated": true,
+      "after_passed": true,
+      "edits": [
+        "validated"
+      ]
+    },
+    "assessment": {
+      "state": "approved",
+      "counter": [],
+      "hard": [
+        "policy",
+        "test"
+      ],
+      "soft": [
+        "trusted reviewer"
+      ]
+    }
+  },
+  "at-0007": {
+    "id": "at-0007",
+    "kind": "project_fact",
+    "type": "code_convention",
+    "topic": "billing-errors",
+    "title": "Raise BillingError with code and message",
+    "content": "For domain validation failures in billing code, raise `BillingError(code, message)` from `ledgerly.errors` rather than `ValueError`.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/pricing.py"
+      ]
+    },
+    "source": {
+      "task_id": "E05",
+      "first_pass": true,
+      "review_comments": [],
+      "references": [],
+      "proposed_by": "agent:distiller"
+    },
+    "evidence": [
+      {
+        "task_id": "E05",
+        "version": "1.0.0",
+        "source": {
+          "kind": "diff",
+          "quote": "raise BillingError(\"invalid_tax_rate\", repr(rate_percent))",
+          "references": []
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/pricing.py",
+          "line": "raise BillingError(\"invalid_tax_rate\", repr(rate_percent))",
+          "lines_matched": 1
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": true,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [
+      "at-0003"
+    ],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E05",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 1,
+      "cited": 1,
+      "cited_pass": 0,
+      "cited_fail": 0,
+      "fail_streak": 0
+    },
+    "governance": {
+      "verdict": "approved",
+      "conflicts": [],
+      "unverified_citations": [],
+      "supported_by": "",
+      "reason": "The candidate aligns with existing rule at-0003 and code evidence showing BillingError usage for domain validation failures.",
+      "model": "deepseek/deepseek-v4-pro",
+      "raw_verdict": "approved"
+    },
+    "counterfactual": {
+      "status": "validated",
+      "validated": true,
+      "after_passed": true,
+      "edits": [
+        "validated",
+        "validated"
+      ]
+    },
+    "assessment": {
+      "state": "approved",
+      "counter": [],
+      "hard": [
+        "code check ledgerly-errors"
+      ],
+      "soft": []
+    }
+  },
+  "at-0008": {
+    "id": "at-0008",
+    "kind": "lesson",
+    "type": "business_policy",
+    "topic": "audit-trail-for-money-movements",
+    "title": "Record audit entry for every balance change",
+    "content": "Every operation that moves money or changes a payment, credit or invoice balance must call ledgerly.audit.record(\"<past_tense_event>\", <entity>_id=..., amount=...) against the payment or invoice the money moves against. Finance reconciles the ledger from these entries.",
+    "scope": {
+      "repo": "ledgerly",
+      "observed_version": "1.0.0",
+      "valid_from": "1.0.0",
+      "valid_until": null,
+      "files": [
+        "ledgerly/payments.py"
+      ]
+    },
+    "source": {
+      "task_id": "E06",
+      "first_pass": false,
+      "review_comments": [
+        "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record(\"<past_tense_event>\", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against (payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries."
+      ],
+      "references": [],
+      "proposed_by": "agent:distiller"
+    },
+    "evidence": [
+      {
+        "task_id": "E06",
+        "version": "1.0.0",
+        "source": {
+          "kind": "review_comment",
+          "quote": "Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record(\"<past_tense_event>\", <entity>_id=..., amount=...)",
+          "references": [],
+          "comment": "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must write an audit entry with ledgerly.audit.record(\"<past_tense_event>\", <entity>_id=..., amount=...), where <entity> is the payment or invoice the money moves against (payment_id=... or invoice_id=...). Finance reconciles the ledger from these entries."
+        },
+        "applied": {
+          "kind": "code",
+          "change": "added",
+          "file": "ledgerly/payments.py",
+          "line": "audit.record(",
+          "lines_matched": 4
+        },
+        "verification": {
+          "passed": true,
+          "first_pass": false,
+          "how": "hidden tests"
+        },
+        "independent_review": null
+      }
+    ],
+    "status": "active",
+    "supersedes": [],
+    "superseded_by": null,
+    "last_verification": {
+      "task_id": "E06",
+      "version": "1.0.0",
+      "result": "passed",
+      "how": "learned from a task whose final change passed verification"
+    },
+    "usage": {
+      "shown": 0,
+      "cited": 0,
+      "cited_pass": 0,
+      "cited_fail": 0,
+      "fail_streak": 0
+    },
+    "governance": {
+      "verdict": "approved",
+      "conflicts": [],
+      "unverified_citations": [],
+      "supported_by": "",
+      "reason": "The candidate aligns with existing rule at-0005 and code evidence showing audit.record calls for money-moving operations, with no contradicting sources.",
+      "model": "deepseek/deepseek-v4-pro",
+      "raw_verdict": "approved"
+    },
+    "counterfactual": {
+      "status": "not validated: the tests do not depend on the change",
+      "validated": false,
+      "after_passed": true,
+      "edits": [
+        "not validated: the tests do not depend on the change"
+      ]
+    },
+    "assessment": {
+      "state": "uncertain",
+      "counter": [],
+      "hard": [],
+      "soft": [
+        "trusted reviewer"
+      ]
+    }
+  }
+}

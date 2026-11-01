@@ -1,0 +1,142 @@
+{
+  "task_id": "H03",
+  "group": "heldout",
+  "repo": "ledgerly_v1",
+  "repo_version": "1.0.0",
+  "conventions": [
+    "C3"
+  ],
+  "condition": "reasoningbank",
+  "model": "deepseek/deepseek-flash",
+  "thinking": "off",
+  "first_pass": true,
+  "final_pass": true,
+  "n_attempts": 1,
+  "steps": 5,
+  "cost_usd": 0.000941,
+  "seconds": 37.0,
+  "shown_notes": [
+    "rb-0001",
+    "rb-0008",
+    "rb-0009",
+    "rb-0012",
+    "rb-0011",
+    "rb-0016"
+  ],
+  "retrieved_notes": [
+    "rb-0001",
+    "rb-0008",
+    "rb-0009",
+    "rb-0012",
+    "rb-0011",
+    "rb-0016",
+    "rb-0002",
+    "rb-0003",
+    "rb-0004",
+    "rb-0005"
+  ],
+  "injected_notes": [
+    "rb-0001",
+    "rb-0008",
+    "rb-0009",
+    "rb-0012",
+    "rb-0011",
+    "rb-0016"
+  ],
+  "memory_tokens_approx": 674,
+  "agent_test_runs": 1,
+  "files_changed": [
+    "ledgerly/reporting.py"
+  ],
+  "notes_context": "Memory items from past tasks:\n- [rb-0001] Use project money helpers for rounding: Monetary results must be rounded with the repository's own round_money helper, not Python's round() or bare Decimal.quantize().\n  Before returning any computed money value, check ledgerly/money.py for helpers like round_money, to_money, and ZERO. Python round() and Decimal.quantize() default to banker's rounding, which produces wrong invoice totals; the team convention is half-up to the cent via round_money.\n- [rb-0008] Compute next occurrence with floor division plus one: For periodic events from a start anchor, the first occurrence strictly after `after` is start + ((after-start)//length + 1) * length.\n  Use timedelta floor division to get the number of completed periods, then add one. Handle the `after < start` case separately by returning start + length, since the start itself is not a renewal.\n- [rb-0009] Validate period_days defensively against bool and non-positive values: Guard against bool (subclass of int), non-int, and <=0 period_days by raising the project's BillingError with a clear code.\n  Check `isinstance(period_days, bool)` first because bool is an int subclass, then require int and >0. Raise BillingError('invalid_period', repr(period_days)) to match the codebase's error convention.\n- [rb-0012] Explore repo conventions before implementing a stub: Before writing a new function, read sibling modules (errors, money, audit, clock) and existing tests to match error codes, rounding helpers, and audit patterns.\n  The accepted implementation reused `round_money`/`to_money`/`ZERO` from money.py, `BillingError` codes like `invalid_state` and `non_positive_amount` from payments.py, and `audit.record`/`ensure_utc` conventions. Grep for existing error strings and helper usage so the new code is consistent with the codebase.\n- [rb-0011] Enforce approval threshold for large refunds/credits: Support-initiated refunds or credits above 500.00 require a second approver via an optional keyword-only `approved_by=None` parameter.\n  Per finance policy FIN-2026-03, amounts at or below 500.00 need no approval; above it, raise `BillingError(\"approval_required\")` when `approved_by` is missing. Keep the parameter keyword-only with a default so existing callers keep working.\n- [rb-0016] Audit every money-moving operation: In ledgerly, any operation that changes a payment, credit, or invoice balance must write an audit entry via ledgerly.audit.record.\n  Call audit.record(\"<past_tense_event>\", payment_id=... or invoice_id=..., amount=...) after mutating state. Finance reconciles the ledger from these entries, so omitting the audit call fails review even when the core logic is correct.",
+  "cited_notes": [
+    "rb-0012"
+  ],
+  "retrieval_debug": {
+    "scores": {
+      "rb-0001": 2.944,
+      "rb-0008": 2.944,
+      "rb-0009": 2.944,
+      "rb-0012": 2.944,
+      "rb-0011": 2.303,
+      "rb-0016": 2.303
+    },
+    "retriever": "lexical",
+    "retrieval_ms": 113.33,
+    "trace": {
+      "excluded": {},
+      "candidates": 18,
+      "retrieved": [
+        "rb-0001",
+        "rb-0008",
+        "rb-0009",
+        "rb-0012",
+        "rb-0011",
+        "rb-0016",
+        "rb-0002",
+        "rb-0003",
+        "rb-0004",
+        "rb-0005"
+      ],
+      "injected": [
+        "rb-0001",
+        "rb-0008",
+        "rb-0009",
+        "rb-0012",
+        "rb-0011",
+        "rb-0016"
+      ],
+      "texts": {
+        "rb-0001": "Use project money helpers for rounding Monetary results must be rounded with the repository's own round_money helper, not Python's round() or bare Decimal.quantize(). Before returning any computed money value, check ledgerly/money.py for helpers like round_money, to_money, and ZERO. Python round() a",
+        "rb-0002": "Read existing sibling functions for conventions Existing functions in the same module reveal the expected patterns (rounding, coercion, zero handling) to mirror. When adding a new function, inspect neighboring functions like line_total and invoice_total first. They showed the pattern of to_money(...",
+        "rb-0003": "Handle empty/zero-denominator cases explicitly Guard against division by zero by returning the module's ZERO constant when total quantity is zero. Compute the denominator first and return ZERO (imported from ledgerly.money) if it is falsy, before dividing. This satisfies the 'invoice without lines h",
+        "rb-0004": "Mirror existing validation patterns in the module Reuse the exact error codes and message formats already used by sibling functions to stay consistent with hidden tests. Before implementing a new function, read the surrounding module for existing validation idioms (e.g. `raise BillingError(\"invalid_",
+        "rb-0005": "Coerce money inputs through the project's helper Pass raw price inputs through `to_money` before comparing or storing, rather than assuming Decimal. When a parameter is typed loosely (e.g. `unit_price` with no annotation), normalize it with the project's existing conversion helper (`to_money`) befor",
+        "rb-0006": "Guard bools when validating integer types `isinstance(True, int)` is True in Python, so explicitly reject bool before the int check. For positive-integer validation, write `isinstance(x, bool) or not isinstance(x, int) or x <= 0` to reject booleans, which otherwise pass an `isinstance(x, int)` check",
+        "rb-0007": "Reuse existing helpers for time normalization and errors Before implementing a new function, scan sibling modules for established helpers (ensure_utc, BillingError) and mirror their usage. Inspect related modules like subscriptions.py and clock.py to find canonical helpers for UTC normalization and ",
+        "rb-0008": "Compute next occurrence with floor division plus one For periodic events from a start anchor, the first occurrence strictly after `after` is start + ((after-start)//length + 1) * length. Use timedelta floor division to get the number of completed periods, then add one. Handle the `after < start` cas",
+        "rb-0009": "Validate period_days defensively against bool and non-positive values Guard against bool (subclass of int), non-int, and <=0 period_days by raising the project's BillingError with a clear code. Check `isinstance(period_days, bool)` first because bool is an int subclass, then require int and >0. Rais",
+        "rb-0010": "Check idempotency key before any state validation When implementing money-moving operations, look up the idempotency key in the audit trail first and return the original result before validating state or amount. Team convention requires an optional keyword-only `idempotency_key=None` on every operat",
+        "rb-0011": "Enforce approval threshold for large refunds/credits Support-initiated refunds or credits above 500.00 require a second approver via an optional keyword-only `approved_by=None` parameter. Per finance policy FIN-2026-03, amounts at or below 500.00 need no approval; above it, raise `BillingError(\"appr",
+        "rb-0012": "Explore repo conventions before implementing a stub Before writing a new function, read sibling modules (errors, money, audit, clock) and existing tests to match error codes, rounding helpers, and audit patterns. The accepted implementation reused `round_money`/`to_money`/`ZERO` from money.py, `Bill",
+        "rb-0013": "Reuse existing money helpers for rounding and coercion When implementing monetary functions, use the repo's to_money/round_money helpers instead of raw round() or float arithmetic. Search for a money module before writing arithmetic. Coercing inputs with to_money and rounding results with round_mone",
+        "rb-0014": "Match the project's error type and code conventions Raise the domain error class with a snake_case code string, following existing call sites. Grep for existing raise statements to learn the convention (e.g. BillingError(\"invalid_state\", detail)). Use the same exception class and a descriptive code ",
+        "rb-0015": "Validate inclusive bounds explicitly For range constraints stated as inclusive, check < low or > high so boundary values pass. Implement validation as `if rate < 0 or rate > 100: raise ...` so 0 and 100 are accepted. Validate the coerced numeric value, not the raw input, to avoid type-comparison sur",
+        "rb-0016": "Audit every money-moving operation In ledgerly, any operation that changes a payment, credit, or invoice balance must write an audit entry via ledgerly.audit.record. Call audit.record(\"<past_tense_event>\", payment_id=... or invoice_id=..., amount=...) after mutating state. Finance reconciles the led",
+        "rb-0017": "Mirror sibling module conventions before implementing Reading authorize/issue_invoice in the same repo revealed the exact audit and error patterns to copy. Before writing a new function, read the closest existing functions in the same and sibling modules. Copy their audit event naming, BillingError(",
+        "rb-0018": "Validate state before mutating and recording capture checks payment.status == \"authorized\" and raises BillingError before touching status or writing audit. Order operations as: validate precondition, normalize inputs (ensure_utc), mutate entity, then audit.record. This prevents partial state changes"
+      },
+      "memory_tokens_approx": 674
+    }
+  },
+  "leaks": [],
+  "attempts": [
+    {
+      "n": 1,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 5,
+      "seconds": 36.4,
+      "tokens": {
+        "prompt": 13349,
+        "completion": 646,
+        "cache_hit": 9856,
+        "reasoning": 0
+      },
+      "cost_usd": 0.000941,
+      "cited": [
+        "rb-0012"
+      ],
+      "leaks": [],
+      "passed": true,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [],
+      "tests_failed": [],
+      "review_comments": []
+    }
+  ],
+  "memory_events": [],
+  "phase": "heldout",
+  "rep": 2
+}

@@ -1,0 +1,161 @@
+{
+  "task_id": "E02",
+  "group": "experience",
+  "repo": "ledgerly_v1",
+  "repo_version": "1.0.0",
+  "conventions": [
+    "C2"
+  ],
+  "condition": "reasoningbank",
+  "model": "deepseek/deepseek-flash",
+  "thinking": "off",
+  "first_pass": true,
+  "final_pass": true,
+  "n_attempts": 1,
+  "steps": 8,
+  "cost_usd": 0.001703,
+  "seconds": 53.9,
+  "shown_notes": [
+    "rb-0002",
+    "rb-0003",
+    "rb-0001"
+  ],
+  "retrieved_notes": [
+    "rb-0002",
+    "rb-0003",
+    "rb-0001"
+  ],
+  "injected_notes": [
+    "rb-0002",
+    "rb-0003",
+    "rb-0001"
+  ],
+  "memory_tokens_approx": 297,
+  "agent_test_runs": 2,
+  "files_changed": [
+    "ledgerly/invoice.py"
+  ],
+  "notes_context": "Memory items from past tasks:\n- [rb-0002] Read existing module conventions before implementing: Inspect sibling functions and the money module to mirror established patterns for conversion and rounding.\n  Before writing a new function, read the surrounding file and helper modules (money.py, models.py) to see how existing functions like line_total and invoice_total handle to_money and round_money, then follow the same pattern.\n- [rb-0003] Handle empty/zero-denominator cases explicitly: Guard against division by zero by returning the project's ZERO constant when total quantity is zero.\n  Compute the denominator first and return ZERO (the project's Decimal zero) when it is zero, rather than relying on exception handling or returning a plain int 0.\n- [rb-0001] Use project money helpers for rounding: Monetary results must be rounded with the repository's own helper (e.g. ledgerly.money.round_money) rather than Python round() or bare Decimal.quantize().\n  Python's round() and Decimal.quantize() default to banker's rounding, which produces wrong invoice totals. Always import and call the project's round_money (half-up to the cent) on any computed money value before returning it.",
+  "cited_notes": [
+    "rb-0001",
+    "rb-0002"
+  ],
+  "retrieval_debug": {
+    "scores": {
+      "rb-0002": 2.303,
+      "rb-0003": 1.386,
+      "rb-0001": 0.916
+    },
+    "retriever": "lexical",
+    "retrieval_ms": 0.35,
+    "trace": {
+      "excluded": {},
+      "candidates": 3,
+      "retrieved": [
+        "rb-0002",
+        "rb-0003",
+        "rb-0001"
+      ],
+      "injected": [
+        "rb-0002",
+        "rb-0003",
+        "rb-0001"
+      ],
+      "texts": {
+        "rb-0001": "Use project money helpers for rounding Monetary results must be rounded with the repository's own helper (e.g. ledgerly.money.round_money) rather than Python round() or bare Decimal.quantize(). Python's round() and Decimal.quantize() default to banker's rounding, which produces wrong invoice totals.",
+        "rb-0002": "Read existing module conventions before implementing Inspect sibling functions and the money module to mirror established patterns for conversion and rounding. Before writing a new function, read the surrounding file and helper modules (money.py, models.py) to see how existing functions like line_to",
+        "rb-0003": "Handle empty/zero-denominator cases explicitly Guard against division by zero by returning the project's ZERO constant when total quantity is zero. Compute the denominator first and return ZERO (the project's Decimal zero) when it is zero, rather than relying on exception handling or returning a pla"
+      },
+      "memory_tokens_approx": 297
+    }
+  },
+  "leaks": [],
+  "attempts": [
+    {
+      "n": 1,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 8,
+      "seconds": 53.4,
+      "tokens": {
+        "prompt": 32480,
+        "completion": 1460,
+        "cache_hit": 27520,
+        "reasoning": 0
+      },
+      "cost_usd": 0.001703,
+      "cited": [
+        "rb-0002",
+        "rb-0001"
+      ],
+      "leaks": [],
+      "passed": true,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [],
+      "tests_failed": [],
+      "review_comments": []
+    }
+  ],
+  "memory_events": [
+    {
+      "seq": 4,
+      "ts": 1793491111.907,
+      "type": "add",
+      "item": {
+        "id": "rb-0004",
+        "title": "Read sibling modules to match error codes and conventions",
+        "description": "Before implementing a new function, grep the codebase for existing BillingError codes and validation patterns to reuse them consistently.",
+        "content": "Search for the error class and its usages (e.g. `grep -rn 'BillingError' ledgerly`) to learn established codes like `invalid_state` and `negative_amount`. Reusing the same codes and message formats as neighboring functions (payments.py, invoice.py) makes hidden tests pass without guessing.",
+        "source": {
+          "task_id": "E02",
+          "repo": "ledgerly",
+          "version": "1.0.0",
+          "final_pass": true
+        },
+        "status": "active"
+      },
+      "reason": "extracted from task E02"
+    },
+    {
+      "seq": 5,
+      "ts": 1793491111.907,
+      "type": "add",
+      "item": {
+        "id": "rb-0005",
+        "title": "Reject bools when validating integer inputs",
+        "description": "In Python, `isinstance(True, int)` is True, so guard against bools explicitly when a positive integer is required.",
+        "content": "Validate with `isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0` and raise a dedicated error code. This prevents `True`/`False` from silently passing as quantities 1/0.",
+        "source": {
+          "task_id": "E02",
+          "repo": "ledgerly",
+          "version": "1.0.0",
+          "final_pass": true
+        },
+        "status": "active"
+      },
+      "reason": "extracted from task E02"
+    },
+    {
+      "seq": 6,
+      "ts": 1793491111.907,
+      "type": "add",
+      "item": {
+        "id": "rb-0006",
+        "title": "Normalize money via to_money/round_money before sign checks",
+        "description": "Convert raw price inputs through the project's money helpers before comparing to ZERO so Decimals, strings, and floats are handled uniformly.",
+        "content": "Call `to_money(unit_price)` then `round_money(...)` and compare against `ZERO` to raise `negative_amount`. Store the normalized value on the LineItem so downstream totals stay consistent.",
+        "source": {
+          "task_id": "E02",
+          "repo": "ledgerly",
+          "version": "1.0.0",
+          "final_pass": true
+        },
+        "status": "active"
+      },
+      "reason": "extracted from task E02"
+    }
+  ],
+  "phase": "learn",
+  "rep": 4
+}

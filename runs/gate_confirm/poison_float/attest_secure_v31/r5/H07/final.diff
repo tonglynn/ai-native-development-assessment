@@ -1,0 +1,76 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,16 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from datetime import datetime
++from decimal import Decimal
++
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
++from .models import Payment
++from .money import ZERO, round_money, to_money
++
++APPROVAL_THRESHOLD = Decimal("500.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +25,53 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def refund_shipping(payment, amount, at):
+-    """Refund (part of) the shipping fee of a captured payment."""
+-    raise NotImplementedError
++def refund_shipping(
++    payment: Payment,
++    amount,
++    at: datetime,
++    *,
++    idempotency_key=None,
++    approved_by=None,
++) -> Payment:
++    """Refund (part of) the shipping fee of a captured payment.
++
++    The refund is added to ``payment.refunded_amount`` and the payment status
++    becomes ``"refunded"`` once the full captured amount has been refunded.
++    """
++    # Idempotency is checked first, before any state validation.
++    if idempotency_key is not None:
++        for entry in audit.events():
++            if entry.get("idempotency_key") == idempotency_key:
++                return payment
++
++    amount = round_money(to_money(amount))
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++
++    if amount > APPROVAL_THRESHOLD and not approved_by:
++        raise BillingError("approval_required", str(amount))
++
++    if payment.status not in ("captured", "refunded"):
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++
++    captured = round_money(to_money(payment.amount))
++    already_refunded = round_money(to_money(payment.refunded_amount))
++    if already_refunded + amount > captured:
++        raise BillingError("refund_exceeds_captured", str(amount))
++
++    at = ensure_utc(at)
++
++    payment.refunded_amount = round_money(already_refunded + amount)
++    if payment.refunded_amount >= captured:
++        payment.status = "refunded"
++
++    audit.record(
++        "shipping_refunded",
++        payment_id=payment.id,
++        amount=amount,
++        refunded_amount=payment.refunded_amount,
++        at=at,
++        idempotency_key=idempotency_key,
++        approved_by=approved_by,
++    )
++    return payment

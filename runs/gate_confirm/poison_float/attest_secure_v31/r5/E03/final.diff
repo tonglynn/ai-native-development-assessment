@@ -1,0 +1,34 @@
+--- a/ledgerly/renewals.py
++++ b/ledgerly/renewals.py
+@@ -1,6 +1,8 @@
+ """Renewal reminders (moved over from the old billing monolith)."""
+ 
+ from datetime import datetime, timedelta
++
++from .clock import ensure_utc
+ 
+ REMINDER_DAYS_BEFORE = 3
+ 
+@@ -10,6 +12,19 @@
+     return renewal_at - timedelta(days=REMINDER_DAYS_BEFORE) <= now < renewal_at
+ 
+ 
+-def next_renewal(sub, after):
+-    """First renewal strictly after ``after``."""
+-    raise NotImplementedError
++def next_renewal(sub, after: datetime) -> datetime:
++    """First renewal strictly after ``after``.
++
++    Renewals occur every ``sub.period_days`` days from ``sub.started_at``;
++    the start itself is not a renewal.
++    """
++    after = ensure_utc(after)
++    start = ensure_utc(sub.started_at)
++    length = timedelta(days=sub.period_days)
++    if after < start:
++        return start + length
++    n = (after - start) // length
++    renewal = start + n * length
++    if renewal <= after:
++        renewal += length
++    return renewal

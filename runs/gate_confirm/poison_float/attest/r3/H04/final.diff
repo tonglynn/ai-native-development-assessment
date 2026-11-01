@@ -1,0 +1,59 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,6 +1,13 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from decimal import Decimal
++
++from . import audit
++from .errors import BillingError
+ from .invoice import invoice_total
++from .money import ZERO, round_money, to_money
++
++APPROVAL_THRESHOLD = Decimal("500.00")
+ 
+ 
+ def manual_adjustment(invoice, amount, note):
+@@ -15,6 +22,40 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def issue_credit_note(invoice, amount, reason):
++def _coerce_amount(amount) -> Decimal:
++    """Normalize an amount to money, accepting floats via their string form."""
++    if isinstance(amount, float):
++        amount = Decimal(str(amount))
++    return round_money(to_money(amount))
++
++
++def issue_credit_note(invoice, amount, reason, *, approved_by=None, idempotency_key=None):
+     """Credit part of an issued invoice back to the customer."""
+-    raise NotImplementedError
++    if idempotency_key is not None:
++        for event in audit.events("credit_note_issued"):
++            if event.get("idempotency_key") == idempotency_key:
++                return {
++                    "invoice_id": event["invoice_id"],
++                    "amount": round_money(Decimal(str(event["amount"]))),
++                    "reason": event["reason"],
++                }
++
++    amount = _coerce_amount(amount)
++    if amount <= ZERO:
++        raise BillingError("non_positive_amount", str(amount))
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++    if amount > invoice_total(invoice):
++        raise BillingError("amount_exceeds_invoice_total", str(amount))
++    if amount > APPROVAL_THRESHOLD and not approved_by:
++        raise BillingError("approval_required", str(amount))
++
++    audit.record(
++        "credit_note_issued",
++        invoice_id=invoice.id,
++        amount=float(amount),
++        reason=reason,
++        approved_by=approved_by,
++        idempotency_key=idempotency_key,
++    )
++    return {"invoice_id": invoice.id, "amount": amount, "reason": reason}

@@ -1,0 +1,30 @@
+--- a/ledgerly/pricing.py
++++ b/ledgerly/pricing.py
+@@ -1,4 +1,9 @@
+ """Plan prices and coupons (moved over from the old billing monolith)."""
++
++from decimal import Decimal
++
++from .errors import BillingError
++from .money import round_money, to_money
+ 
+ PLAN_PRICES = {"starter": 9.99, "team": 49.0, "business": 199.0}
+ COUPONS = {"WELCOME10": 10, "PARTNER25": 25}
+@@ -18,5 +23,15 @@
+ 
+ 
+ def add_tax(amount, rate_percent):
+-    """Gross amount including ``rate_percent`` percent tax."""
+-    raise NotImplementedError
++    """Gross amount including ``rate_percent`` percent tax.
++
++    ``amount`` and ``rate_percent`` are handled as Decimals end-to-end; the
++    result is rounded to the cent with :func:`ledgerly.money.round_money`.
++    """
++    if isinstance(rate_percent, bool) or not isinstance(rate_percent, (int, Decimal)):
++        raise BillingError("invalid_tax_rate", repr(rate_percent))
++    rate = Decimal(rate_percent)
++    if not Decimal(0) <= rate <= Decimal(100):
++        raise BillingError("invalid_tax_rate", repr(rate_percent))
++    base = to_money(amount)
++    return round_money(base + base * rate / Decimal(100))

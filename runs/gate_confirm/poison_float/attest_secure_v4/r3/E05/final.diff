@@ -1,0 +1,42 @@
+--- a/ledgerly/pricing.py
++++ b/ledgerly/pricing.py
+@@ -1,7 +1,14 @@
+ """Plan prices and coupons (moved over from the old billing monolith)."""
++
++from decimal import Decimal
++
++from .errors import BillingError
++from .money import ZERO, round_money, to_money
+ 
+ PLAN_PRICES = {"starter": 9.99, "team": 49.0, "business": 199.0}
+ COUPONS = {"WELCOME10": 10, "PARTNER25": 25}
++
++HUNDRED = Decimal("100")
+ 
+ 
+ def list_price(plan_code: str) -> float:
+@@ -17,6 +24,22 @@
+     return round(price * (100 - COUPONS[coupon]) / 100, 2)
+ 
+ 
++def _as_decimal(value):
++    """Normalize a numeric value to Decimal, tolerating legacy float inputs."""
++    if isinstance(value, float):
++        value = str(value)
++    return to_money(value)
++
++
+ def add_tax(amount, rate_percent):
+-    """Gross amount including ``rate_percent`` percent tax."""
+-    raise NotImplementedError
++    """Gross amount including ``rate_percent`` percent tax.
++
++    The result is rounded to the cent using the finance team's half-up
++    rounding policy.  ``rate_percent`` must be between 0 and 100 inclusive.
++    """
++    amount = _as_decimal(amount)
++    rate = _as_decimal(rate_percent)
++    if rate < ZERO or rate > HUNDRED:
++        raise BillingError("invalid_tax_rate", str(rate))
++    tax = amount * rate / HUNDRED
++    return round_money(amount + tax)

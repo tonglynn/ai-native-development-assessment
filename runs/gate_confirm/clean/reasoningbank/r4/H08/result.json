@@ -1,0 +1,142 @@
+{
+  "task_id": "H08",
+  "group": "heldout",
+  "repo": "ledgerly_v1",
+  "repo_version": "1.0.0",
+  "conventions": [
+    "C1",
+    "C2",
+    "C3",
+    "C4",
+    "C5"
+  ],
+  "condition": "reasoningbank",
+  "model": "deepseek/deepseek-flash",
+  "thinking": "off",
+  "first_pass": true,
+  "final_pass": true,
+  "n_attempts": 1,
+  "steps": 9,
+  "cost_usd": 0.002147,
+  "seconds": 56.2,
+  "shown_notes": [
+    "rb-0004",
+    "rb-0016",
+    "rb-0012",
+    "rb-0010",
+    "rb-0018",
+    "rb-0001"
+  ],
+  "retrieved_notes": [
+    "rb-0004",
+    "rb-0016",
+    "rb-0012",
+    "rb-0010",
+    "rb-0018",
+    "rb-0001",
+    "rb-0005",
+    "rb-0006",
+    "rb-0007",
+    "rb-0002"
+  ],
+  "injected_notes": [
+    "rb-0004",
+    "rb-0016",
+    "rb-0012",
+    "rb-0010",
+    "rb-0018",
+    "rb-0001"
+  ],
+  "memory_tokens_approx": 680,
+  "agent_test_runs": 2,
+  "files_changed": [
+    "ledgerly/payments.py"
+  ],
+  "notes_context": "Memory items from past tasks:\n- [rb-0004] Mirror existing error codes and validation patterns: Before implementing a new function, grep the codebase for existing BillingError raises and reuse their error codes and message formats.\n  Read sibling modules (e.g. payments.py, invoice.py) to copy conventions like `invalid_state` with `f\"invoice {invoice.id} is {invoice.status}\"`. Hidden tests likely assert on these codes, so consistency with existing code beats inventing new names.\n- [rb-0016] Add idempotency_key to money-moving operations: Team convention requires every payment/credit/invoice balance-changing function to accept keyword-only idempotency_key=None and short-circuit on prior audit entries.\n  Signature: `def capture(payment, at, *, idempotency_key=None)`. Check the key FIRST, before state validation: scan `audit.events(\"payment_captured\")` for a matching `idempotency_key` and return the original record without reapplying. Always include `idempotency_key` in the audit entry you write.\n- [rb-0012] Add optional keyword-only approval gate for large amounts: Refunds/credits above a policy threshold need a second approver; accept approved_by=None and raise BillingError(\"approval_required\") when missing.\n  Define a module-level APPROVAL_THRESHOLD (e.g. round_money(\"500.00\")) and, after state validation, raise BillingError(\"approval_required\") if amount > threshold and approved_by is None. Keep the parameter keyword-only with a default so existing callers are unaffected.\n- [rb-0010] Check repo conventions before implementing money-moving functions: The first attempt implemented refund correctly per the issue but missed two team conventions (idempotency_key, approved_by) that hidden tests enforced.\n  Before writing a payment/credit/invoice mutation, grep the repo and docs for conventions like idempotency keys, approval thresholds, and audit logging. These cross-cutting requirements are often not in the issue text but are enforced by tests.\n- [rb-0018] Mirror existing error codes and message formats: Reuse established BillingError codes and message patterns from sibling functions for consistency.\n  Grep for existing `BillingError` raises and copy their codes and formats, e.g. `raise BillingError(\"invalid_state\", f\"payment {payment.id} is {payment.status}\")`, and normalize datetimes with `ensure_utc(at)`.\n- [rb-0001] Use project money helpers for rounding: Team convention requires rounding money via ledgerly.money.round_money (half-up to cent), not Python round() or bare Decimal.quantize().\n  Before returning any monetary Decimal, wrap the computation in the repo's round_money helper. Python's round() and bare quantize() use banker's rounding and produce wrong invoice totals.",
+  "cited_notes": [],
+  "retrieval_debug": {
+    "scores": {
+      "rb-0004": 8.191,
+      "rb-0016": 7.835,
+      "rb-0012": 5.889,
+      "rb-0010": 4.89,
+      "rb-0018": 4.248,
+      "rb-0001": 2.944
+    },
+    "retriever": "lexical",
+    "retrieval_ms": 153.89,
+    "trace": {
+      "excluded": {},
+      "candidates": 18,
+      "retrieved": [
+        "rb-0004",
+        "rb-0016",
+        "rb-0012",
+        "rb-0010",
+        "rb-0018",
+        "rb-0001",
+        "rb-0005",
+        "rb-0006",
+        "rb-0007",
+        "rb-0002"
+      ],
+      "injected": [
+        "rb-0004",
+        "rb-0016",
+        "rb-0012",
+        "rb-0010",
+        "rb-0018",
+        "rb-0001"
+      ],
+      "texts": {
+        "rb-0001": "Use project money helpers for rounding Team convention requires rounding money via ledgerly.money.round_money (half-up to cent), not Python round() or bare Decimal.quantize(). Before returning any monetary Decimal, wrap the computation in the repo's round_money helper. Python's round() and bare quan",
+        "rb-0002": "Read existing module helpers before implementing The invoice module already imported ZERO, round_money, and to_money; reusing them satisfies conventions and edge cases. Inspect the target file's imports and sibling functions (e.g., line_total, invoice_total) to mirror established patterns like to_mo",
+        "rb-0003": "Handle empty-collection edge case explicitly Guard against division by zero when the invoice has no lines by returning ZERO before dividing. Compute total_quantity first; if it is falsy, return ZERO immediately. This matches the spec that an invoice without lines has an average of zero.",
+        "rb-0004": "Mirror existing error codes and validation patterns Before implementing a new function, grep the codebase for existing BillingError raises and reuse their error codes and message formats. Read sibling modules (e.g. payments.py, invoice.py) to copy conventions like `invalid_state` with `f\"invoice {in",
+        "rb-0005": "Reject bools and non-ints for integer validation When validating a positive integer parameter, explicitly exclude bool (isinstance(True, int) is True) and non-int types. Use `if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0: raise ...`. This catches True/False, floats,",
+        "rb-0006": "Normalize money via round_money before sign checks Convert unit_price with the project's round_money helper before comparing to ZERO, so rounding and type coercion happen consistently. Call `price = round_money(unit_price)` first, then check `price < ZERO`, and store the rounded Decimal on the LineI",
+        "rb-0007": "Reuse existing period arithmetic helpers When implementing a new time-based function, look for a sibling module already doing similar period math and mirror its conventions. Search the package for existing functions computing billing periods (e.g. current_period) and reuse their exact pattern: ensur",
+        "rb-0008": "Handle the before-start edge case explicitly For 'first X strictly after t' queries, special-case t before the anchor before applying floor-division arithmetic. Floor division on a negative timedelta yields a negative index that can produce a wrong or non-strictly-after result. Guard with `if after ",
+        "rb-0009": "Normalize datetimes through the project's ensure_utc Convert all datetime inputs with the repo's ensure_utc rather than ad-hoc tzinfo checks so naive/invalid inputs raise the project's BillingError. The codebase centralizes datetime validation in clock.ensure_utc, which raises BillingError for naive",
+        "rb-0010": "Check repo conventions before implementing money-moving functions The first attempt implemented refund correctly per the issue but missed two team conventions (idempotency_key, approved_by) that hidden tests enforced. Before writing a payment/credit/invoice mutation, grep the repo and docs for conve",
+        "rb-0011": "Idempotency: check audit log first, return original result Money-moving operations should accept keyword-only idempotency_key=None and short-circuit on a prior matching audit entry before any state validation. Look up audit.events(<event_name>) for an entry with the same idempotency_key and return t",
+        "rb-0012": "Add optional keyword-only approval gate for large amounts Refunds/credits above a policy threshold need a second approver; accept approved_by=None and raise BillingError(\"approval_required\") when missing. Define a module-level APPROVAL_THRESHOLD (e.g. round_money(\"500.00\")) and, after state validati",
+        "rb-0013": "Reuse existing money helpers for rounding and coercion When implementing monetary functions, reuse the project's existing money utilities instead of raw float/round. Before writing arithmetic, inspect ledgerly/money.py for helpers like to_money and round_money. Coerce inputs with to_money and round ",
+        "rb-0014": "Match the project's error convention for validation Raise the domain-specific BillingError with a short code rather than ValueError for invalid inputs. Check ledgerly/errors.py and existing call sites (e.g. invoice.py) to see how invalid inputs are signaled. Use BillingError(\"invalid_rate\", ...) sty",
+        "rb-0015": "Read the existing test and docstring before implementing The stub's docstring and tests/test_tax.py reveal expected types and return values; verify with a quick manual script after editing. Inspect the target test file and any related modules to infer expected input types (Decimal, int, str) and out",
+        "rb-0016": "Add idempotency_key to money-moving operations Team convention requires every payment/credit/invoice balance-changing function to accept keyword-only idempotency_key=None and short-circuit on prior audit entries. Signature: `def capture(payment, at, *, idempotency_key=None)`. Check the key FIRST, be",
+        "rb-0017": "Check team conventions before submitting, not just tests The first attempt passed all visible tests but was rejected for missing the idempotency convention introduced after INC-204. Passing the existing test suite is not sufficient; look for documented team conventions (CHANGELOG, review notes, sibl",
+        "rb-0018": "Mirror existing error codes and message formats Reuse established BillingError codes and message patterns from sibling functions for consistency. Grep for existing `BillingError` raises and copy their codes and formats, e.g. `raise BillingError(\"invalid_state\", f\"payment {payment.id} is {payment.sta"
+      },
+      "memory_tokens_approx": 680
+    }
+  },
+  "leaks": [],
+  "attempts": [
+    {
+      "n": 1,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 9,
+      "seconds": 56.0,
+      "tokens": {
+        "prompt": 40283,
+        "completion": 1912,
+        "cache_hit": 34304,
+        "reasoning": 0
+      },
+      "cost_usd": 0.002147,
+      "cited": [],
+      "leaks": [],
+      "passed": true,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [],
+      "tests_failed": [],
+      "review_comments": []
+    }
+  ],
+  "memory_events": [],
+  "phase": "heldout",
+  "rep": 4
+}

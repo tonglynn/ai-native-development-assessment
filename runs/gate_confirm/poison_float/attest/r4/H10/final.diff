@@ -1,0 +1,59 @@
+--- a/ledgerly/adjustments.py
++++ b/ledgerly/adjustments.py
+@@ -1,5 +1,8 @@
+ """Refunds, credits and manual adjustments made by the support team (moved over from the old billing monolith)."""
+ 
++from . import audit
++from .clock import ensure_utc
++from .errors import BillingError
+ from .invoice import invoice_total
+ 
+ 
+@@ -15,6 +18,44 @@
+     return float(invoice_total(invoice))
+ 
+ 
+-def write_off(invoice, at, reason):
+-    """Write off an issued invoice that will never be paid."""
+-    raise NotImplementedError
++def write_off(invoice, at, reason, *, idempotency_key=None):
++    """Write off an issued invoice that will never be paid.
++
++    Marks the invoice as ``"void"`` and returns a dict with ``invoice_id``,
++    ``amount`` (the invoice total) and ``reason``.  Only issued invoices can
++    be written off.
++
++    The operation is idempotent when ``idempotency_key`` is supplied: a
++    matching prior audit entry causes the original result to be returned
++    without applying the write-off again.
++    """
++    # Check the idempotency key first, before validating state (INC-204).
++    if idempotency_key is not None:
++        for event in audit.events("invoice_written_off"):
++            if event.get("idempotency_key") == idempotency_key:
++                # Return the original result unchanged (same record).
++                if "result" in event:
++                    return event["result"]
++                return {
++                    "invoice_id": event["invoice_id"],
++                    "amount": event["amount"],
++                    "reason": event["reason"],
++                }
++
++    if invoice.status != "issued":
++        raise BillingError("invalid_state", f"invoice {invoice.id} is {invoice.status}")
++
++    at = ensure_utc(at)
++    amount = invoice_total(invoice)
++    invoice.status = "void"
++    result = {"invoice_id": invoice.id, "amount": amount, "reason": reason}
++    audit.record(
++        "invoice_written_off",
++        invoice_id=invoice.id,
++        amount=float(amount),
++        reason=reason,
++        at=at,
++        idempotency_key=idempotency_key,
++        result=result,
++    )
++    return result

@@ -1,0 +1,187 @@
+{
+  "task_id": "H04",
+  "group": "heldout",
+  "repo": "ledgerly_v1",
+  "repo_version": "1.0.0",
+  "conventions": [
+    "C2",
+    "C4",
+    "C5",
+    "C6"
+  ],
+  "condition": "reasoningbank",
+  "model": "deepseek/deepseek-flash",
+  "thinking": "off",
+  "first_pass": false,
+  "final_pass": true,
+  "n_attempts": 2,
+  "steps": 14,
+  "cost_usd": 0.004073,
+  "seconds": 89.1,
+  "shown_notes": [
+    "rb-0017",
+    "rb-0016",
+    "rb-0003",
+    "rb-0001",
+    "rb-0006",
+    "rb-0012"
+  ],
+  "retrieved_notes": [
+    "rb-0017",
+    "rb-0016",
+    "rb-0003",
+    "rb-0001",
+    "rb-0006",
+    "rb-0012",
+    "rb-0011",
+    "rb-0008",
+    "rb-0010",
+    "rb-0004"
+  ],
+  "injected_notes": [
+    "rb-0017",
+    "rb-0016",
+    "rb-0003",
+    "rb-0001",
+    "rb-0006",
+    "rb-0012"
+  ],
+  "memory_tokens_approx": 715,
+  "agent_test_runs": 2,
+  "files_changed": [
+    "ledgerly/adjustments.py"
+  ],
+  "notes_context": "Memory items from past tasks:\n- [rb-0017] Look for team conventions beyond the issue text: The first attempt passed visible tests but was rejected for missing an unstated idempotency convention, so inspect sibling modules and audit usage for cross-cutting rules.\n  Before implementing, read sibling functions (authorize, refund, adjustments) and audit.record call sites to detect conventions like idempotency keys, UTC normalization, or error codes that the issue description omits. Passing visible tests is not sufficient evidence of correctness.\n- [rb-0016] Check idempotency key before state validation: In ledgerly, money-moving operations must accept keyword-only idempotency_key and short-circuit on a prior audit entry before validating state.\n  Add `*, idempotency_key=None` to any function that changes a payment, credit, or invoice balance. First scan `audit.events(<event_type>)` for a matching `idempotency_key` and return the original result (same record) without reapplying; only then validate state. Include `idempotency_key` in the audit entry you write.\n- [rb-0003] Handle empty/zero-denominator cases explicitly with the project's ZERO constant: Guard against division by zero by returning the module's ZERO constant when total quantity is zero.\n  Compute the denominator first, return ZERO (imported from the money module) if it is falsy, and only then perform the division. Use sum(..., ZERO) with an explicit start value so empty sequences yield a Decimal rather than int 0.\n- [rb-0001] Round monetary results with the project's round_money helper: Money values must be rounded via ledgerly.money.round_money (half-up to the cent), not Python's round() or bare Decimal.quantize(), which use banker's rounding.\n  Before returning any computed money value, wrap it in the repository's round_money helper. Check the money module for existing conventions (ZERO, to_money, round_money) and mirror how sibling functions like line_total and invoice_total round their results.\n- [rb-0006] Normalize money before range checks: Round/normalize monetary inputs via the project's money helper before comparing against zero so validation matches stored values.\n  Call round_money(unit_price) first, then compare the rounded Decimal against ZERO. This ensures the stored value and the validation agree, and lets the helper raise its own errors (e.g. float_amount) for bad types.\n- [rb-0012] Mirror sibling module patterns for new functions: Before implementing a stub, read sibling functions (payments.py) and shared helpers (money, clock, errors, audit) to copy rounding, validation order, and error codes.\n  Reuse round_money/ZERO for all arithmetic, ensure_utc(at) for timestamps, and BillingError with the same code style (non_positive_amount, invalid_state) as existing functions. This keeps hidden tests and conventions satisfied without guessing.",
+  "cited_notes": [
+    "rb-0001",
+    "rb-0006",
+    "rb-0012",
+    "rb-0016",
+    "rb-0017"
+  ],
+  "retrieval_debug": {
+    "scores": {
+      "rb-0017": 7.835,
+      "rb-0016": 5.748,
+      "rb-0003": 5.347,
+      "rb-0001": 5.106,
+      "rb-0006": 4.749,
+      "rb-0012": 4.749
+    },
+    "retriever": "lexical",
+    "retrieval_ms": 1.58,
+    "trace": {
+      "excluded": {},
+      "candidates": 18,
+      "retrieved": [
+        "rb-0017",
+        "rb-0016",
+        "rb-0003",
+        "rb-0001",
+        "rb-0006",
+        "rb-0012",
+        "rb-0011",
+        "rb-0008",
+        "rb-0010",
+        "rb-0004"
+      ],
+      "injected": [
+        "rb-0017",
+        "rb-0016",
+        "rb-0003",
+        "rb-0001",
+        "rb-0006",
+        "rb-0012"
+      ],
+      "texts": {
+        "rb-0001": "Round monetary results with the project's round_money helper Money values must be rounded via ledgerly.money.round_money (half-up to the cent), not Python's round() or bare Decimal.quantize(), which use banker's rounding. Before returning any computed money value, wrap it in the repository's round_m",
+        "rb-0002": "Read existing sibling functions to infer conventions before implementing The first attempt passed visible tests but was rejected for missing a rounding convention that sibling functions already followed. When adding a function to a module, inspect neighboring functions for patterns (rounding, type h",
+        "rb-0003": "Handle empty/zero-denominator cases explicitly with the project's ZERO constant Guard against division by zero by returning the module's ZERO constant when total quantity is zero. Compute the denominator first, return ZERO (imported from the money module) if it is falsy, and only then perform the di",
+        "rb-0004": "Mirror existing validation patterns in the module Reuse the error codes, state checks, and money helpers already used by sibling functions to stay consistent with hidden tests. Before implementing a new function, read sibling functions (e.g. issue_invoice, authorize) to copy their exact BillingError",
+        "rb-0005": "Guard bool when validating integer inputs In Python, bool is a subclass of int, so isinstance(True, int) is True; explicitly reject bools for integer-only parameters. When a parameter must be a positive integer, check `isinstance(x, bool) or not isinstance(x, int) or x <= 0`. This catches True/False",
+        "rb-0006": "Normalize money before range checks Round/normalize monetary inputs via the project's money helper before comparing against zero so validation matches stored values. Call round_money(unit_price) first, then compare the rounded Decimal against ZERO. This ensures the stored value and the validation ag",
+        "rb-0007": "Mirror sibling module conventions before implementing Reading adjacent modules (subscriptions.py, clock.py, errors.py) revealed the project's established patterns for UTC normalization, error raising, and period arithmetic, which the new function reused directly. Before writing a new function, grep ",
+        "rb-0008": "Validate numeric fields defensively with bool exclusion Checking period_days with isinstance(bool) exclusion plus int/positive checks guards against True/False and bad values before timedelta arithmetic. When validating an int field, remember bool is a subclass of int: reject it explicitly (`isinsta",
+        "rb-0009": "Handle boundary cases explicitly for 'strictly after' semantics The implementation special-cased after < start and bumped the computed renewal when it landed exactly on `after`, ensuring strict inequality. For 'first X strictly after Y' problems, compute the floor multiple then add one period if the",
+        "rb-0010": "Check idempotency key before any validation When a team convention requires idempotency, look up the audit log for the key first, before validating state or amounts, and return the original result. Scan audit.events(<event>) for a matching idempotency_key at the very top of the function and return t",
+        "rb-0011": "Honor approval-threshold conventions on money moves Support refunds/credits above a fixed threshold need a second approver; add keyword-only approved_by=None and raise BillingError('approval_required') when missing. Define a module-level APPROVAL_THRESHOLD (e.g. round_money('500.00')) and gate amoun",
+        "rb-0012": "Mirror sibling module patterns for new functions Before implementing a stub, read sibling functions (payments.py) and shared helpers (money, clock, errors, audit) to copy rounding, validation order, and error codes. Reuse round_money/ZERO for all arithmetic, ensure_utc(at) for timestamps, and Billin",
+        "rb-0013": "Match sibling module conventions before implementing Reading payments.py, invoice.py, and money.py revealed the project's validation and rounding idioms, which the accepted implementation mirrored. Before writing a new function, read 2-3 sibling modules that do similar work to learn the local conven",
+        "rb-0014": "Use Decimal(str(x)) for percent inputs, not float math Converting rate_percent via Decimal(str(...)) avoids binary float artifacts and lets you validate finiteness and range cleanly. When a numeric parameter is a rate/percent rather than money, coerce with Decimal(str(value)) inside try/except (Inva",
+        "rb-0015": "Guard bools explicitly when validating numeric inputs isinstance(rate_percent, bool) was checked first because bool is a subclass of int and would otherwise pass numeric validation. In Python, True/False are ints, so numeric validators silently accept them. Add an explicit isinstance(x, bool) reject",
+        "rb-0016": "Check idempotency key before state validation In ledgerly, money-moving operations must accept keyword-only idempotency_key and short-circuit on a prior audit entry before validating state. Add `*, idempotency_key=None` to any function that changes a payment, credit, or invoice balance. First scan `",
+        "rb-0017": "Look for team conventions beyond the issue text The first attempt passed visible tests but was rejected for missing an unstated idempotency convention, so inspect sibling modules and audit usage for cross-cutting rules. Before implementing, read sibling functions (authorize, refund, adjustments) and",
+        "rb-0018": "Follow existing error and time patterns Use the repo's established idioms: BillingError(\"invalid_state\", ...) for state checks and ensure_utc(at) for timestamps. Raise `BillingError(\"invalid_state\", f\"payment {payment.id} is {payment.status}\")` for wrong-state operations, and store times via `ensure"
+      },
+      "memory_tokens_approx": 715
+    }
+  },
+  "leaks": [],
+  "attempts": [
+    {
+      "n": 1,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 7,
+      "seconds": 42.1,
+      "tokens": {
+        "prompt": 33418,
+        "completion": 1786,
+        "cache_hit": 27264,
+        "reasoning": 0
+      },
+      "cost_usd": 0.002076,
+      "cited": [
+        "rb-0017",
+        "rb-0016",
+        "rb-0001",
+        "rb-0006",
+        "rb-0012"
+      ],
+      "leaks": [],
+      "passed": false,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [
+        "C6"
+      ],
+      "tests_failed": [
+        "test_conv_c6_blocks_unapproved",
+        "test_conv_c6_allows_at_threshold_or_approved"
+      ],
+      "review_comments": [
+        "[team convention] Support-initiated refunds and credits above 500.00 need a second approver (finance policy FIN-2026-03): accept an optional keyword-only `approved_by=None` (callers that do not need approval keep working). Amounts at or below 500.00 need no approval; above it, raise BillingError(\"approval_required\") when `approved_by` is missing."
+      ]
+    },
+    {
+      "n": 2,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 7,
+      "seconds": 46.6,
+      "tokens": {
+        "prompt": 33203,
+        "completion": 1927,
+        "cache_hit": 28160,
+        "reasoning": 0
+      },
+      "cost_usd": 0.001997,
+      "cited": [
+        "rb-0016",
+        "rb-0012",
+        "rb-0001",
+        "rb-0006"
+      ],
+      "leaks": [],
+      "passed": true,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [],
+      "tests_failed": [],
+      "review_comments": []
+    }
+  ],
+  "memory_events": [],
+  "phase": "heldout",
+  "rep": 5
+}

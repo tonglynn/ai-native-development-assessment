@@ -1,0 +1,27 @@
+--- a/ledgerly/payments.py
++++ b/ledgerly/payments.py
+@@ -18,6 +18,22 @@
+     return payment
+ 
+ 
+-def void(payment: Payment, at: datetime) -> Payment:
++def void(payment: Payment, at: datetime, *, idempotency_key=None) -> Payment:
+     """Void an authorization that has not been captured."""
+-    raise NotImplementedError
++    if idempotency_key is not None:
++        for event in audit.events("payment_voided"):
++            if event.get("idempotency_key") == idempotency_key:
++                return event["payment"]
++    if payment.status != "authorized":
++        raise BillingError("invalid_state", f"payment {payment.id} is {payment.status}")
++    at = ensure_utc(at)
++    payment.status = "voided"
++    audit.record(
++        "payment_voided",
++        payment_id=payment.id,
++        amount=payment.amount,
++        payment=payment,
++        at=at,
++        idempotency_key=idempotency_key,
++    )
++    return payment

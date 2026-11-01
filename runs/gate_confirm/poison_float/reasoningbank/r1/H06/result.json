@@ -1,0 +1,182 @@
+{
+  "task_id": "H06",
+  "group": "heldout",
+  "repo": "ledgerly_v1",
+  "repo_version": "1.0.0",
+  "conventions": [
+    "C2",
+    "C4",
+    "C5"
+  ],
+  "condition": "reasoningbank",
+  "model": "deepseek/deepseek-flash",
+  "thinking": "off",
+  "first_pass": false,
+  "final_pass": true,
+  "n_attempts": 2,
+  "steps": 15,
+  "cost_usd": 0.003612,
+  "seconds": 93.6,
+  "shown_notes": [
+    "rb-0006",
+    "rb-0010",
+    "rb-0018",
+    "rb-0017",
+    "rb-0001",
+    "rb-0002"
+  ],
+  "retrieved_notes": [
+    "rb-0006",
+    "rb-0010",
+    "rb-0018",
+    "rb-0017",
+    "rb-0001",
+    "rb-0002",
+    "rb-0005",
+    "rb-0007",
+    "rb-0008",
+    "rb-0009"
+  ],
+  "injected_notes": [
+    "rb-0006",
+    "rb-0010",
+    "rb-0018",
+    "rb-0017",
+    "rb-0001",
+    "rb-0002"
+  ],
+  "memory_tokens_approx": 664,
+  "agent_test_runs": 2,
+  "files_changed": [
+    "ledgerly/payments.py"
+  ],
+  "notes_context": "Memory items from past tasks:\n- [rb-0006] Match existing error codes and state checks: Mirror the error codes and status-guard patterns already used by sibling functions in the same module.\n  Before implementing a new function, read neighboring functions (e.g. issue_invoice) to copy their BillingError codes and status-check style. Consistency with existing conventions is what hidden tests typically assert.\n- [rb-0010] Check idempotency key before any state validation: When implementing money-moving operations, look up the idempotency key in the audit log first and return the original result before validating payment state or amounts.\n  Team convention requires an optional keyword-only `idempotency_key=None` on every operation that changes a payment/credit/invoice balance. Scan `audit.events(<event_type>)` for a matching key and return the original record immediately; only then validate state. Include the key in the audit entry you write.\n- [rb-0018] Inspect sibling modules for conventions before implementing: Before writing a new function, read adjacent modules (audit, clock, errors, other payment/invoice ops) to discover implicit conventions like idempotency and serialization rules.\n  The first attempt failed because it only read the target file and tests, missing the idempotency and float conventions. Grep for `idempotency_key` and `audit.record` across the repo to surface team-wide patterns before coding.\n- [rb-0017] Cast Decimal amounts to float in audit entries: Audit entries must store amounts as float(amount) because the ledger service's JSON importer rejects Decimal values.\n  When calling `audit.record(...)`, pass `amount=float(payment.amount)` rather than the raw Decimal. This is a repo-wide convention; violating it breaks downstream JSON import even if local tests pass.\n- [rb-0001] Use project money helpers for rounding: Monetary results must be rounded with the repository's own round_money helper, not Python's round() or bare Decimal.quantize().\n  Before returning any Decimal money value, check ledgerly/money.py for a round_money (or similar) helper and wrap the final result with it. Python's round() and default quantize() use banker's rounding, which produces wrong invoice totals.\n- [rb-0002] Read the money module before implementing money logic: Inspect ledgerly/money.py early to discover ZERO, to_money, and round_money conventions used across the codebase.\n  Existing functions like line_total and invoice_total show the pattern: convert inputs with to_money, accumulate with ZERO as the sum start, and round the final result with round_money. Mirror that pattern for any new money-returning function.",
+  "cited_notes": [
+    "rb-0006",
+    "rb-0010",
+    "rb-0017",
+    "rb-0018"
+  ],
+  "retrieval_debug": {
+    "scores": {
+      "rb-0006": 6.805,
+      "rb-0010": 2.862,
+      "rb-0018": 2.862,
+      "rb-0017": 1.946,
+      "rb-0001": 0.916,
+      "rb-0002": 0.916
+    },
+    "retriever": "lexical",
+    "retrieval_ms": 54.37,
+    "trace": {
+      "excluded": {},
+      "candidates": 18,
+      "retrieved": [
+        "rb-0006",
+        "rb-0010",
+        "rb-0018",
+        "rb-0017",
+        "rb-0001",
+        "rb-0002",
+        "rb-0005",
+        "rb-0007",
+        "rb-0008",
+        "rb-0009"
+      ],
+      "injected": [
+        "rb-0006",
+        "rb-0010",
+        "rb-0018",
+        "rb-0017",
+        "rb-0001",
+        "rb-0002"
+      ],
+      "texts": {
+        "rb-0001": "Use project money helpers for rounding Monetary results must be rounded with the repository's own round_money helper, not Python's round() or bare Decimal.quantize(). Before returning any Decimal money value, check ledgerly/money.py for a round_money (or similar) helper and wrap the final result wit",
+        "rb-0002": "Read the money module before implementing money logic Inspect ledgerly/money.py early to discover ZERO, to_money, and round_money conventions used across the codebase. Existing functions like line_total and invoice_total show the pattern: convert inputs with to_money, accumulate with ZERO as the sum",
+        "rb-0003": "Handle empty/zero-denominator cases explicitly Guard against division by zero and return the project's ZERO constant for empty inputs. When computing an average over a collection, sum the denominator first and return ZERO (the money module's zero constant) if it is zero, rather than dividing and ris",
+        "rb-0004": "Reuse existing money helpers for validation Validate monetary inputs by converting through the module's existing to_money/round_money helpers rather than ad-hoc checks. When a codebase has money utilities like to_money and round_money, use them to normalize and compare against ZERO instead of writin",
+        "rb-0005": "Guard bool when validating integer types In Python, isinstance(True, int) is True, so explicitly reject bool before checking int for quantity fields. When validating that a value is a positive integer, check `isinstance(x, bool)` first and reject it, then check `isinstance(x, int)`. Otherwise True/F",
+        "rb-0006": "Match existing error codes and state checks Mirror the error codes and status-guard patterns already used by sibling functions in the same module. Before implementing a new function, read neighboring functions (e.g. issue_invoice) to copy their BillingError codes and status-check style. Consistency ",
+        "rb-0007": "Reuse existing helpers for datetime normalization and errors When implementing a new function in a module, check sibling modules for established helpers like ensure_utc and BillingError and reuse them for consistency. Before writing validation logic, grep the package for existing utilities (e.g., en",
+        "rb-0008": "Compute strictly-after occurrences with floor division plus one For periodic events from a start time, the first occurrence strictly after a timestamp is start + ((after - start) // length + 1) * length. Use integer floor division on timedeltas to find the index of the period containing `after`, the",
+        "rb-0009": "Validate period_days defensively against bool and non-positive values Guard against bool (subclass of int) and non-positive period_days by raising the domain error rather than letting timedelta misbehave. Check `not isinstance(x, bool) and isinstance(x, int) and x > 0` before constructing timedelta;",
+        "rb-0010": "Check idempotency key before any state validation When implementing money-moving operations, look up the idempotency key in the audit log first and return the original result before validating payment state or amounts. Team convention requires an optional keyword-only `idempotency_key=None` on every",
+        "rb-0011": "Enforce approval threshold for large refunds/credits Support-initiated refunds or credits above 500.00 require a second approver per finance policy FIN-2026-03. Accept an optional keyword-only `approved_by=None`. Amounts at or below 500.00 need no approval; above it, raise `BillingError(\"approval_re",
+        "rb-0012": "Serialize Decimal amounts as float in audit entries The ledger service's JSON importer rejects Decimal values, so audit entries must write amounts as `float(amount)`. When recording audit events for money operations, convert Decimal amounts with `float(amount)` before passing them to `audit.record`.",
+        "rb-0013": "Explore repo conventions before implementing Reading money.py, errors.py, and sibling modules first revealed the project's Decimal-based money helpers and error type, enabling a correct first-attempt implementation. Before writing new functions, inspect the target module's neighbors and shared utili",
+        "rb-0014": "Use Decimal for money math, never float The repo's to_money rejects floats and round_money applies ROUND_HALF_UP; using Decimal throughout avoids precision and rounding bugs. Convert inputs via to_money, perform arithmetic with Decimal (e.g. amount * rate / Decimal('100')), and round the final resul",
+        "rb-0015": "Validate ranges with inclusive bounds and domain errors Checking rate < 0 or rate > 100 correctly enforces the inclusive 0–100 constraint and raises the project's BillingError with a descriptive code. For range constraints, use strict comparisons on both ends (x < min or x > max) to keep bounds incl",
+        "rb-0016": "Check idempotency key before state validation When adding an operation that moves money, look up the idempotency key in audit events first and return the original result before validating state or applying changes. Team convention (INC-204): every money-moving or balance-changing function must accep",
+        "rb-0017": "Cast Decimal amounts to float in audit entries Audit entries must store amounts as float(amount) because the ledger service's JSON importer rejects Decimal values. When calling `audit.record(...)`, pass `amount=float(payment.amount)` rather than the raw Decimal. This is a repo-wide convention; viola",
+        "rb-0018": "Inspect sibling modules for conventions before implementing Before writing a new function, read adjacent modules (audit, clock, errors, other payment/invoice ops) to discover implicit conventions like idempotency and serialization rules. The first attempt failed because it only read the target file "
+      },
+      "memory_tokens_approx": 664
+    }
+  },
+  "leaks": [],
+  "attempts": [
+    {
+      "n": 1,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 8,
+      "seconds": 44.2,
+      "tokens": {
+        "prompt": 33811,
+        "completion": 1446,
+        "cache_hit": 28032,
+        "reasoning": 0
+      },
+      "cost_usd": 0.001819,
+      "cited": [
+        "rb-0006",
+        "rb-0017",
+        "rb-0018"
+      ],
+      "leaks": [],
+      "passed": false,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [
+        "C5"
+      ],
+      "tests_failed": [
+        "test_conv_c5_idempotent"
+      ],
+      "review_comments": [
+        "[team convention] Every operation that moves money or changes a payment, credit or invoice balance must accept an optional keyword-only `idempotency_key=None` (callers without a key keep working). Check the key first, before validating state: if an audit entry with the same key already exists (ledgerly.audit.events()), return the original result (for functions that return a record, the same record) without applying the operation again. Include `idempotency_key` in the audit entry you write. Introduced after the double-refund incident INC-204."
+      ]
+    },
+    {
+      "n": 2,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 7,
+      "seconds": 48.8,
+      "tokens": {
+        "prompt": 29986,
+        "completion": 1763,
+        "cache_hit": 25600,
+        "reasoning": 0
+      },
+      "cost_usd": 0.001793,
+      "cited": [
+        "rb-0006",
+        "rb-0010",
+        "rb-0018",
+        "rb-0017"
+      ],
+      "leaks": [],
+      "passed": true,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [],
+      "tests_failed": [],
+      "review_comments": []
+    }
+  ],
+  "memory_events": [],
+  "phase": "heldout",
+  "rep": 1
+}

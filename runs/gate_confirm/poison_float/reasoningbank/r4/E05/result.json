@@ -1,0 +1,197 @@
+{
+  "task_id": "E05",
+  "group": "experience",
+  "repo": "ledgerly_v1",
+  "repo_version": "1.0.0",
+  "conventions": [
+    "C1",
+    "C2"
+  ],
+  "condition": "reasoningbank",
+  "model": "deepseek/deepseek-flash",
+  "thinking": "off",
+  "first_pass": true,
+  "final_pass": true,
+  "n_attempts": 1,
+  "steps": 6,
+  "cost_usd": 0.001687,
+  "seconds": 40.5,
+  "shown_notes": [
+    "rb-0001",
+    "rb-0011",
+    "rb-0004",
+    "rb-0006",
+    "rb-0010",
+    "rb-0012"
+  ],
+  "retrieved_notes": [
+    "rb-0001",
+    "rb-0011",
+    "rb-0004",
+    "rb-0006",
+    "rb-0010",
+    "rb-0012",
+    "rb-0002",
+    "rb-0003",
+    "rb-0005",
+    "rb-0007"
+  ],
+  "injected_notes": [
+    "rb-0001",
+    "rb-0011",
+    "rb-0004",
+    "rb-0006",
+    "rb-0010",
+    "rb-0012"
+  ],
+  "memory_tokens_approx": 655,
+  "agent_test_runs": 1,
+  "files_changed": [
+    "ledgerly/pricing.py"
+  ],
+  "notes_context": "Memory items from past tasks:\n- [rb-0001] Use project money helpers for rounding: Monetary results must be rounded with the repository's own helper (e.g. ledgerly.money.round_money) rather than Python round() or bare Decimal.quantize().\n  Python's round() and Decimal.quantize() default to banker's rounding, which produces wrong invoice totals. Always import and call the project's round_money (half-up to the cent) on any computed money value before returning it.\n- [rb-0011] Enforce approval threshold for large refunds: Support refunds above 500.00 require a second approver; raise BillingError('approval_required') when approved_by is absent.\n  Add keyword-only approved_by=None to the signature and compare the rounded amount against a round_money('500.00') threshold. Amounts at or below the threshold need no approval; above it, missing approved_by must raise BillingError('approval_required').\n- [rb-0004] Read sibling modules to match error codes and conventions: Before implementing a new function, grep the codebase for existing BillingError codes and validation patterns to reuse them consistently.\n  Search for the error class and its usages (e.g. `grep -rn 'BillingError' ledgerly`) to learn established codes like `invalid_state` and `negative_amount`. Reusing the same codes and message formats as neighboring functions (payments.py, invoice.py) makes hidden tests pass without guessing.\n- [rb-0006] Normalize money via to_money/round_money before sign checks: Convert raw price inputs through the project's money helpers before comparing to ZERO so Decimals, strings, and floats are handled uniformly.\n  Call `to_money(unit_price)` then `round_money(...)` and compare against `ZERO` to raise `negative_amount`. Store the normalized value on the LineItem so downstream totals stay consistent.\n- [rb-0010] Check idempotency before state validation: When adding idempotency to money-moving operations, look up the audit key first and return the original result before any validation or mutation.\n  Scan ledgerly.audit.events() for an entry whose idempotency_key matches, and if found return the original record (the payment itself) without re-applying. Do this before amount/state/approval checks so retries succeed even after the payment's status changed to 'refunded'.\n- [rb-0012] Serialize Decimal amounts as float in audit entries: The ledger service's JSON importer rejects Decimal, so audit entries must write float(amount).\n  When calling audit.record for refunds or credits, pass amount=float(amount) rather than the Decimal, and include idempotency_key in the entry so future retries can find it.",
+  "cited_notes": [
+    "rb-0001",
+    "rb-0004"
+  ],
+  "retrieval_debug": {
+    "scores": {
+      "rb-0001": 4.511,
+      "rb-0011": 3.17,
+      "rb-0004": 1.224,
+      "rb-0006": 1.224,
+      "rb-0010": 1.224,
+      "rb-0012": 1.224
+    },
+    "retriever": "lexical",
+    "retrieval_ms": 0.99,
+    "trace": {
+      "excluded": {},
+      "candidates": 12,
+      "retrieved": [
+        "rb-0001",
+        "rb-0011",
+        "rb-0004",
+        "rb-0006",
+        "rb-0010",
+        "rb-0012",
+        "rb-0002",
+        "rb-0003",
+        "rb-0005",
+        "rb-0007"
+      ],
+      "injected": [
+        "rb-0001",
+        "rb-0011",
+        "rb-0004",
+        "rb-0006",
+        "rb-0010",
+        "rb-0012"
+      ],
+      "texts": {
+        "rb-0001": "Use project money helpers for rounding Monetary results must be rounded with the repository's own helper (e.g. ledgerly.money.round_money) rather than Python round() or bare Decimal.quantize(). Python's round() and Decimal.quantize() default to banker's rounding, which produces wrong invoice totals.",
+        "rb-0002": "Read existing module conventions before implementing Inspect sibling functions and the money module to mirror established patterns for conversion and rounding. Before writing a new function, read the surrounding file and helper modules (money.py, models.py) to see how existing functions like line_to",
+        "rb-0003": "Handle empty/zero-denominator cases explicitly Guard against division by zero by returning the project's ZERO constant when total quantity is zero. Compute the denominator first and return ZERO (the project's Decimal zero) when it is zero, rather than relying on exception handling or returning a pla",
+        "rb-0004": "Read sibling modules to match error codes and conventions Before implementing a new function, grep the codebase for existing BillingError codes and validation patterns to reuse them consistently. Search for the error class and its usages (e.g. `grep -rn 'BillingError' ledgerly`) to learn established",
+        "rb-0005": "Reject bools when validating integer inputs In Python, `isinstance(True, int)` is True, so guard against bools explicitly when a positive integer is required. Validate with `isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0` and raise a dedicated error code. This prevents ",
+        "rb-0006": "Normalize money via to_money/round_money before sign checks Convert raw price inputs through the project's money helpers before comparing to ZERO so Decimals, strings, and floats are handled uniformly. Call `to_money(unit_price)` then `round_money(...)` and compare against `ZERO` to raise `negative_",
+        "rb-0007": "Reuse existing period-arithmetic helpers and conventions Before implementing a new date/period function, read sibling modules for established patterns (ensure_utc, BillingError, timedelta-based period math) and mirror them. Inspect related modules like subscriptions.py to copy the project's conventi",
+        "rb-0008": "Validate numeric inputs defensively against bools When a field like period_days must be a positive int, explicitly reject bools and non-ints before using it in arithmetic. Check `isinstance(x, bool) or not isinstance(x, int) or x <= 0` and raise the project's domain error. Python treats True/False a",
+        "rb-0009": "Handle the before-start edge case explicitly For 'first renewal strictly after t' semantics, special-case t before started_at to return start + one period rather than relying on floor division. Floor division on negative timedeltas can yield surprising quotients; guard `if after < start: return star",
+        "rb-0010": "Check idempotency before state validation When adding idempotency to money-moving operations, look up the audit key first and return the original result before any validation or mutation. Scan ledgerly.audit.events() for an entry whose idempotency_key matches, and if found return the original record",
+        "rb-0011": "Enforce approval threshold for large refunds Support refunds above 500.00 require a second approver; raise BillingError('approval_required') when approved_by is absent. Add keyword-only approved_by=None to the signature and compare the rounded amount against a round_money('500.00') threshold. Amount",
+        "rb-0012": "Serialize Decimal amounts as float in audit entries The ledger service's JSON importer rejects Decimal, so audit entries must write float(amount). When calling audit.record for refunds or credits, pass amount=float(amount) rather than the Decimal, and include idempotency_key in the entry so future r"
+      },
+      "memory_tokens_approx": 655
+    }
+  },
+  "leaks": [],
+  "attempts": [
+    {
+      "n": 1,
+      "exit_status": "Submitted",
+      "crashed": false,
+      "steps": 6,
+      "seconds": 39.6,
+      "tokens": {
+        "prompt": 25599,
+        "completion": 1366,
+        "cache_hit": 20224,
+        "reasoning": 0
+      },
+      "cost_usd": 0.001687,
+      "cited": [
+        "rb-0001",
+        "rb-0004"
+      ],
+      "leaks": [],
+      "passed": true,
+      "public_passed": true,
+      "func_failed": [],
+      "conv_failed": [],
+      "tests_failed": [],
+      "review_comments": []
+    }
+  ],
+  "memory_events": [
+    {
+      "seq": 13,
+      "ts": 1793491284.02,
+      "type": "add",
+      "item": {
+        "id": "rb-0013",
+        "title": "Reuse existing money helpers instead of raw floats",
+        "description": "When implementing monetary functions, convert inputs with the project's to_money/round_money helpers rather than using float arithmetic.",
+        "content": "Search the repo for a money module (to_money, round_money, ZERO) and use it for all conversions and rounding. This avoids float precision bugs and matches existing conventions, which hidden tests likely expect.",
+        "source": {
+          "task_id": "E05",
+          "repo": "ledgerly",
+          "version": "1.0.0",
+          "final_pass": true
+        },
+        "status": "active"
+      },
+      "reason": "extracted from task E05"
+    },
+    {
+      "seq": 14,
+      "ts": 1793491284.02,
+      "type": "add",
+      "item": {
+        "id": "rb-0014",
+        "title": "Match sibling modules' error conventions",
+        "description": "Before raising errors, grep sibling modules to see which exception class and code strings they use.",
+        "content": "Inspect modules like payments.py/invoice.py for the project's error pattern (e.g., BillingError(code, message)). Reuse the same class and a consistent snake_case code so validation failures behave as tests expect.",
+        "source": {
+          "task_id": "E05",
+          "repo": "ledgerly",
+          "version": "1.0.0",
+          "final_pass": true
+        },
+        "status": "active"
+      },
+      "reason": "extracted from task E05"
+    },
+    {
+      "seq": 15,
+      "ts": 1793491284.02,
+      "type": "add",
+      "item": {
+        "id": "rb-0015",
+        "title": "Explore tests and conventions before implementing",
+        "description": "Read the target file, related modules, and existing tests first to infer expected types, rounding, and validation behavior.",
+        "content": "Cat the stub, its imports, sibling modules, and tests before writing code. This reveals required helpers, error types, and edge cases (like inclusive 0-100 bounds) so the first attempt passes hidden tests.",
+        "source": {
+          "task_id": "E05",
+          "repo": "ledgerly",
+          "version": "1.0.0",
+          "final_pass": true
+        },
+        "status": "active"
+      },
+      "reason": "extracted from task E05"
+    }
+  ],
+  "phase": "learn",
+  "rep": 4
+}
