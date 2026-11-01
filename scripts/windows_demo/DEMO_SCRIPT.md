@@ -101,23 +101,21 @@
 
 **怎么做**：打开"命令提示符"（不是在 Claude 里），逐行运行：
 ```
-set PYTHONPATH=%USERPROFILE%\Documents\AttestDemo\app
-set ATTEST_HOME=%USERPROFILE%\Documents\AttestDemo\memory
-set ATTEST_APPROVERS=owner:finance-lead
-set PYTHONUTF8=1
-python -m attest notes --repo C:\Users\23778\Documents\AttestDemo\ledgerly-demo
-python -m attest retract --repo C:\Users\23778\Documents\AttestDemo\ledgerly-demo --note at-0001 --reason "政策变更，暂停使用"
+cd /d C:\Users\23778\Documents\AttestDemo
+admin notes
+admin retract --note at-0001 --reason "政策变更，暂停使用"
+admin notes
 ```
-（at-0001 以 notes 命令列出的幂等那条经验的编号为准。）
+（at-0001 以第一次 admin notes 列出的幂等那条经验的编号为准。）
 
 然后对 Claude 说：
 > 再用 attest 的 recall 查一次这个仓库的经验，task 参数还用运费退款那段任务描述。
 
 **为什么这么做**
 - 在命令行而不是在 Claude 里操作：撤回、批准只有人能做，MCP 里根本没有这些工具，Agent 删不掉、也批不了规则。
-- 设置 PYTHONUTF8=1：你的系统编码是中文 GBK，这样命令行读写不会出编码错误。
+- 用 admin.bat：它固定用装了 Attest 依赖的 Python 3.12，并设好记忆位置和 UTF-8 编码。彩排时直接运行 `python -m attest retract` 没有生效，记忆日志里没有撤回记录。最可能的原因：那个入口会连带加载实验运行器，需要这台电脑上没装的依赖（如 yaml），命令一启动就报错；admin.bat 走的入口只依赖 MCP 服务器。
 
-**预期结果**：notes 列出两条经验（幂等那条 active，float 那条 retired）；撤回后，Claude 再 recall 返回 "No verified notes"。
+**预期结果**：第一次 admin notes 列出两条（at-0001 [active]、at-0002 [retired]）；retract 打印 {"retired": "at-0001", ...}；第二次 admin notes 里 at-0001 变成 [retired]；Claude 再 recall 返回 "No verified notes for this repository yet."
 
 **讲**：经验错了或政策变了，人一条命令就能撤回，Agent 下一次就不会再用。
 

@@ -76,3 +76,26 @@ print("verified", out["verified"], [a["state"] for a in out["assessed"]], out.ge
     env.update(LC_ALL="C", LANG="C", PYTHONUTF8="0", PYTHONCOERCECLOCALE="0")
     proc = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, encoding="utf-8", env=env)
     assert "verified True ['approved'] None" in proc.stdout, proc.stdout + proc.stderr[-800:]
+
+
+def test_admin_cli_needs_only_the_mcp_dependencies(repo, monkeypatch, tmp_path):
+    """The demo machine has only mcp and pytest; `python -m attest` imports the runner and failed there."""
+    import os, sys
+    m = server(monkeypatch)
+    f = repo / "ledgerly/adjustments.py"
+    f.write_text(f.read_text() + '\n\ndef refund(payment, amount, at, *, idempotency_key=None):\n    return payment\n')
+    review = "Every operation that moves money must accept an optional keyword-only idempotency_key=None. Introduced after the double-refund incident INC-204."
+    cand = {"kind": "lesson", "type": "business_policy", "title": "Money operations take idempotency_key",
+            "content": "Every ledgerly operation that moves money accepts a keyword-only idempotency_key=None.",
+            "evidence_quote": "Introduced after the double-refund incident INC-204",
+            "applied_in_diff": "def refund(payment, amount, at, *, idempotency_key=None):"}
+    nid = m.learn(str(repo), "Partial refunds", [review], candidates=[cand])["admitted"][0]
+    block = tmp_path / "block"
+    block.mkdir()
+    (block / "sitecustomize.py").write_text("import sys\nfor n in ('litellm', 'yaml', 'minisweagent', 'openai'):\n    sys.modules[n] = None\n")
+    env = dict(os.environ, PYTHONPATH=f"{block}{os.pathsep}{ROOT}", ATTEST_STORE="jsonl")
+    run = lambda *a: subprocess.run([sys.executable, "-m", "attest.admin", *a, "--repo", str(repo)], capture_output=True, text=True, env=env)
+    out = run("retract", "--note", nid, "--reason", "policy changed")
+    assert out.returncode == 0, out.stderr[-800:]
+    assert f"{nid}  [retired]" in run("notes").stdout
+    assert m.recall(str(repo), "Partial refunds")["note_ids"] == []
