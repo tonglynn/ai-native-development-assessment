@@ -15,6 +15,11 @@ Configuration (environment):
   ATTEST_STORE       sqlite (default here: one memory.db per repository that several
                      agents or people can share) or jsonl (the experiments' format)
   ATTEST_VERIFY_CMD  verification command run in the repository (default: python -m pytest -q)
+  ATTEST_GATEWAY     checks (default) or off. With checks, every note the write gate admits is then assessed as
+                     in gateway v4, deterministically (team code checks, registered policies, trusted reviewer
+                     comments; no model, no API key): approved -> a rule; uncertain -> kept, never a rule, waits
+                     for a person (python -m attest review); rejected -> retired with the reason. The
+                     counterfactual test is not run here. off = the preregistered gate only.
 
 Claude Code:  claude mcp add attest -- python -m attest.mcp_server
 """
@@ -81,6 +86,33 @@ def _verify(repo: Path) -> tuple[bool, str]:
     return proc.returncode == 0, (proc.stdout + proc.stderr)[-1500:]
 
 
+def _assess(memory: EarnedMemory, repo_name: str, ids: list[str], review_comments: list[str]) -> list[dict]:
+    """Gateway v4's three states on newly admitted notes, with the deterministic evidence only (D75)."""
+    from .memory import codechecks
+    from .memory.admission import _norm
+    from .memory.gateway import benchmark_trust, three_state
+    trust = benchmark_trust()
+    out = []
+    for iid in ids:
+        it = memory.store.items()[iid]
+        ev = (it.get("evidence") or [{}])[0]
+        text = f"{it.get('title') or ''} {it.get('content') or ''}"
+        applied = (ev.get("applied") or {}).get("line") or ""
+        quote = (ev.get("source") or {}).get("quote") or ""
+        code = codechecks.run(repo_name, text, applied)
+        policy = any(p in trust.registry for p in re.findall(r"\b(?:FIN|POL|SEC)-\d{4}-\d{2}\b|\bINC-\d+\b", quote))
+        reviewer = any(_norm(c) in trust.trusted for c in review_comments if quote and _norm(quote) in _norm(c))
+        a = three_state(policy=policy, counterfactual=None, code=code, reviewer=reviewer, repeated=False)
+        fields = {"assessment": a}
+        if a["state"] == "uncertain":
+            fields["observed_only"] = True
+        elif a["state"] == "rejected":
+            fields.update(status="retired", retracted_by="gateway")
+        memory.store.append("update", id=iid, fields=fields, reason=f"gateway checks: {a['state']} (counter {a['counter']}, hard {a['hard']}, soft {a['soft']})")
+        out.append({"id": iid, "title": it.get("title"), **a})
+    return out
+
+
 # ------------------------------------------------------------------ tool functions (plain Python, tested directly)
 
 def recall(repo_path: str, task: str) -> dict:
@@ -103,8 +135,12 @@ def learn(repo_path: str, task: str, review_comments: list[str], candidates: lis
     verified, output = _verify(repo)
     run = {"first_pass": not review_comments, "final_pass": verified, "verified_by": f"verification command: {VERIFY_CMD}", "shown_notes": [], "cited_notes": [],
            "attempts": [{"passed": not review_comments, "review_comments": list(review_comments)}]}
-    events = _memory(key).learn(_task(name, task), version, run, "", diff, candidates=candidates)
+    memory = _memory(key)
+    events = memory.learn(_task(name, task), version, run, "", diff, candidates=candidates)
+    assessed = _assess(memory, name, [e["item"]["id"] for e in events if e["type"] == "add"], review_comments) \
+        if os.environ.get("ATTEST_GATEWAY", "checks") != "off" else []
     return {
+        "assessed": assessed,
         "verified": verified,
         "verification_output": output if not verified else "",
         "admitted": [e["item"]["id"] for e in events if e["type"] == "add"],
