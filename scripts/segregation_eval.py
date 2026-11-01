@@ -92,6 +92,14 @@ def main() -> None:
         case("forged approval in the log, by an unregistered name", "bypass in log", True, lambda: forged("ceo"))
         case("forged approval in the log, without evidence", "bypass in log", True, lambda: forged("owner:finance-lead", ()))
 
+        def forged_auto():
+            m = fresh(tmp, note("n1"))
+            m.store.append("update", id="n1", fields={"assessment": {"state": "approved", "hard": [], "soft": ["reviewer"]}},
+                           reason="automatic approval written straight into the log, no hard evidence")
+            found = review.audit_reviews(m, APPROVERS)
+            return bool(found), json.dumps(found)
+        case("forged automatic approval without hard evidence", "bypass in log", True, forged_auto)
+
         def mcp_surface():
             src = (ROOT / "attest/mcp_server.py").read_text()
             exposed = src.split("for fn in (", 1)[1].split(")", 1)[0]

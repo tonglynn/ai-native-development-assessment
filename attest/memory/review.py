@@ -128,8 +128,14 @@ def audit_reviews(memory, approvers) -> list[dict]:
             continue
         f = e.get("fields") or {}
         rv = f.get("review") or {}
-        decided = rv.get("decision") in ("approved", "rejected") or (f.get("assessment") or {}).get("state") == "approved"
+        a = f.get("assessment") or {}
+        decided = rv.get("decision") in ("approved", "rejected")
         who = rv.get("by") or (f.get("supersede") or {}).get("by")
+        if not decided and not f.get("supersede") and a.get("state") == "approved":
+            # an automatic approval by the gateway is legitimate only with hard evidence (policy, test, code check)
+            if not [h for h in a.get("hard") or [] if not str(h).startswith("human review")]:
+                out.append({"seq": e.get("seq"), "id": e.get("id"), "by": None, "problems": ["approved without hard evidence or a person"]})
+            continue
         if not (decided or f.get("status") == "superseded"):
             continue
         problems = []

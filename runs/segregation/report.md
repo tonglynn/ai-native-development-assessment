@@ -1,6 +1,6 @@
 # Segregation of duties in the memory lifecycle (D69, offline)
 
-**16/16 cases behave as fixed in advance** (bypasses blocked: 14/14; controls allowed: 2/2).
+**17/17 cases behave as fixed in advance** (bypasses blocked: 15/15; controls allowed: 2/2).
 
 | Case | Kind | Expected | Got | Detail |
 |---|---|---|---|---|
@@ -17,6 +17,7 @@
 | forged approval in the log, by an agent | bypass in log | blocked | blocked | [{"seq": 2, "id": "n1", "by": "agent:distiller", "problems": ["decided by an agent"]}] |
 | forged approval in the log, by an unregistered name | bypass in log | blocked | blocked | [{"seq": 2, "id": "n1", "by": "ceo", "problems": ["decider not a registered approver"]}] |
 | forged approval in the log, without evidence | bypass in log | blocked | blocked | [{"seq": 2, "id": "n1", "by": "owner:finance-lead", "problems": ["approval without evidence"]}] |
+| forged automatic approval without hard evidence | bypass in log | blocked | blocked | [{"seq": 2, "id": "n1", "by": null, "problems": ["approved without hard evidence or a person"]}] |
 | agents can reach approve/reject/retract/supersede via MCP | surface | blocked | blocked | exposed to agents: recall, learn, report_outcome, list_notes |
 | registered owner approves with evidence (control) | control | allowed | allowed | approved, audit clean |
 | registered owner supersedes an old rule (control) | control | allowed | allowed | old: superseded, excluded: 'superseded by new (replaced by a newer rule, recorded by owner:finance-lead)', sti |
