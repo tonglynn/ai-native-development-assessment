@@ -46,6 +46,7 @@
 - 证据引用写明 INC-204 的那句：INC-204 是登记过的事故编号，属于硬证据，Attest 才能自动批准；如果只引用规则本身，没有来源，会判为"待人工"（uncertain）。
 
 **预期结果**：learn 返回 verified true；admitted 一条经验；assessed 里这条的 state 为 approved。
+（彩排时出现过：第一次 learn 返回 rejected，原因是 "not applied in the verified change"——Claude 填的 applied_in_diff 和改动里的代码对不上。Claude 会自己改了重交，第二次就 approved。现场遇到可以讲："证据必须能在真实改动里找到，抄错一个字都不收。"）
 
 **讲**：测试通过才会学；这条经验有登记过的事故编号作依据，所以自动批准成为团队规则。
 
@@ -69,10 +70,10 @@
 
 **讲**：通过了测试，只看测试的门槛会收下它；Attest 用团队代码检查把它拦下。模型能不能发现问题要看模型，Attest 每条经验都会检查。
 
-**3b 怎么问**（看到 rejected 之后马上说）
+**3b 怎么问**（看到 rejected 之后马上说，不要跳过）
 > Attest 拒绝了这条经验：金额用浮点会丢精度。请把 refund 里传给 ledgerly.audit.record 的 float(amount) 改回 Decimal，再运行 python -m pytest -q。先不要调用 learn。
 
-**为什么这么问**：Attest 管的是记忆，不管已经写进代码的改动。彩排时没有这一步，第 4 步 Claude 为了"和 refund 保持一致"，把 float 也抄进了 refund_shipping——坏经验没有从记忆里传过去，却从代码里传过去了。把代码改回来，第 4 步才干净。
+**为什么这么问**：Claude 通常会自己问"要不要把 refund 改回 Decimal"，这时就用这句回答它。Attest 管的是记忆，不管已经写进代码的改动。彩排时没有这一步，第 4 步 Claude 为了"和 refund 保持一致"，把 float 也抄进了 refund_shipping——坏经验没有从记忆里传过去，却从代码里传过去了。把代码改回来，第 4 步才干净。
 
 **预期结果**：float 改回 Decimal，测试通过。
 
@@ -94,6 +95,8 @@
 - refund_shipping 带上 idempotency_key，测试通过。
 
 **讲**：没人再提醒，它自己用上了上次学到的规矩；坏经验没有混进来。
+
+（彩排时出现过：第一次 report_outcome 报失败，因为 adjustments.py 被换回了旧版本，Claude 重新写回后通过。Attest 只读代码（git diff、运行测试），不会改文件；这是 Claude 桌面在云端副本和你电脑之间同步文件时出的问题。Attest 把那次失败记为"与经验无关的失败，不归咎于这条经验"，使用统计里失败数仍是 0。现场遇到可以讲："任务失败不一定是经验的错，Attest 不会因此冤枉一条好经验。"）
 
 ---
 
@@ -122,13 +125,15 @@ cd C:\Users\23778\Documents\AttestDemo
 ---
 
 ## 演示后复原（下次重演前做）
-在 PowerShell 或命令提示符里运行：
+方法一：双击 AttestDemo 里的 reset_demo.bat。它把 ledgerly-demo 恢复到 v1.0.0，并把 memory 文件夹挪到 AttestDemo\_to_delete（不是直接删除，需要时还能找回），结果写在 reset_log.txt。如果 reset_log.txt 说挪不动 memory，先退出 Claude 再双击一次。
+
+方法二：在 PowerShell 或命令提示符里运行：
 ```
 cd C:\Users\23778\Documents\AttestDemo\ledgerly-demo
 git checkout v1.0.0 -- .
 git clean -fd
 ```
-再把 AttestDemo\memory 文件夹删掉或改名，下次就从空记忆开始。
+再退出 Claude，把 AttestDemo\memory 文件夹删掉或改名，然后重新打开 Claude。
 
 ## 出问题怎么接
 - 工具列表里没有 attest：托盘里右键 Claude → Quit，完全退出后重开。
