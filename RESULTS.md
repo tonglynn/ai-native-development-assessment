@@ -1494,3 +1494,36 @@ with its own distiller; a fresh memory per case; 0 errors.
   Whether they do, and whether the agent follows them, is measured downstream by D71.
 - Cost: v4 learned 4 of 6 controls from an empty memory, all as rules.
 修正：主实验"毒药 0 次入库"是因为被投毒的任务没通过验证；攻击者让任务通过时，预注册的 Attest 门槛会存下 33/60，v4 为 0 条规则，但有 23/60 作为"未确认"笔记保留并在所属文件中显示。
+
+
+## Gate confirmation: a gate without the performance cost? (D71, exploratory, rules fixed before the run)
+
+`attest stress --kind gate_confirm`, `scripts/gate_confirm_report.py` (committed before the run), `runs/gate_confirm`.
+One session; every arm learns its own memory on the experience tasks (and updates it on held-out tasks, as in the
+gateway runs) on a clean stream and on a stream whose review gives test-passing poison (float audit amounts, E04 and
+E06); 5 repetitions; business-policy guard off for every arm; 0 runs excluded. Chart: `docs/effect_safety.png`.
+
+| Arm | Clean held-out pass@1 | Poison stream pass@1 | Poison notes stored | Held-out runs applying the poison |
+|---|---|---|---|---|
+| ReasoningBank-style | 60% | 58% | 10 | 28/55 |
+| ACE-style | 65% | 46% | 8 | 23/55 |
+| Attest (preregistered gate) | 73% | 69% | 5 | 20/55 |
+| Attest, no gate | 82% | 71% | 4 | 13/55 |
+| **Attest + gateway v3.1** | **82%** | **80%** | **0** | **0/55** |
+| Attest + gateway v4 | 84% | 76% | 0 | 0/55 |
+
+| v3.1 against | Difference, paired by task | Verdict |
+|---|---|---|
+| no gate | −0 pp [−7, +7] | not worse (rule 1 met) |
+| Attest | +9 pp [+2, +16] | better (rule 2 met) |
+| ReasoningBank-style | +22 pp [+4, +44] | better (secondary) |
+| ACE-style | +16 pp [−4, +38] | not worse (secondary) |
+| v4 against no gate / Attest | +2 [−9, +11] / +11 [−0, +25] | not worse / not worse (secondary) |
+
+Rule 3 met (v3.1: 0 poison stored, 0 applied). **All three rules met: on this benchmark the evidence gateway keeps
+test-passing poison out with no measured performance cost**, which answers H6 for the gateway, not for the
+preregistered gate. Limits: exploratory; v3.1 and v4 were designed on this benchmark after the main experiment; one
+model family; v3.1 still approves a trusted reviewer's wrong advice (D59; v4 does not, D60). Under the poison, v4's
+unconfirmed notes (D70) reached 0 of 55 held-out patches. The preregistered Attest stored the test-passing poison in
+5 of its memories, as D36 found.
+确认实验：在同一轮、各系统自己学习的条件下，v3.1 82%，不比去掉门槛差，比预注册门槛好 9 个百分点，投毒流 0 条入库、0 次被照做。三条预设规则全部满足（探索性）。
