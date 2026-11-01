@@ -82,7 +82,11 @@ def _task(name: str, task: str) -> SimpleNamespace:
 
 
 def _verify(repo: Path) -> tuple[bool, str]:
-    proc = subprocess.run(shlex.split(VERIFY_CMD), cwd=repo, capture_output=True, text=True, timeout=900)
+    import sys
+    args = shlex.split(VERIFY_CMD, posix=os.name != "nt")
+    if args and args[0] in ("python", "python3"):  # the server's own interpreter (on Windows "python" may be another one)
+        args[0] = sys.executable
+    proc = subprocess.run(args, cwd=repo, capture_output=True, text=True, timeout=900)
     return proc.returncode == 0, (proc.stdout + proc.stderr)[-1500:]
 
 
