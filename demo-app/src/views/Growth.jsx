@@ -1,9 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchJson } from "../py";
 import { Panel, Code, Stamp, Tag, Source, cn } from "../ui";
+import { Status, Statuses } from "../ui";
 
 const COND = { attest: "开记忆（Attest）", no_memory: "不开记忆" };
 const CONV = { C1: "金额精确舍入", C2: "错误码规范", C3: "时间统一为 UTC", C4: "记审计日志", C5: "幂等（重复请求只执行一次）", C6: "超额需审批" };
+const NOTE_RX = { C1: /round_money|half-up|Decimal/i, C2: /BillingError/i, C3: /ensure_utc|\bUTC\b/i, C4: /audit\.record|audit entr/i, C5: /idempot/i, C6: /approv/i };
+const CODE_RX = { C1: /round_money/, C2: /BillingError\(/, C3: /ensure_utc/, C4: /audit\.record\(/, C5: /idempotency_key/, C6: /approved_by/ };
+function KeyEvidence({ run }) {
+  const ret = run.spans.find(s => s.kind === "retrieve");
+  const notes = ret ? ret.context.split("\n").filter(l => /^- \[/.test(l)) : [];
+  const added = run.diff.split("\n").filter(l => l.startsWith("+") && !l.startsWith("+++")).join("\n");
+  const t1 = run.spans.find(s => s.kind === "tests");
+  const rows = (run.conventions || []).map(c => ({ c, note: notes.find(n => NOTE_RX[c]?.test(n)), code: CODE_RX[c]?.test(added), ok: !(t1?.conv_failed || []).includes(c) }));
+  return (
+    <div className="grid gap-2 rounded-lg border-2 border-pen bg-penwash/40 p-4">
+      <div className="flex flex-wrap items-center gap-2"><b className="text-[15px]">这次任务为什么{run.first_pass ? "第一次就成功" : "第一次没成功"}</b><span className="text-xs text-soft">读取记忆 {ret ? `${ret.injected.length} 条经验` : "：记忆关闭"}</span></div>
+      <div className="overflow-x-auto"><table className="w-full border-collapse text-sm"><thead><tr className="text-left text-xs text-soft"><th className="py-1 pr-3 font-medium">这个任务要守的规矩</th><th className="py-1 pr-3 font-medium">记忆里有相关经验吗</th><th className="py-1 pr-3 font-medium">代码落实了吗</th><th className="py-1 font-medium">第一次的隐藏测试</th></tr></thead>
+        <tbody>{rows.map(r => <tr key={r.c} className="border-t border-rule"><td className="py-1.5 pr-3">{r.c} {CONV[r.c]}</td>
+          <td className="py-1.5 pr-3">{r.note ? <span className="text-ok">有：{r.note.replace(/^- \[[\w-]+\] /, "").split(":")[0]}</span> : <span className="text-soft">{ret ? "没有" : "—"}</span>}</td>
+          <td className="py-1.5 pr-3">{r.code ? <span className="text-ok">写了</span> : <span className="text-bad">没写</span>}</td>
+          <td className="py-1.5">{r.ok ? <span className="text-ok">通过</span> : <span className="text-bad">失败</span>}</td></tr>)}</tbody></table></div>
+      <p className="m-0 text-xs text-soft">按关键词从注入的记忆文本和最终 diff 里判断，是辅助阅读，不是模型的自述；测试结果是真实的。"代码落实"只看有没有写出对应的代码，写了也可能写错，以测试为准。</p>
+    </div>
+  );
+}
 const fmtMs = ms => ms == null ? "—" : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
 function kindLabel(s) { return { retrieve: "记忆", llm: "模型", tool: "命令", tests: "测试", review: "评审" }[s.kind]; }
 function SpanDetail({ s }) {
@@ -44,9 +65,11 @@ export default function Growth() {
         <div className="grid gap-1 text-xs text-soft">第几次<div className="flex gap-1">{[1, 2, 3].map(k => { const r = all.find(x => x.task === task && x.condition === cond && x.rep === k); return <button key={k} onClick={() => setRep(k)} className={cn("flex items-center gap-1 rounded border px-2.5 py-1.5 text-sm", rep === k ? "border-pen bg-penwash" : "border-rule")}>{k}<span className={r.first_pass ? "text-ok" : "text-bad"}>{r.first_pass ? "✓" : "✗"}</span></button>; })}</div></div>
         <div className="ml-auto grid gap-0.5 text-sm"><span>这个任务：开记忆 <b className="text-ok">{sib("attest").filter(r => r.first_pass).length}/3</b>，不开 <b className="text-bad">{sib("no_memory").filter(r => r.first_pass).length}/3</b> 第一次通过</span><span className="text-xs text-soft">全部 11 个任务：开记忆 {overall("attest")}，不开 {overall("no_memory")}</span></div>
       </div>
-      <Panel title={`${run.task}：${run.title}`} aside={<span className="font-mono text-xs text-soft">{run.path} · 结果提交 {run.commit} · 代码冻结于 {run.frozen_at}</span>}>
+      <Panel title={`${run.task}：${run.title}`} aside={<Status kind="replay" />}>
+        <p className="m-0 mb-2 font-mono text-xs text-soft">任务 {run.task} · 运行 {run.path} · 条件 {cond} · 结果提交 {run.commit} · 代码冻结于 {run.frozen_at}</p>
         <details className="mb-3"><summary className="cursor-pointer text-sm text-soft">任务原文（AI 收到的题目）</summary><Code className="mt-2">{run.issue}</Code></details>
         <div className="mb-3 flex flex-wrap items-center gap-3 text-sm"><Stamp kind={run.first_pass ? "pass" : "fail"} label={run.first_pass ? "第一次就通过" : run.final_pass ? "评审后通过" : "未通过"} /><span className="text-soft">{run.attempts} 次提交 · {run.steps} 步 · {Math.round(run.seconds)} 秒 · 输入 {tot.p.toLocaleString()} / 输出 {tot.c.toLocaleString()} token · ${run.cost?.toFixed(4)}</span></div>
+        <div className="mb-4"><KeyEvidence run={run} /></div>
         <div className="grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
           <ol className="m-0 max-h-[560px] list-none overflow-y-auto rounded-md border border-rule p-0" aria-label="执行轨迹">
             {run.spans.map((s, i) => (
@@ -58,7 +81,7 @@ export default function Growth() {
           <div className="min-w-0"><SpanDetail s={run.spans[sel]} /></div>
         </div>
       </Panel>
-      <Panel title="最终改动（这次运行提交的 diff）"><Code className="max-h-[420px] overflow-auto">{run.diff}</Code></Panel>
+      <Panel title="最终改动（这次运行提交的 diff）" aside={<Status kind="replay" />}><Code className="max-h-[420px] overflow-auto">{run.diff}</Code></Panel>
       <Source>runs/main（预注册主实验，代码冻结于 cf5d879）；每一行都来自轨迹文件 attempt*.traj.json 与 result.json。</Source>
     </div>
   );

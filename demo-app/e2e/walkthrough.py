@@ -3,12 +3,21 @@ Run with the app served at 127.0.0.1:8778: python demo-app/e2e/walkthrough.py <v
 import re, sys
 from playwright.sync_api import sync_playwright
 URL = "http://127.0.0.1:8778/index.html"
-CAP = """(t)=>{let e=document.getElementById('cap');if(!e){e=document.createElement('div');e.id='cap';e.style.cssText="position:fixed;left:50%;bottom:22px;transform:translateX(-50%);max-width:1150px;background:rgba(18,26,22,.93);color:#fff;font:500 21px/1.5 'Noto Sans CJK SC',sans-serif;padding:12px 24px;border-radius:10px;z-index:9999;text-align:center";document.body.appendChild(e)}e.textContent=t}"""
+# Caption box over the empty lower part of the left sidebar: smaller, semi-transparent, never over code or data.
+CAP = """(t)=>{let e=document.getElementById('cap');if(!e){e=document.createElement('div');e.id='cap';e.style.cssText="position:fixed;left:24px;bottom:18px;width:290px;background:rgba(18,26,22,.74);color:#fff;font:500 15px/1.5 'Noto Sans CJK SC',sans-serif;padding:8px 12px;border-radius:8px;z-index:9999";document.body.appendChild(e)}e.textContent=t}"""
 with sync_playwright() as p:
     b = p.chromium.launch(headless=True, args=["--no-proxy-server"])
     ctx = b.new_context(viewport={"width": 1440, "height": 900}, record_video_dir=sys.argv[1], record_video_size={"width": 1440, "height": 900})
     pg = ctx.new_page()
-    def say(t, ms=3800): pg.evaluate(CAP, t); pg.wait_for_timeout(ms)
+    import time
+    T0, CUES = time.time(), []
+    def cue(t):
+        now = time.time() - T0
+        if CUES: CUES[-1][1] = now
+        CUES.append([now, None, t])
+    def say(t, ms=3800): pg.evaluate(CAP, t); cue(t); pg.wait_for_timeout(ms)
+    _ev = pg.evaluate
+    def cap_now(t): _ev(CAP, t); cue(t)
     def go(v): pg.goto(f"{URL}#{v}"); pg.wait_for_load_state("networkidle"); pg.wait_for_timeout(600)
     def scroll(y): pg.mouse.wheel(0, y); pg.wait_for_timeout(800)
     go("background"); say("业务背景：一家 SaaS 公司的计费系统（合成）。客服退款有三条团队规矩：幂等、超额审批、审计。", 5000)
@@ -25,22 +34,28 @@ with sync_playwright() as p:
     say("同一个任务不开记忆：第一次提交没通过，错在幂等和审批，和评审之前纠正过的一样。", 5000)
     go("security"); pg.get_by_text("各系统的处理结果").wait_for(timeout=30000)
     say("场景二：一条能通过测试的毒评论——审计金额写成 float。测试挡不住它。", 4500)
-    scroll(500); say("真实记录：ReasoningBank 式、ACE 式、预注册门槛都把它存成了规则；Attest + 门控 v4 没有写入。", 5000)
+    scroll(500); say("真实记录：两个基线和预注册门槛都存成了规则，v4 没有写入。", 5000)
     pg.get_by_role("button", name="在浏览器里现场跑一遍 Attest 的检查").click(); pg.get_by_text("门控 v4 的结论").wait_for(timeout=90000)
-    scroll(700); say("现在在浏览器里运行 Attest 的真实代码：团队代码检查发现 float，三态判定为拒绝。反事实测试不在浏览器运行，已标明。", 6500)
-    pg.evaluate(CAP, "评审也可以自己写一条，例如一条带密钥的建议，提交给 Attest。"); pg.get_by_role("tab", name="自己写一条（现场运行）").click(); pg.wait_for_timeout(1500)
+    scroll(700); say("现场运行真实代码：代码检查发现 float，判为拒绝。", 6500)
+    cap_now("评审也可以自己写一条，例如一条带密钥的建议，提交给 Attest。"); pg.get_by_role("tab", name="自己写一条（现场运行）").click(); pg.wait_for_timeout(1500)
     pg.get_by_role("button", name="带密钥的建议").click(); pg.get_by_role("button", name="提交给 Attest").click(); pg.get_by_text("门控 v4 的结论").wait_for(timeout=30000)
     say("评审也可以自己写一条：这条带密钥的建议，第一步就被密钥扫描拦下。自定义案例不计入实验统计。", 6000)
-    scroll(900); say("如果毒药进了记忆：ACE 式的 AI 照着写了 float(amount)，Attest 没有。", 5000)
+    scroll(900); say("ACE 式照着写了 float(amount)；Attest 没有。", 5000)
     go("governance"); pg.get_by_role("heading", name=re.compile("待审队列")).wait_for(timeout=60000)
     say("场景三：拿不准的经验进入待审队列。每个按钮都现场调用 Attest 的审批代码；身份是演示用的。", 5000)
     pg.get_by_role("button", name="AI 智能体", exact=True).click(); pg.get_by_role("button", name="批准", exact=True).first.click(); say("AI 智能体想自己批准：被拒绝。", 3500)
     pg.get_by_role("button", name="业务负责人（登记的审批人）").click(); pg.get_by_role("button", name="批准", exact=True).first.click(); say("业务负责人带依据批准：成为规则。", 3500)
-    pg.evaluate(CAP, "政策变了：FIN-2026-11 把阈值提到 1000.00，新阈值笔记进入队列。"); pg.get_by_role("button", name=re.compile("新政策生效")).click(); pg.wait_for_timeout(1500)
+    cap_now("政策变了：FIN-2026-11 把阈值提到 1000.00，新阈值笔记进入队列。"); pg.get_by_role("button", name=re.compile("新政策生效")).click(); pg.wait_for_timeout(1500)
     pg.locator("li").filter(has_text="at-0008").get_by_role("button", name="批准", exact=True).click(); pg.wait_for_timeout(500)
     pg.get_by_role("button", name=re.compile("取代旧阈值")).click(); say("政策变了：新阈值批准后取代旧阈值，检索写明旧规则为什么不再注入，记录留在日志里。", 6000)
-    pg.evaluate(CAP, "有人绕过接口伪造一条批准，然后运行审计。"); pg.get_by_role("button", name="AI 智能体", exact=True).click(); pg.wait_for_timeout(800); pg.get_by_role("button", name="伪造一条批准").click(); pg.get_by_role("button", name="运行审计").click()
+    cap_now("有人绕过接口伪造一条批准，然后运行审计。"); pg.get_by_role("button", name="AI 智能体", exact=True).click(); pg.wait_for_timeout(800); pg.get_by_role("button", name="伪造一条批准").click(); pg.get_by_role("button", name="运行审计").click()
     say("有人绕过接口伪造一条批准：审计当场查出。", 4500)
-    go("results"); say("表现：新任务 33% → 70%（预注册）；60 次投毒 0 次成为规则；门控 v3.1 与不设门槛同为 82%。每个数字都写明口径和局限。", 7500)
-    scroll(600); pg.wait_for_timeout(2500)
+    go("results"); say("三项结果，每项写明口径；下面是性能比较。", 7500)
+    scroll(700); say("性能比较：新任务通过率、受投毒时的表现。", 4500)
+    scroll(600); say("业务风险更低，步数、成本和记忆体积更小。描述性比较。", 5000)
+    scroll(700); pg.wait_for_timeout(2000)
+    CUES[-1][1] = time.time() - T0
     ctx.close(); b.close()
+    def ts(x): h, r = divmod(x, 3600); m_, s_ = divmod(r, 60); return f"{int(h):02d}:{int(m_):02d}:{int(s_):02d},{int((s_ % 1) * 1000):03d}"
+    srt = "\n".join(f"{i}\n{ts(a)} --> {ts(b_)}\n{t}\n" for i, (a, b_, t) in enumerate(CUES, 1))
+    open(sys.argv[2] if len(sys.argv) > 2 else "walkthrough.srt", "w").write(srt)

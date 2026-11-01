@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { call, fetchJson } from "../py";
 import { Panel, Stamp, Button, Code, Source, Tag, cn } from "../ui";
+import { Status, Statuses } from "../ui";
 
 const WHO = [["agent:coder", "AI 智能体"], ["agent:distiller", "提出这条经验的提炼程序"], ["dev:alice", "未登记的员工"], ["owner:finance-lead", "业务负责人（登记的审批人）"]];
 const explain = m => /agents and the note's proposer/.test(m) ? "智能体和提出这条经验的一方，都不能批准它。" : /not a registered approver/.test(m) ? "只有登记在审批人名单上的人能做决定。"
@@ -26,7 +27,7 @@ export default function Governance() {
       <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-soft">我现在是</span>{WHO.map(([k, l]) => <button key={k} onClick={() => setWho(k)} className={cn("rounded-full border px-3 py-1 text-sm", who === k ? "border-pen bg-pen text-white" : "border-rule bg-sheet")}>{l}</button>)}</div>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
         <div className="grid content-start gap-5">
-          <Panel title={`待审队列（${queue.length}）`}>
+          <Panel title={`待审队列（${queue.length}）`} aside={<Statuses kinds={["live", "demo"]} />}>
             <div className="mb-3 grid gap-2 sm:grid-cols-2">
               <label className="grid gap-1 text-xs text-soft" htmlFor="rs">理由<input id="rs" name="reason" autoComplete="off" value={reason} onChange={e => setReason(e.target.value)} className="rounded border border-rule bg-sheet px-2 py-1 text-sm text-ink" /></label>
               <label className="grid gap-1 text-xs text-soft" htmlFor="evd">依据（分号分隔，可留空试试）<input id="evd" name="evidence" spellCheck={false} autoComplete="off" value={evidence} onChange={e => setEvidence(e.target.value)} className="rounded border border-rule bg-sheet px-2 py-1 text-sm text-ink" /></label>
@@ -40,17 +41,17 @@ export default function Governance() {
                   <Button size="sm" onClick={() => act(`驳回 ${q.id}`, "G.reject(I, W, R)", { I: q.id, W: who, R: reason })}>驳回</Button></div>
               </li>))}</ul>
           </Panel>
-          <Panel title="现在给新任务 H04 检索，会注入哪些规则">
+          <Panel title="现在给新任务 H04 检索，会注入哪些规则" aside={<Status kind="live" />}>
             {ret && <div className="grid gap-2 text-sm"><div>注入：{ret.injected.map(i => <Tag key={i} tone={i === "at-0008" ? "ok" : "soft"} className="mr-1">{i}</Tag>)}</div>
               {Object.entries(ret.excluded).map(([k, v]) => <div key={k}><Tag tone="bad">{k}</Tag> 不注入：<span className="text-soft">{v}</span></div>)}</div>}
             <p className="m-0 mt-2 text-xs text-soft">每次操作后都重新调用真实的检索代码。</p>
           </Panel>
-          <Panel title="审计日志（只追加，最新 10 条）">
+          <Panel title="审计日志（只追加，最新 10 条）" aside={<Status kind="live" />}>
             <ol className="ruled m-0 list-none p-0 text-sm">{log.slice().reverse().map(e => <li key={e.seq} className="flex gap-3 py-1.5"><span className="w-10 shrink-0 font-mono text-xs text-soft">#{e.seq}</span><span className="w-12 shrink-0">{e.type}</span><span className="w-16 shrink-0 font-mono text-xs">{e.id || e.item}</span><span className="min-w-0 text-soft">{e.reason}</span></li>)}</ol>
           </Panel>
         </div>
         <div className="grid content-start gap-5">
-          <Panel title="政策变更">
+          <Panel title="政策变更" aside={<Statuses kinds={["live", "sim"]} />}>
             <p className="m-0 text-sm">FIN-2026-11 把超额退款的审批阈值从 500.00 提到 1000.00。</p>
             <div className="mt-3 grid gap-2">
               <Button size="sm" onClick={() => act("新政策生效：新阈值笔记进入队列（模拟）", "G.new_threshold_note()", {})}>1 新政策生效，新阈值笔记进入队列</Button>
@@ -59,7 +60,7 @@ export default function Governance() {
             </div>
             <p className="m-0 mt-2 text-xs text-soft">先以业务负责人身份批准 at-0008，再做第 2 步；换个身份试试会怎样。新阈值笔记是模拟的。</p>
           </Panel>
-          <Panel title="试试伪造批准">
+          <Panel title="试试伪造批准" aside={<Statuses kinds={["live", "demo"]} />}>
             <p className="m-0 text-sm">假设有人绕过审批接口，直接往日志里写一条"已批准"。</p>
             <div className="mt-3 flex flex-wrap gap-2"><Button size="sm" onClick={() => act("伪造：以当前身份直接写入批准 at-0003", "G.forge(I, W)", { I: "at-0003", W: who })}>伪造一条批准</Button><Button size="sm" tone="primary" onClick={runAudit}>运行审计</Button></div>
             {audit && (audit.length ? <div className="mt-3 grid gap-2 text-sm"><div><Stamp kind="refused" label="查出问题" /></div>{audit.map((a, i) => <div key={i} className="text-soft">日志第 {a.seq} 条：{a.id}，决定人 <code>{String(a.by)}</code>，问题：{a.problems.join("、")}</div>)}</div>

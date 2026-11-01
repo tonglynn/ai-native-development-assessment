@@ -3,6 +3,7 @@ import { ReactFlow, Background as Grid, Handle, Position } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { D } from "../lib";
 import { Panel, Code, Stamp, Tag, cn } from "../ui";
+import { Status, Statuses } from "../ui";
 
 const E04 = D.learn.find(l => l.task === "E04");
 const N = E04.new_notes[0];
@@ -27,7 +28,7 @@ export default function How() {
         <h2 className="m-0 text-2xl font-black">它怎么工作：一条经验的写入流程</h2>
         <p className="m-0 max-w-[68ch] text-soft">普通的 AI 记忆，是让模型自己总结"学到了什么"，然后直接存下来。Attest 多了一道关：只有能拿出证据的经验才进得去。点下面每一步，看演示运行（任务 E04，部分退款）里这一步的真实数据。</p>
       </div>
-      <Panel title="写入流程" aside={<span className="text-xs text-soft">点击节点</span>}>
+      <Panel title="写入流程" aside={<Statuses kinds={["replay"]} />}>
         <div className="h-[120px]"><ReactFlow nodes={nodes} edges={edges} nodeTypes={{ n: Node }} fitView proOptions={{ hideAttribution: true }} panOnDrag={false} zoomOnScroll={false} zoomOnPinch={false} zoomOnDoubleClick={false} preventScrolling={false} nodesConnectable={false} onNodeClick={(_, n) => setSel(n.id)}><Grid gap={18} size={1} color="var(--rule)" /></ReactFlow></div>
         <div className="mt-4 grid gap-3 border-t border-rule pt-4 text-sm">
           {sel === "run" && <><p className="m-0">任务 E04 要求实现部分退款。AI 第一次提交后，隐藏测试发现两条规矩没做对：</p><div className="flex gap-2">{E04.attempts[0].conv_failed.map(c => <Tag key={c} tone="bad">{c} 未通过</Tag>)}</div><p className="m-0 text-xs text-soft">真实回放：runs/demo/learn/E04</p></>}

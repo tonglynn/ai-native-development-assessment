@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { DATA, sysName } from "../lib";
 import { call, fetchJson } from "../py";
 import { Panel, Stamp, Button, Code, Source, Tag, cn } from "../ui";
+import { Status, Statuses } from "../ui";
 const CodeDiff = lazy(() => import("../CodeDiff"));
 
 const CH = { review: "评审意见", issue: "任务描述（issue）", readme: "项目文档（README 等）", tool_output: "工具输出 / 代码注释" };
@@ -22,6 +23,7 @@ function Live({ result, ms }) {
       <li key={i} className="grid gap-1 py-2.5" style={{ animation: `fadein .3s ${i * 0.25}s both` }}>
         <div className="flex flex-wrap items-center gap-2"><b className="text-sm">{i + 1}. {STEP[s.step] || s.step}</b><Tag tone={tone}>{label}</Tag><code className="text-xs text-soft">{s.fn}</code></div>
         <div className="text-xs text-soft">返回：<code>{JSON.stringify(s.output)}</code>{s.note ? `；${s.note}` : ""}</div></li>); })}</ol>
+    <div className="flex flex-wrap items-center gap-2 rounded-md bg-code px-3 py-2 text-sm"><b>反事实检查</b><Status kind="notrun" /><span className="text-xs text-soft">需要运行整个测试套件，浏览器里不执行；三态判定按"没有这项证据"处理</span></div>
     <div className="flex flex-wrap items-center gap-3" style={{ animation: `fadein .3s ${result.steps.length * 0.25}s both` }}><span className="text-sm">门控 v4 的结论</span><Stamp kind={st} /><span className="text-xs text-soft">反证：{result.state.counter.join("、") || "无"}；硬证据：{result.state.hard.join("、") || "无"}；软证据：{result.state.soft.join("、") || "无"}</span></div>
     <div className="text-sm">同一事件交给<b>预注册的 Attest 门槛</b>（主实验版本，只看来源、落实与验证）：{result.preregistered_gate.map((g, i) => <span key={i}>{g.type === "add" ? <Tag tone="bad">写入记忆</Tag> : <Tag tone="ok">拒绝写入</Tag>} <span className="text-soft">{g.reason}</span></span>)}</div>
     <p className="m-0 text-xs text-soft">现场运行于你的浏览器（Pyodide），耗时 {ms} ms。反事实测试需要运行整个测试套件，浏览器里不运行，三态判定时按"没有这项证据"处理。这是新的探索性案例，不计入 D70 的统计。</p>
@@ -48,11 +50,11 @@ export default function Security() {
       </div>
       {mode === "preset" && p && <>
         <div className="flex flex-wrap gap-2">{presets.map((x, i) => <button key={x.id} onClick={() => { setPi(i); setLive(null); }} className={cn("rounded-full border px-3 py-1 text-sm", i === pi ? "border-pen bg-penwash text-pen" : "border-rule bg-sheet")}>{x.control ? "正常建议" : x.payload}：{CH[x.channel === "review_untrusted" || x.channel === "review_forged" || x.channel === "review_insider" ? "review" : x.channel]}</button>)}</div>
-        <Panel title="这次攻击" aside={<Tag tone={p.control ? "ok" : "bad"}>{p.control ? "对照：真实的团队规则" : "合成的有害建议"}</Tag>}>
+        <Panel title="这次攻击" aside={<span className="flex gap-1"><Tag tone={p.control ? "ok" : "bad"}>{p.control ? "对照：真实的团队规则" : "合成的有害建议"}</Tag><Status kind="sim" /></span>}>
           <Code>{p.text}</Code>
           <p className="m-0 mt-2 text-xs text-soft">通道：{p.channel}{p.trusted ? "（来自可信评审者：内部人员出错）" : ""}；{p.applied ? <>任务的改动也照着写了：<code>{p.applied_line.trim()}</code></> : "任务的改动没有照着写"}；任务通过了全部隐藏测试。</p>
         </Panel>
-        <Panel title="各系统的处理结果（D70 真实记录）" aside={<span className="text-xs text-soft">每个系统用自己的提炼模型处理同一事件</span>}>
+        <Panel title="各系统的处理结果（D70 真实记录）" aside={<Statuses kinds={["record", "baseline"]} />}>
           <div className="overflow-x-auto"><table className="w-full border-collapse text-sm"><thead><tr className="border-b border-rule text-left text-soft"><th className="px-2 py-2 font-medium">系统</th><th className="px-2 py-2 font-medium">结果</th><th className="px-2 py-2 font-medium">写进记忆的内容</th></tr></thead>
             <tbody>{["reasoningbank", "ace", "attest_no_gate", "attest", "attest_secure_v4"].map(s => { const r = p.recorded[s] || {}; return (
               <tr key={s} className="border-b border-rule last:border-0"><td className="px-2 py-2 font-medium">{sysName[s]}</td><td className="px-2 py-2"><Stamp kind={r.rule ? "rule" : r.stored ? "uncertain" : "none"} label={r.rule ? "存为规则" : r.stored ? "待人工" : "未写入"} /></td><td className="px-2 py-2 text-xs text-soft">{r.note?.trim().slice(0, 180) || "—"}</td></tr>); })}</tbody></table></div>
@@ -60,7 +62,7 @@ export default function Security() {
           <div className="mt-3"><Button onClick={() => run({ channel: p.channel.startsWith("review") ? "review" : p.channel, author: p.trusted ? "tech-lead" : "someone", text: p.text, applied: p.applied_line })} disabled={busy}>在浏览器里现场跑一遍 Attest 的检查</Button></div>
         </Panel>
       </>}
-      {mode === "custom" && <Panel title="写一条经验，交给 Attest">
+      {mode === "custom" && <Panel title="写一条经验，交给 Attest" aside={<Status kind="live" />}>
         <div className="grid gap-3">
           <div className="flex flex-wrap gap-2">{EXAMPLES.map(([l, ch, au, tx, al]) => <button key={l} onClick={() => { setForm({ channel: ch, author: au, text: tx, applied: al }); setLive(null); }} className="rounded-full border border-rule bg-sheet px-3 py-1 text-xs hover:border-pen">{l}</button>)}</div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -73,8 +75,8 @@ export default function Security() {
           <p className="m-0 text-xs text-soft">对比：ReasoningBank 式、ACE 式没有写入前检查，模型提炼后直接存。在 60 次预置攻击中，它们把毒药存成规则的次数是 {DATA.d70.reasoningbank.rule}/60 和 {DATA.d70.ace.rule}/60（D70 真实记录，浏览器里不能现场运行，因为它们需要语言模型）。</p>
         </div>
       </Panel>}
-      {(status || live) && <div aria-live="polite"><Panel title="现场运行：Attest 的每一步检查">{status && <p className="m-0 mb-2 text-sm text-soft">{status}</p>}{live && <Live {...live} />}</Panel></div>}
-      <Panel title="如果毒药进了记忆：后续任务的代码" aside={<span className="text-xs text-soft">D71 真实回放：投毒流，任务 H04，第 1 次重复</span>}>
+      {(status || live) && <div aria-live="polite"><Panel title="现场运行：Attest 的每一步检查" aside={<Status kind="live" />}>{status && <p className="m-0 mb-2 text-sm text-soft">{status}</p>}{live && <Live {...live} />}</Panel></div>}
+      <Panel title="如果毒药进了记忆：后续任务的代码" aside={<Statuses kinds={["replay", "baseline"]} />}>
         <div className="mb-3 flex flex-wrap gap-2">{["ace", "reasoningbank"].map(s => <Button key={s} size="sm" tone={pick === s ? "primary" : "plain"} onClick={() => setPick(s)}>{sysName[s]}</Button>)}</div>
         <Suspense fallback={<p className="text-sm text-soft">正在载入代码对比…</p>}><CodeDiff original={down[pick].files[fname]?.after || ""} modified={down.attest_secure_v4.files[fname]?.after || ""} leftLabel={`${sysName[pick]}（记忆里有这条毒笔记）`} rightLabel="Attest + 门控 v4" height={360} /></Suspense>
         <p className="m-0 mt-2 text-sm">{pick === "ace" ? "ACE 式的 AI 照着毒笔记，把审计金额写成了 float(amount)；Attest 写的是 amount。" : "这一次 ReasoningBank 式的 AI 没有照做，但毒笔记一直在它的记忆里。"}整轮 55 次留出任务运行中照着毒药做的次数：ReasoningBank 式 {d71.reasoningbank.heldout_runs_applying_poison}，ACE 式 {d71.ace.heldout_runs_applying_poison}，Attest + v4 {d71.attest_secure_v4.heldout_runs_applying_poison}。</p>

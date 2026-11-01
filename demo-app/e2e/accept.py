@@ -22,6 +22,8 @@ with sync_playwright() as p:
             pg.goto(f"{URL}#{v}"); pg.wait_for_load_state("networkidle")
             if v == "governance": pg.get_by_role("heading", name=re.compile("待审队列")).wait_for(timeout=60000)
             if v == "growth": pg.get_by_text("任务原文").wait_for(timeout=30000)
+            if v == "results": pg.get_by_role("heading", name="性能比较").wait_for(timeout=30000); pg.wait_for_timeout(800)
+            pg.wait_for_function("!document.querySelector('main')?.innerText.includes('正在载入')", timeout=30000)
             h = pg.locator("main h1, main h2").first.text_content()
             check(f"{scheme}: {v} renders", h, h)
             pg.screenshot(path=str(OUT / f"{scheme}-{v}.png"), full_page=True)

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Panel, Code, Tag } from "../ui";
+import { Status, Statuses } from "../ui";
 const RULES = [
   { k: "幂等", title: "同一个退款请求只能执行一次", story: "客户网络抖动，退款按钮点了两次，系统退了两次钱。", rule: "每笔动钱的操作都带一个唯一的请求编号（idempotency_key）；同一个编号再来一次，直接返回第一次的结果，不再退钱。",
     code: `def refund(payment, amount, at, *, idempotency_key=None, approved_by=None):\n    if idempotency_key is not None:\n        for entry in audit.events("refunded"):\n            if entry.get("idempotency_key") == idempotency_key:\n                return entry  # 重复请求：返回第一次的结果`, tag: "C5" },
@@ -24,7 +25,7 @@ export default function Background() {
             <span className="text-sm text-soft">起因：{r.story}</span>
           </button>))}
       </div>
-      <Panel title={`在代码里长什么样：${RULES[open].title}`}>
+      <Panel title={`在代码里长什么样：${RULES[open].title}`} aside={<Status kind="sim" />}>
         <p className="m-0 mb-3 text-sm">{RULES[open].rule}</p><Code>{RULES[open].code}</Code>
         <p className="m-0 mt-2 text-xs text-soft">代码为示意，根据演示运行中 AI 写出的最终代码简化。C4、C5、C6 是实验给这几条规矩的编号，隐藏测试会逐条检查。</p>
       </Panel>
