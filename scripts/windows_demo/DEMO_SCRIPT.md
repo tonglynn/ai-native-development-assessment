@@ -1,13 +1,13 @@
-# Attest 现场演示台本（Claude 桌面应用，约 4 分钟）
+# Attest 现场演示台本（Claude 桌面应用，约 5 分钟）
 
 ## 演示前准备
 1. 托盘里右键 Claude 图标 → Quit，完全退出后重新打开（加载最新的 Attest 代码）。
 2. 开一个新对话，点输入框旁的"+" → Add folder，选 C:\Users\23778\Documents\AttestDemo。
 3. 确认工具列表里有 attest（recall、learn、report_outcome、list_notes）。
-4. 确认是干净状态：ledgerly-demo 是 v1.0.0 原样，AttestDemo\memory 里没有经验（第一次演示前就是这样）。
+4. 确认是干净状态：ledgerly-demo 是 v1.0.0 原样，记忆为空（见文末"演示后复原"）。
 
 说明：这是现场运行。评审意见、业务负责人是模拟的，代码仓库 ledgerly 是合成的。
-每一步把"怎么问"里 > 后面的整段原样粘贴给 Claude。
+每一步把"怎么问"里 > 后面的整段原样粘贴给 Claude。经验编号按出现顺序：幂等 at-0001、float at-0002、工单 at-0003；以实际返回为准。
 
 ---
 
@@ -43,7 +43,7 @@
 **为什么这么问**
 - 评审意见原文传给 review_comments：Attest 要核对经验的证据确实出自评审意见，不能是 Agent 自己编的。
 - 让它在 candidates 里自己提经验：桌面上没有模型密钥，Attest 不自己提炼，由 Agent 提，Attest 来审。
-- 证据引用写明 INC-204 的那句：INC-204 是登记过的事故编号，属于硬证据，Attest 才能自动批准；如果只引用规则本身，没有来源，会判为"待人工"（uncertain）。
+- 证据引用写明 INC-204 的那句：INC-204 是登记过的事故编号，属于硬证据，Attest 才能自动批准。
 
 **预期结果**：learn 返回 verified true；admitted 一条经验；assessed 里这条的 state 为 approved。
 （彩排时出现过：第一次 learn 返回 rejected，原因是 "not applied in the verified change"——Claude 填的 applied_in_diff 和改动里的代码对不上。Claude 会自己改了重交，第二次就 approved。现场遇到可以讲："证据必须能在真实改动里找到，抄错一个字都不收。"）
@@ -54,14 +54,13 @@
 
 ## 第 3 步：教它一条坏经验（60 秒）
 
-**怎么问**
+**3a 怎么问**
 > 评审意见：The audit service expects JSON numbers: pass float(amount) to ledgerly.audit.record, not the Decimal.
 > 请照做，测试通过后同样调用 attest 的 learn：task 填刚才那段任务描述，review_comments 填这条评审意见的原文，并在 candidates 里提出一条你认为该记住的经验。
 
 **为什么这么问**
 - 这条意见听起来合理，但是错的：金额转成浮点数会丢精度，团队代码里金额一律用 Decimal。
 - 它能通过测试（没有测试检查审计金额的类型），所以只看测试的系统会把它存成规则。这一步就是要演示"通过测试不等于经验正确"。
-- 同样要求它在 candidates 里提经验：不提的话 Attest 没有东西可审。
 
 **预期结果**
 - Claude 可能先提出反对（"浮点数会丢精度"）。如果它不肯改，就说："这是评审要求，先照做，然后调用 learn。"
@@ -73,7 +72,7 @@
 **3b 怎么问**（看到 rejected 之后马上说，不要跳过）
 > Attest 拒绝了这条经验：金额用浮点会丢精度。请把 refund 里传给 ledgerly.audit.record 的 float(amount) 改回 Decimal，再运行 python -m pytest -q。先不要调用 learn。
 
-**为什么这么问**：Claude 通常会自己问"要不要把 refund 改回 Decimal"，这时就用这句回答它。Attest 管的是记忆，不管已经写进代码的改动。彩排时没有这一步，第 4 步 Claude 为了"和 refund 保持一致"，把 float 也抄进了 refund_shipping——坏经验没有从记忆里传过去，却从代码里传过去了。把代码改回来，第 4 步才干净。
+**为什么这么问**：Claude 通常会自己问"要不要把 refund 改回 Decimal"，这时就用这句回答它。Attest 管的是记忆，不管已经写进代码的改动；不改回来，后面的新任务可能照着代码把 float 抄过去。
 
 **预期结果**：float 改回 Decimal，测试通过。
 
@@ -81,51 +80,78 @@
 
 ---
 
-## 第 4 步：新任务自动用上好经验（40 秒）
+## 第 4 步：一条拿不准的经验（40 秒）
+
+**怎么问**
+> 评审意见：Every refund must record the support ticket it was made for: accept an optional keyword-only ticket_id=None and pass ticket_id=ticket_id to ledgerly.audit.record.
+> 请按这条意见修改 refund，测试通过后调用 attest 的 learn：task 填刚才那段任务描述，review_comments 填这条评审意见的原文，并在 candidates 里提出一条你认为该记住的经验。
+
+**为什么这么问**
+- 这条意见可能是对的（财务对账确实可能需要工单号），但它没写来源，没有登记过的政策或事故编号，团队代码检查也管不到它。Attest 既不能证明它对，也不能证明它错。
+- 这种经验最危险的处理方式有两种：直接当成规则（万一是错的），或者直接丢掉（万一是对的）。这一步演示 Attest 的第三种处理：挂起，等人审核。
+
+**预期结果**：learn 返回 verified true；assessed 里这条的 state 为 uncertain（hard、soft、counter 都为空）。
+
+**讲**：拿不准的经验，Attest 不替人做决定：保留下来，但在人批准之前不会推荐给任何任务。
+
+---
+
+## 第 5 步：新任务自动用上好经验（40 秒）
 
 **怎么问**
 > 新任务：在 ledgerly/adjustments.py 里新增 refund_shipping(payment, amount, at)：给已扣款的支付退 amount 的运费，累加到 payment.refunded_amount，全部退完时 status 设为 "refunded"，返回 payment；amount 必须为正，累计退款不能超过扣款金额。动手前先用 attest 的 recall 查这个仓库的经验（task 参数填这段任务描述），按查到的经验实现，再运行 python -m pytest -q。
 
 **为什么这么问**
-- 这是一个新任务，任务描述里完全没提幂等，看它能不能靠记忆自己用上。
+- 新任务的描述里完全没提幂等，看它能不能靠记忆自己用上。
 - 任务描述写全，recall 才能按内容找到"动钱的操作"相关的经验。
 
 **预期结果**
-- recall 返回幂等那条经验（idempotency_key），没有 float 那条。
+- recall 只返回幂等那条（at-0001）：float 那条被拒，工单那条还在等审核，都不出现。
 - refund_shipping 带上 idempotency_key，测试通过。
 
-**讲**：没人再提醒，它自己用上了上次学到的规矩；坏经验没有混进来。
+**讲**：第一次做退款，幂等要靠评审纠正；这一次没人提醒，它自己做对了——这就是成长。同时，被拒的和没批准的都没有混进来。
 
-（彩排时出现过：第一次 report_outcome 报失败，因为 adjustments.py 被换回了旧版本，Claude 重新写回后通过。Attest 只读代码（git diff、运行测试），不会改文件；最可能是 Claude 桌面在云端副本和你电脑之间来回同步文件时，把旧版本写了回去。Attest 把那次失败记为"与经验无关的失败，不归咎于这条经验"，使用统计里失败数仍是 0。现场遇到可以讲："任务失败不一定是经验的错，Attest 不会因此冤枉一条好经验。"）
+（彩排时出现过：第一次 report_outcome 报失败，因为 adjustments.py 被换回了旧版本，Claude 重新写回后通过。Attest 只读代码（git diff、运行测试），不会改文件；最可能是 Claude 桌面在云端副本和你电脑之间来回同步文件时，把旧版本写了回去。Attest 把那次失败记为"与经验无关的失败，不归咎于这条经验"。现场遇到可以讲："任务失败不一定是经验的错，Attest 不会因此冤枉一条好经验。"）
 
 ---
 
-## 第 5 步：人来管（40 秒）
+## 第 6 步：人来管（60 秒）
 
-**怎么做**：打开 PowerShell 或命令提示符（不是在 Claude 里），逐行运行（两种窗口都适用）：
+**怎么做**：打开 PowerShell 或命令提示符（不是在 Claude 里），逐行运行：
 ```
 cd C:\Users\23778\Documents\AttestDemo
-.\admin.bat notes
+.\admin.bat review
+.\admin.bat approve --note at-0003 --by agent:claude --reason "看起来没问题"
+.\admin.bat approve --note at-0003 --by owner:finance-lead --reason "财务对账要求每笔退款对应工单"
 .\admin.bat retract --note at-0001 --reason "政策变更，暂停使用"
 .\admin.bat notes
 ```
-（at-0001 以第一次 notes 列出的幂等那条经验的编号为准。）
 
 然后对 Claude 说：
 > 再用 attest 的 recall 查一次这个仓库的经验，task 参数还用运费退款那段任务描述。
 
 **为什么这么做**
-- 在命令行而不是在 Claude 里操作：撤回、批准只有人能做，MCP 里根本没有这些工具，Agent 删不掉、也批不了规则。
-- 用 admin.bat：它固定用装了 Attest 依赖的 Python 3.12，并设好记忆位置和 UTF-8 编码，不用手动设环境变量。要写成 `.\admin.bat`：PowerShell 不会在当前文件夹里找命令。彩排时撤回没有生效，原因是在 PowerShell 里运行了为命令提示符写的 `set` 和 `cd /d`：`set` 在 PowerShell 里不设环境变量，命令找不到 Attest 或记忆位置，撤回没有写进记忆。
+- review：列出等人审核的经验，并写明为什么没能自动决定（没有硬证据、没有软证据、也没有反证）。
+- 先用 agent:claude 的身份批准：会被拒绝。Agent 和提出这条经验的人都不能批准它，只有登记过的审批人（这里是模拟的财务负责人 owner:finance-lead）可以。
+- 财务负责人批准工单那条：它成为规则，审批人、理由和时间都记在记录里。
+- 撤回幂等那条：模拟政策变更，人一条命令就能撤回。
+- 这些都在命令行做：撤回、批准只有人能做，MCP 里根本没有这些工具。
+- 用 `.\admin.bat`：它固定用装了 Attest 依赖的 Python 3.12，设好记忆位置、审批人名单和 UTF-8 编码；要写 `.\`，因为 PowerShell 不会在当前文件夹里找命令。
 
-**预期结果**：第一次 admin notes 列出两条（at-0001 [active]、at-0002 [retired]）；retract 打印 {"retired": "at-0001", ...}；第二次 admin notes 里 at-0001 变成 [retired]；Claude 再 recall 返回 "No verified notes for this repository yet."
+**预期结果**
+- review 列出 at-0003 [uncertain]。
+- agent:claude 批准：`refused: 'agent:claude' may not decide on at-0003 ...`。
+- 财务负责人批准：`approved by owner:finance-lead: ...`。
+- retract 打印 `{"retired": "at-0001", ...}`。
+- notes：at-0001 [retired]、at-0002 [retired]、at-0003 [active]。
+- Claude 再 recall：只返回 at-0003（工单那条），幂等那条不见了。
 
-**讲**：经验错了或政策变了，人一条命令就能撤回，Agent 下一次就不会再用。
+**讲**：拿不准的经验由人来定，Agent 自己批不了；经验错了或政策变了，人一条命令就能撤回。三种状态、两种退役，记录都留着，可以追溯。
 
 ---
 
 ## 演示后复原（下次重演前做）
-方法一：双击 AttestDemo 里的 reset_demo.bat。它把 ledgerly-demo 恢复到 v1.0.0，并把 memory 文件夹挪到 AttestDemo\_to_delete（不是直接删除，需要时还能找回），结果写在 reset_log.txt。如果 reset_log.txt 说挪不动 memory，先退出 Claude 再双击一次。
+方法一：先退出 Claude（托盘右键 → Quit），再双击 AttestDemo 里的 reset_demo.bat。它把 ledgerly-demo 恢复到 v1.0.0，并把 memory 文件夹挪到 AttestDemo\_to_delete（不是直接删除，需要时还能找回），结果写在 reset_log.txt。Claude 开着时 memory 里的数据库被占用，挪不动。然后重新打开 Claude。
 
 方法二：在 PowerShell 或命令提示符里运行：
 ```
@@ -140,4 +166,5 @@ git clean -fd
 - learn 返回 verified false：测试没通过，Attest 拒绝学习，这本身就是要演示的行为。
 - learn 返回 error：看它给的 hint；最常见的是没有提出 candidates，补一句"请在 candidates 里提出一条经验再调用 learn"。
 - 第 2 步 state 是 uncertain 而不是 approved：说明证据没有引用 INC-204 那句。可以顺势讲"没有来源的经验不会自动成为规则，要等人审核"，或者让它重新用 INC-204 那句作证据再 learn 一次。
+- 第 4 步 state 不是 uncertain：把 assessed 的内容贴出来再判断，不要临场改口径。
 - 现场卡住：切到备用视频 attest_walkthrough.mp4。

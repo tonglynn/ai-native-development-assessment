@@ -99,3 +99,27 @@ def test_admin_cli_needs_only_the_mcp_dependencies(repo, monkeypatch, tmp_path):
     assert out.returncode == 0, out.stderr[-800:]
     assert f"{nid}  [retired]" in run("notes").stdout
     assert m.recall(str(repo), "Partial refunds")["note_ids"] == []
+
+
+def test_uncertain_note_waits_for_a_person_and_is_recalled_only_after_approval(repo, monkeypatch, tmp_path):
+    """D78: no source, no check, no trusted reviewer -> uncertain: kept, not recalled; a registered person approves it."""
+    import os, sys
+    m = server(monkeypatch)
+    f = repo / "ledgerly/adjustments.py"
+    f.write_text(f.read_text() + '\n\ndef refund(payment, amount, at, *, ticket_id=None):\n'
+                 '    audit.record("payment_refunded", payment_id=payment.id, amount=amount, ticket_id=ticket_id)\n    return payment\n')
+    review = ("Every refund must record the support ticket it was made for: accept an optional keyword-only ticket_id=None "
+              "and pass ticket_id=ticket_id to ledgerly.audit.record.")
+    cand = {"kind": "lesson", "type": "business_policy", "title": "Refunds record their support ticket",
+            "content": "Every ledgerly refund accepts ticket_id=None and passes ticket_id=ticket_id to ledgerly.audit.record.",
+            "evidence_quote": "pass ticket_id=ticket_id to ledgerly.audit.record", "applied_in_diff": "ticket_id=ticket_id)"}
+    out = m.learn(str(repo), "Partial refunds", [review], candidates=[cand])
+    nid = out["admitted"][0]
+    assert out["assessed"][0]["state"] == "uncertain"
+    assert m.recall(str(repo), "Partial refunds for captured payments")["note_ids"] == []
+    env = dict(os.environ, PYTHONPATH=str(ROOT), ATTEST_STORE="jsonl", ATTEST_APPROVERS="owner:finance-lead")
+    run = lambda *a: subprocess.run([sys.executable, "-m", "attest.admin", *a, "--repo", str(repo)], capture_output=True, text=True, env=env)
+    assert nid in run("review").stdout
+    assert "refused" in run("approve", "--note", nid, "--by", "agent:claude", "--reason", "looks right").stdout
+    assert run("approve", "--note", nid, "--by", "owner:finance-lead", "--reason", "finance reconciliation needs it").returncode == 0
+    assert m.recall(str(repo), "Partial refunds for captured payments")["note_ids"] == [nid]

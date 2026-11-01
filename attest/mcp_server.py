@@ -71,13 +71,25 @@ def _identity(repo_path: str) -> tuple[Path, str, str, str]:
     return repo, name, version.lstrip("v"), key
 
 
+class _McpMemory(EarnedMemory):
+    """D78: an uncertain note (the gateway kept it for a person, observed_only) is never recalled as a rule:
+    D75 said "kept, never a rule", but recall used EarnedMemory's exclusion, which does not know the flag.
+    It is recalled once a person approves it (python -m attest.admin approve)."""
+
+    def _exclusion(self, item: dict, task, version):
+        why = super()._exclusion(item, task, version)
+        if not why and item.get("observed_only"):
+            return "uncertain: waits for a person's review"
+        return why
+
+
 def _memory(key: str) -> EarnedMemory:
     import hashlib
 
     # readable prefix plus a hash of the exact key, so two keys never share a directory
     slug = re.sub(r"[^A-Za-z0-9_.-]", "_", key)[:80] + "-" + hashlib.sha256(key.encode()).hexdigest()[:10]
     secret_scan = os.environ.get("ATTEST_SECRET_SCAN", "1") != "0"  # on by default here (D43)
-    return EarnedMemory(HOME / slug, backend=STORE, secret_scan=secret_scan)
+    return _McpMemory(HOME / slug, backend=STORE, secret_scan=secret_scan)
 
 
 def _task(name: str, task: str) -> SimpleNamespace:
@@ -186,7 +198,8 @@ def list_notes(repo_path: str, include_inactive: bool = False) -> list[dict]:
     _, name, _, key = _identity(repo_path)
     items = _memory(key).store.items().values()
     return [
-        {k: it.get(k) for k in ("id", "title", "content", "status", "scope", "evidence", "usage", "superseded_by")}
+        {**{k: it.get(k) for k in ("id", "title", "content", "status", "scope", "evidence", "usage", "superseded_by")},
+         "state": (it.get("assessment") or {}).get("state"), "waiting_for_review": bool(it.get("observed_only"))}
         for it in items if include_inactive or it["status"] in ("active", "suspect")
     ]
 
