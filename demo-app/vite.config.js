@@ -1,11 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { viteSingleFile } from "vite-plugin-singlefile";
 
-// One self-contained index.html: opens offline by double-click and publishes as a single page.
+// Multi-file build: pages, Monaco and the Python runtime load only when a view needs them.
+// Serve docs/app over HTTP (python -m http.server -d docs/app) — browsers do not load WebAssembly from file://.
 export default defineConfig({
-  plugins: [react(), viteSingleFile()],
+  plugins: [react()],
   base: "./",
-  build: { outDir: "../docs/app", emptyOutDir: false, chunkSizeWarningLimit: 8000, assetsInlineLimit: 100000000 },
+  build: { outDir: "../docs/app", emptyOutDir: true, chunkSizeWarningLimit: 8000 },
   worker: { format: "iife" },
 });

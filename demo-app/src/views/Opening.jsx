@@ -1,28 +1,17 @@
-import { D, LABELS } from "../lib";
 import { Button } from "../ui";
-const pass = c => D.reuse.runs.filter(r => r.condition === c && r.first_pass).length;
 export default function Opening({ go }) {
-  const poison = Object.fromEntries(D.poison.slice(1).map(p => [p.system, p]));
   return (
-    <div className="grid gap-8">
+    <div className="grid gap-7">
       <div className="grid gap-4">
-        <h1 className="m-0 max-w-[22ch] text-[2.6rem] font-black leading-[1.08] tracking-tight">编码智能体总在重犯评审已经纠正过的错误。</h1>
-        <p className="m-0 max-w-[62ch] text-lg text-soft">Attest 让它只从验证过的经验中成长：经验要有可执行的证据才能成为规则，拿不准的交给人，每一次决定都能追溯。这里回放的是一次真实运行，你可以逐步查看智能体做了什么、门控为什么这样判。</p>
+        <h1 className="m-0 max-w-[20ch] text-[2.5rem] font-black leading-[1.1] tracking-tight">AI 编程助手不记得评审教过它什么。</h1>
+        <p className="m-0 max-w-[60ch] text-lg text-soft">今天评审指出"重复的退款请求会退两次钱"，它改好了；下一个任务，它又犯同样的错。Attest 给它一份团队记忆：评审教过一次的经验，经过验证后记下来，下次自动用上；没有证据的、可能有害的，不让它记。</p>
       </div>
-      <video className="w-full max-w-[960px] rounded-lg border border-rule bg-black" src="attest_film.mp4" controls muted playsInline preload="metadata" aria-label="Attest 机制动画" />
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[["playground", "看它怎样成长", `新任务 H04：开记忆 ${pass("attest_v4")}/3 通过，不开记忆 ${pass("no_memory")}/3。`],
-          ["security", "看它怎样拒绝学坏", `同一条毒评论：ACE 式${poison.ace?.rule ? "写成了规则" : "未写入"}，ReasoningBank 式${poison.reasoningbank?.rule ? "写成了规则" : "未写入"}，Attest ${poison.attest_secure_v4?.stored ? "写入了" : "一条也没写"}。`],
-          ["governance", "看人怎样管它", "智能体不能自己批准规则；政策变了由人取代旧规则；每个决定都能审计。"]].map(([k, t, d]) => (
-          <button key={k} onClick={() => go(k)} className="grid gap-1.5 rounded-lg border border-rule bg-sheet p-4 text-left hover:border-pen">
-            <span className="text-[17px] font-bold">{t}</span><span className="text-sm text-soft">{d}</span><span className="text-sm font-medium text-pen">打开</span>
-          </button>))}
+      <video className="w-full max-w-[920px] rounded-lg border border-rule bg-black" src="attest_film.mp4" controls muted playsInline preload="metadata" aria-label="Attest 是怎么工作的：84 秒动画" />
+      <p className="m-0 -mt-4 text-xs text-soft">动画没有声音，画面上的文字即讲解；所有数字来自已提交的运行记录。</p>
+      <div className="grid gap-2 text-sm text-soft">
+        <p className="m-0">这个演示分三个场景。每个场景都基于已经提交的真实运行记录；需要现场判断的部分，在你的浏览器里运行 Attest 的真实代码。每处都标着它是<b className="text-ink">真实回放</b>、<b className="text-ink">现场运行</b>还是<b className="text-ink">模拟</b>。</p>
       </div>
-      <div className="grid gap-1.5 text-sm">
-        {LABELS.map(([a, b]) => <div key={a}><b>{a}：</b><span className="text-soft">{b}</span></div>)}
-        <div className="text-soft">本页所有数值都由 <code>scripts/export_demo_data.py</code> 从已提交的运行记录导出，不是现场调用模型。</div>
-      </div>
-      <div><Button tone="primary" onClick={() => go("playground")}>从第一个场景开始</Button></div>
+      <div className="flex flex-wrap gap-3"><Button tone="primary" onClick={() => go("background")}>先看业务背景</Button><Button onClick={() => go("growth")}>直接看场景一</Button></div>
     </div>
   );
 }
