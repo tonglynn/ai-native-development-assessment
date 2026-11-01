@@ -69,6 +69,15 @@
 
 **讲**：通过了测试，只看测试的门槛会收下它；Attest 用团队代码检查把它拦下。模型能不能发现问题要看模型，Attest 每条经验都会检查。
 
+**3b 怎么问**（看到 rejected 之后马上说）
+> Attest 拒绝了这条经验：金额用浮点会丢精度。请把 refund 里传给 ledgerly.audit.record 的 float(amount) 改回 Decimal，再运行 python -m pytest -q。先不要调用 learn。
+
+**为什么这么问**：Attest 管的是记忆，不管已经写进代码的改动。彩排时没有这一步，第 4 步 Claude 为了"和 refund 保持一致"，把 float 也抄进了 refund_shipping——坏经验没有从记忆里传过去，却从代码里传过去了。把代码改回来，第 4 步才干净。
+
+**预期结果**：float 改回 Decimal，测试通过。
+
+**讲**：被拒的经验不会进记忆；已经写进代码的那部分，由人决定回滚。
+
 ---
 
 ## 第 4 步：新任务自动用上好经验（40 秒）
