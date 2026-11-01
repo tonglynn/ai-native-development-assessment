@@ -1,66 +1,47 @@
-# AI 协作日志 / AI collaboration log
+# AI collaboration log / AI 协作日志
 
-本项目大量使用 AI（Claude）编写代码和文档。这里记录 AI 提出了什么、我接受 / 修改 / 否决了什么，
-以及原因。这是 AI 参与过程中我做过哪些判断和纠正的原始记录。
+**English** · [中文说明](#中文说明)
 
-记录方式：每当一项决定落定（一次提议被接受、修改或否决），就追加一行，日期是对话当天。第二栏写 AI 提出或产出了什么，
-第三栏写我的判断或纠正；纠正来自 AI 自查时，第三栏写"—"或我的回应，并在结果栏注明是 AI 发现的。依据是当时的对话；
-每个决定的完整理由、替代方案与证据在 `DECISIONS.md`（D 编号对应），失败与修复在 `INCIDENTS.md`。
+Claude wrote most of the code and documents in this project. This log keeps only the decisions that shaped the
+work, following `DECISIONS.md` (the D numbers there give the full reasoning, the alternatives and the evidence). Each
+row says what the AI proposed or produced, what I judged or corrected, and what came of it. When a correction came
+from the AI checking its own work, the row says so. Routine steps (scheduling, reruns, wording) are left out.
 
-| 日期 | AI 的提议或产出 | 我的判断 / 纠正 | 结果 |
-|---|---|---|---|
-| 10/29 | 首版方案：复用我的旧项目 tiny-agent-harness 作为 Agent 底座 | 指出那个项目是 AI 写的，我并不了解 | 放弃复用（D2），计划中加入"理解检查"环节 |
-| 10/29 | 第二版方案：从零写一个小的 Agent 核心 | 质疑"会不会太简单"，要求调研 GitHub 上可复用的成熟项目 | 改为 mini-swe-agent + 与 ReasoningBank、ACE 两种已发表设计对比（D3），项目定位明显提升 |
-| 10/29 | 默认按中午 11:59 截止排期 | 纠正为晚上 23:59 | 时间表多出半天缓冲 |
-| 10/29 | — | （流程）把 API key 直接发进了聊天；AI 拒绝使用并建议作废 | 改用 Codespaces secret 管理 key，key 不进聊天、不进仓库 |
-| 10/30 | 让我在 Codespace 里手动跑实验 | 反馈 Codespace 老断线，要求 AI 直接跑 | AI 不接触 key，改为 GitHub Actions 服务器端运行（D14），AI 推送请求文件即可启动实验 |
-| 10/30 | 写入门槛按"80% 词重合"判断证据（D21） | 有条件接受：不得允许语义改写 | 收紧为只容忍格式差异（D25），之后又修正多行片段（D27、D28） |
-| 10/30 | 把 Agent 自报的"引用"当作笔记被使用的证据 | 只能作为降级触发条件，效果要看隐藏测试、行为与注入记录 | D10 改为有条件 |
-| 10/30 | 统计判定方案 | 定下 H1 优效性、H3/H4/H6 非劣效性（δ = 10 个百分点），区间跨界时写"方向一致，证据不足" | 写入预注册 |
-| 10/30 | 冻结主实验 | 要求冻结前独立复核 8 项，有 Blocker 或 Major 只修必要内容并重新验证 25/25 | 复核后冻结，之后才开始主实验 |
-| 10/30 | 动态遗忘 V1 的衰减参数 | 质疑"怎么确定这些参数最有效" | 做参数扫描，修正结论为"默认参数下遗忘修复不了污染" |
-| 10/30 | 遗忘 V1 的保留值公式 | 指出效用 U 的永久保底、"任务通过 ≠ 笔记有贡献"、恢复后会立即再次归档，并要求补"小而重要的规则被误忘"回归集 | 遗忘 V1.1 与回归测试 |
-| 10/30 | V1.1 是否采用 | 在看结果前定下规则：省了空间但丢了更多正确规则，就保留 V1 为默认 | 结果符合该条件，V1.1 只作可选项（D31） |
-| 10/30 | 提交 21ec78d | 复核出四处问题：没验证 ≠ 验证失败；"4 倍"只是假设；政策保护是叠加而非替换、引用识别过宽；`reactivate()` 不传时钟不重置 | 全部修正并披露 |
-| 10/31 | 价值反馈的六种改进办法 | 要求六点都验证 | 遗忘 V2、存活检查、规则生成检查、失败归因；负面结果照实报告（D32、D33） |
-| 10/31 | — | 质疑业务场景是否实用，要求参考 GitHub 上更好的实现 | 调研 Copilot Memory、CodeRabbit、Qodo 与两篇真实仓库基准；重写 README 开头；加入检索时核对（D34） |
-| 10/31 | 建议不补完整的生产级计费系统 | 同意，改为补一个支付服务超时重试的探索性任务 | X01（D35） |
-| 10/31 | — | 要求做独立的全仓库审计 | 发现 7 个 Blocker（投毒测试的真实机制与代价、普通摘要基线为空、检索时核对的对照组反常等），逐条核实后修正 |
-| 10/31 | — | 提出从记忆治理转向智能体记忆安全：六类攻击、红队、指标；要求全部使用虚构密钥、模拟工具和隔离仓库 | 选定"五项 + Agent 提示词注入运行"；信任边界（D41）、封存日志（D42）、MCP 身份与密钥扫描（D43）、真实注入运行（D44）、隔离与追溯（D45）；工具投毒、权限提升、目标劫持只写设计（ROADMAP） |
-| 10/31 | 做 D43 时发现 MCP 按 remote 最后一段区分记忆；准备 D44 时发现 Agent 的 shell 继承了模型密钥 | — | 两处都修复并扫描已提交的运行，无泄漏；注入运行中 Agent 执行了 37 次 `env`，修复前密钥会进入提交的轨迹 |
-| 10/31 | 报告真实评审覆盖率低（Saleor 1/25） | 问是否该改进、怎么改，要求按 Claude 提出的顺序做 | 漏斗诊断（13/25 训练集没教过，6 条存下却检索不到）；新仓库 home-assistant 上"通用写法 + 预留名额"没有改善，照实报告（D46） |
-| 10/31 | — | 提出混合检索、遗忘长期验证、上下文压缩扩大范围三项 | 三项精简后都做：重排检索最好但代码结果不确定，词法仍为默认（D47）；统一衰减在第 200 个任务丢掉审批规则（D48）；Context Manager 在新场景 9/9 通过（D49） |
-| 10/31 | 余额耗尽导致三个运行失效 | 充值后要求重跑；嫌慢，要求越快越好 | 作废运行另存并记入 INC-3；并行改造后重跑 |
-| 10/31 | 解释 H6（无门槛反而更好） | 追问"是不是为安全牺牲表现"、"门槛判断不了对错怎么办" | 代码引用审核（D50）、全部安全措施组合（D51，代价 −21） |
-| 10/31 | — | 提供外部评审意见：门槛"自证正确"、审核误挂起、任务级护栏、隔离不到代码 | 两层证据（D52）、分级处理（D53）、规则级验证（D54）、影响追踪（D55）、v2（D56） |
-| 10/31 | v2 仍挂起 8 条正确笔记 | 指出真正瓶颈是"为什么还挂起"，要求按三类拆解 | 诊断：25 条全是代码引用的误冲突；R1–R3 后 v3 挂起 0 条（D57） |
-| 10/31 | — | 要求证明 v3 "学会区分"而不只是通过测试 | 冻结测试集：如常 0/10 错误成为规则，冷启动 5/10，R2 是漏洞（D58） |
-| 11/01 | 提出反事实检查 | 同意继续 | 反事实检查替换 R2，v3.1 端到端 88%、两种毒药 0/0（D59） |
-| 11/01 | — | 指出自动回退不足、业务规则与代码规范要分开、可信者出错未解决，要求保留 Uncertain | v4 三种状态与规则分类，所有冻结集 0 致命错误（D60） |
-| 11/01 | — | 要求人工审核接入生命周期、软证据独立性、测量审核收益 | 按来源判断独立性（攻击 4/6 → 0/6，D61）；审核队列与职责分离（D62）；回放显示批准后反而 70%（D63） |
-| 11/01 | — | 提出价值评分、分层、动态 Top-K 与拥挤消融 | Claude 建议先不拟合权重、加挤占指标；C 组消除挤占（D64） |
-| 11/01 | Claude 说"说好到此为止" | 纠正：并没有说好；问 C 组与 v3.1 比 | 同轮比较：v3.1 比 Attest 更好，v4 + 审核 + C 不更差（D65） |
-| 11/01 | 判断 v3.1 + C 不值得跑（v3.1 已几乎无挤占） | 接受；提出软预算、任务类型、跨业务验证 | 软预算与任务类型两组都比 A 更好（D66）；跨业务需新任务，写入 ROADMAP |
-| 11/01 | — | 指出业务范围与基准不一致，要求补全角色、职责与异常 | 只改文档：研究范围、谁发起/审批/执行/审计、职责分离（未测量）、覆盖地图 |
-| 11/01 | 列出 13 项缺点，含"可信评审者与测试同源" | 要求一起做、越快越好 | 补 AI_LOG、局限、推荐配置、版本表、开销、复现 D66 |
-| 11/01 | 提议两层数字审计：确定性比对脚本 + 未参与写作的模型逐节审读 | 问"能不能先在 GitHub 或本地上跑" | 第一层本地、第二层 Actions；0 处错误数字，唯一缺出处的离线核对重跑并存档（D67） |
-| 11/01 | 提议提交前总检查与补存档 | 同意 | 测试全过、冻结任务集 25/25、全历史无 PDF、无题目原文、无真实密钥（唯一命中是测试用的私钥头） |
-| 11/01 | 解释 Context Manager；读代码发现"最近一步过大""工作状态无上限"两个超预算分支 | 问"是不是滑动窗口、这个方法是不是太蠢"，同意修 | 预算保护；改前后两个场景的上下文逐字节一致，原结果不变（D68） |
-| 11/01 | 竞品调研报告，建议定位为"写入关口" | 要求对比同类、选一个突出功能，同意按报告走 | 取代关系、职责分离 16/16（D69）；AI 核对时发现报告两处与仓库不符（遗忘默认、伤害证据），已纠正 |
-| 11/01 | 按"策略 b"设计投毒基准与剂量实验，并开始运行 | 中断执行，对照题目要求问"方向是不是走偏了" | AI 承认重心偏向安全；剂量实验取消；首页改为按评审关注点逐条对应，主线改回"成长"；已在跑的投毒基准只作附录证据（D70） |
-| 11/01 | 比较主线与同类，建议用确认实验坐实"门槛不损失效果"；随后自查发现前提错误（主实验记忆只有 9 条，代价不是挤占造成的） | 同意按建议走 | 改为同一轮比较门槛本身，判读规则先提交；三条全部满足，v3.1 不比无门槛差、比预注册门槛好、毒药 0 次被照做（D71） |
-| 11/01 | 模块与功能清单 | 要求每个模块回答三个问题：解决什么实际问题、现有方案为何不行、用什么数据证明 | README 的 "Each module" 表，无效的尝试单列；核对时改正两个决策编号 |
-| 11/01 | 建议"效果 × 安全"图与并排演示 | 问还要怎么突出优势 | `docs/effect_safety.png` |
-| 11/01 | — | 问 pass@1 以外还有哪些指标表现好 | 业务风险、步数、成本、记忆体积、受攻击时的 pass@1（描述性，未检验，`runs/gate_confirm/secondary.md`） |
-| 11/01 | — | 问 AI_LOG 是怎么记录的 | AI 自查发现两处问题并修正：表格被空行截断，后半部分不显示为表格；近期几行把 AI 的发现记在"我的判断"一栏、并追加到了错误的表下。已重写这些行 |
+| Date | Decision | AI proposed or produced | My judgement / correction | Outcome |
+|---|---|---|---|---|
+| 10/29 | D2 | Reuse my earlier project tiny-agent-harness as the agent | It was written by AI and I do not understand it; I could not defend reused code I cannot explain | Not reused; an understanding check added to the plan |
+| 10/29 | D3 | A small agent core written from scratch | Questioned whether it was too simple; asked for mature open-source agents to build on | mini-swe-agent as the agent, compared with ReasoningBank-style and ACE-style memory, two published designs |
+| 10/29 | D4, D14 | — | I pasted an API key into the chat; the AI refused to use it and advised revoking it. Later, Codespaces kept disconnecting, so I asked the AI to run the experiments itself | The key lives only in a repository secret; experiments run on GitHub Actions, started by a request file, so the AI never handles the key |
+| 10/30 | D10 | Treat the agent's self-reported citations as evidence that a note was used | Only as a trigger for demotion; whether a note worked is judged by hidden tests, behaviour and injection records | D10 made conditional |
+| 10/30 | Preregistration | A statistical plan | Set H1 as superiority and H3, H4, H6 as non-inferiority (δ = 10 pp); an interval crossing the margin is reported as "same direction, not enough evidence" | Written into `PREREGISTRATION.md` before any memory run |
+| 10/30 | D15 | Baselines showed a strong agent finds every convention visible in the code; proposed splitting conventions into discoverable and review-only, adding C5, C6 and stale task S04 | Agreed: do not weaken the model; memory's value should be knowledge the code does not show | Task set grew to 25 tasks |
+| 10/30 | D23 | Options for the low recall on the real Saleor reviews | Keep the evidence gate; do not lower it to raise recall; report Saleor as an independent real-repository result; rerun an independent benchmark audit first | Saleor reported as is (no recall advantage); audit fixes before the freeze |
+| 10/30 | Freeze | Freeze the main experiment | Required an independent review of 8 items first; freeze only with no blocker or major, fixing only what is necessary and revalidating 25/25 | Frozen at `cf5d879` |
+| 10/30 | D31 | Forgetting V1.1 | Questioned how the parameters were chosen and found four flaws in the formula; fixed the adoption rule before seeing results (saves space but loses more correct rules → V1 stays default) | Parameter sweep; V1.1 optional; result matched the rule |
+| 10/30 | Commit 21ec78d | — | Found four problems in review: "not verified" treated as "verification failed"; "4×" was an assumption; policy protection should add, not replace; `reactivate()` without a clock | All fixed and disclosed |
+| 10/31 | D32, D33 | Six ways to get value feedback for forgetting | Asked for all six to be tested | Negative results reported as found (model-made checks useful for 1 of 25 rules) |
+| 10/31 | D34 | — | Questioned whether the business scenario was realistic; asked to study better implementations on GitHub | Studied Copilot Memory and others; README rewritten; use-time verification added (no gain, reported) |
+| 10/31 | Audit | — | Asked for an independent audit of the whole repository | 7 blockers found (including how the poison test really worked and an empty summary baseline), each checked and fixed |
+| 10/31 | D41–D45 | — | Proposed moving from memory governance to memory security: six attack kinds, red-team cases, metrics; fake keys, simulated tools and isolated repositories only | Trust boundary, sealed log, MCP identity and secret scanning, a real injection run, quarantine |
+| 10/31 | D43, D44 | While building D43 and D44 the AI found two real vulnerabilities: MCP memory keyed by the repository's last name segment, and the agent's shell inheriting the model key | — | Both fixed; committed runs scanned, no leak |
+| 10/31 | D46 | Reported low coverage of real review comments | Asked whether and how to improve it, in the order the AI proposed | Coverage funnel; the remedy did not help on home-assistant, reported as a negative result |
+| 10/31 | D50, D51 | Explained H6 (no gate scored higher) | Asked whether this meant trading performance for safety, and what happens when the gate cannot judge right from wrong | Code-cited review; all safeguards together, which cost 21 points (reported) |
+| 10/31 | D52–D56 | — | Brought an external review: the gate "proves itself", correct notes held by mistake, guards only at task level, quarantine does not reach code | Two-layer evidence, graded handling, rule-level checks, impact tracing, gateway v2 |
+| 10/31 | D57 | v2 still held 8 correct notes | Said the real bottleneck was why they were held, and asked for them to be split into three causes | All were false conflicts cited from legacy code; v3 holds 0 |
+| 10/31 | D58 | — | Asked for proof that v3 tells trusted, wrong and undecidable advice apart, not just that it passes tests | Frozen judgement set; found the hole: from an empty memory, 5 of 10 wrong cases became rules via R2 |
+| 11/01 | D60 | Counterfactual check (D59) | Pointed out that automatic reverts were not enough, that business rules and code conventions need different checks, that a trusted reviewer's mistakes were unsolved; asked to keep "uncertain" | Gateway v4 with three states: 0 critical errors on every frozen set |
+| 11/01 | D61–D63 | — | Asked for human review in the lifecycle, independence of soft evidence, and the measured benefit and cost of review | Independence by origin (attacks counted 4/6 → 0/6); review queue; replay showed review cost 79% → 70% |
+| 11/01 | D64 | — | Proposed value scores, tiers, dynamic top-k and a crowding ablation | AI advised not fitting weights and adding a displacement measure; criticality-first removed displacement |
+| 11/01 | D65 | The AI wrote that I had agreed to stop | Corrected it: I had not; asked how C compares with v3.1 | Same-session comparison: v3.1 better than Attest |
+| 11/01 | D67 | Two-layer number audit (deterministic script + a model that wrote nothing) | Asked for it to run locally or on GitHub first | 0 wrong numbers; the one number without a source was rerun and saved |
+| 11/01 | D68 | Explained the Context Manager | Asked whether it was just a sliding window and whether that was too naive | Reading the code found two ways to exceed the budget; fixed; contexts byte-identical on recorded scenarios |
+| 11/01 | D69, D70 | A competitive review, then a security benchmark ("strategy b") | Stopped the run and asked, against the assessment brief, whether the direction had drifted | AI agreed the weight had shifted to security; the dose experiment was dropped; the README front page was rebuilt around what reviewers look for, with growth as the main line |
+| 11/01 | D71 | Proposed confirming "a gate without a performance cost"; then found its own premise wrong (the main memories hold 9 notes, so the cost was not crowding) | Agreed to go ahead | Redesigned to compare the gates themselves, rules committed first; all three met: v3.1 not worse than no gate, better than the preregistered gate, 0 poison applied |
+| 11/01 | README | A list of modules and features | Every module must answer: what real problem it solves for a coding agent, why existing approaches fall short, and which data shows it works | The "Each module" table, with what did not work listed separately |
 
-**审阅基准任务集草案（D6）后的意见与修改**（依据决策日志 D8、D13、D15、D23 与当时的对话记录整理）：
+<a id="中文说明"></a>
+## 中文说明
 
-| 日期 | AI 的提议或产出 | 我的判断 / 纠正 | 结果 |
-|---|---|---|---|
-| 10/30 | 每个任务最多两次尝试，第一次失败后给模拟评审意见，主指标看第一次通过率（D8） | 确认 | 写入预注册 |
-| 10/30 | 第四条规范 C4 的内容 | 授权 AI 决定，要求能被隐藏测试客观检查 | C4 定为"动钱的操作必须写审计记录"（D13） |
-| 10/30 | 两次无记忆基线显示，代码里可见的规范强 Agent 都能找到；提议把规范分为"可发现"与"只靠评审传承"两层，新增 C5（幂等）、C6（审批阈值）和过期任务 S04（D15） | 确认：不人为削弱模型，记忆的价值应放在代码里没有的知识上 | 任务集从 18 个扩到 25 个（后续审计又加入 H11、S05） |
-| 10/30 | 冻结前的任务集与门槛 | 要求先重新启动独立的基准审计；保留 D17 的证据门槛；Saleor 结果作为真实项目的独立测试如实报告，不为提高召回而降低门槛；Process Memory 只作下一阶段扩展；审计完成后再决定是否冻结（D23） | 独立审计修复 1 个阻断问题和 6 个主要问题（`benchmark/AUDIT.md`） |
-| 10/30 | 冻结 | 要求冻结前再核对 DECISIONS（D7–D11）、PREREGISTRATION 与 AUDIT 三份材料，并独立复核 8 项；没有 Blocker 和 Major 才冻结，有问题只修必要内容并重新验证 25/25 | 复核通过后在 `cf5d879` 冻结 |
-| 10/30 | 记忆分类（实体 / 语义 / 程序 / 情景） | 记入 ROADMAP，不改主实验 | ROADMAP 分类一节 |
+本项目的大部分代码和文档由 Claude 编写。这里只保留影响方向的决定，与 `DECISIONS.md` 的 D 编号对应（完整理由、替代方案和证据见该文件）。每一行写明 AI 提出或产出了什么、我做了什么判断或纠正、结果如何；纠正来自 AI 自查时会注明。排期、重跑、措辞等日常事项不记录。
+
+关键的几次纠正：不复用自己看不懂的 AI 代码（D2）；要求站在成熟开源项目上，并与已发表的方案对比（D3）；密钥只放在仓库 secret，AI 不接触（D4、D14）；坚持证据门槛，不为提高召回而降低（D23）；冻结前必须独立复核（cf5d879）；看结果前先定判读规则（D31、预注册）；把"为什么还挂起正确笔记"作为真正的瓶颈（D57）；要求证明门控能区分可信、错误与无法判断的建议（D58、D60）；纠正 AI 声称"已经说好停止"（D65）；中断"策略 b"，对照题目判断方向偏了，主线改回"成长"（D69、D70）；要求每个模块回答"解决什么问题、现有方案为何不行、用什么数据证明"。AI 自查发现的问题：两个真实漏洞（D43、D44）、确认实验的前提错误（D71）。

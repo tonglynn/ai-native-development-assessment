@@ -54,7 +54,7 @@ not compared (runs shared one runner). 安全以外的指标：重复扣款、�
 | **One design iteration** | [The gateway, v1 → v4](#one-design-iteration) below |
 | **A failure located and recovered** | Memory: a poison already in memory is quarantined and traced back to the runs it reached (shown in 23/33 held-out runs, applied in 14; quarantine removes it from retrieval and holds only the notes learned from it, D45). Engineering: [INC-2](INCIDENTS.md) (every context run crashed on unanswered tool calls; found, fixed, tested) |
 | **Real vs simulated** | Real: agent runs (DeepSeek), tests, logs in `runs/`. Simulated and labelled: the repositories, review comments, policies and all attack material. Every number in these documents is checked against `runs/` (`runs/audit_numbers`, D67) |
-| **AI involvement and my corrections** | [`AI_LOG.md`](AI_LOG.md): every decision with who proposed and who corrected it; [`DECISIONS.md`](DECISIONS.md) D1–D70 |
+| **AI involvement and my corrections** | [`AI_LOG.md`](AI_LOG.md): the decisions that shaped the work, with what the AI proposed and what I judged or corrected; [`DECISIONS.md`](DECISIONS.md) D1–D70 |
 
 ### Each module: the problem, why existing approaches fall short, the evidence
 
