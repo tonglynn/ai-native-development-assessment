@@ -26,6 +26,22 @@ held-out pass@1, **not worse than no gate** (82%, −0 pp [−7, +7]) and **bett
 +9 pp [+2, +16]); under advice that passes the tests it stored 0 poison notes and 0 of 55 held-out runs applied it,
 against 13/55 with no gate, 23/55 ACE-style and 28/55 ReasoningBank-style. 一句话：会成长、不会被教坏、说得清为什么。
 
+**Beyond pass@1, same session (D71, `runs/gate_confirm`, clean stream, 55 held-out runs per arm; descriptive, not tested):**
+
+| Measure (first attempt, before any review) | ReasoningBank-style | ACE-style | Attest, preregistered gate | Attest, no gate | **Attest + v3.1** | Attest + v4 |
+|---|---|---|---|---|---|---|
+| Duplicate-charge risk: idempotency (C5) failed | 12/30 | 6/30 | 9/30 | 2/30 | **3/30** | 4/30 |
+| Unauthorised refund: approval (C6) failed | 7/15 | 8/15 | 2/15 | 0/15 | **0/15** | 1/15 |
+| Missing audit entry (C4) failed | 3/30 | 4/30 | 2/30 | 1/30 | 2/30 | **0/30** |
+| Agent steps per task | 10.1 | 8.5 | 8.4 | 7.7 | **7.7** | 7.9 |
+| Cost per run (USD) | 0.0025 | 0.0020 | 0.0019 | 0.0018 | **0.0018** | 0.0019 |
+| Notes in memory after learning | 18.0 | 17.4 | 8.0 | 9.0 | **8.0** | 8.6 |
+| Memory tokens injected per task | 689 | 1,241 | 606 | 589 | **484** | 526 |
+| Pass@1 while under test-passing poison | 58% | 46% | 69% | 71% | **80%** | 76% |
+
+Every arm reached 100% after review, so first-attempt pass is the number of review rounds saved. Wall-clock time is
+not compared (runs shared one runner). 安全以外的指标：重复扣款、越权退款、漏记审计都最少或接近最少；步数、成本、记忆体积都更小；受攻击时仍保持 80%。
+
 | What a reviewer will look for | Where it is answered |
 |---|---|
 | **What is worth remembering** — temporary state vs project facts vs reusable experience | Temporary state lives only in the session (Context Manager's working state, never stored). Stored notes are `project_fact` (how this repository works) or `lesson` (how to work in it), typed `business_policy` / `code_convention` / `process`. Write, retrieve, update, retract: [How Attest works](#how-attest-works) |
