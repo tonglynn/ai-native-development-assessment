@@ -23,7 +23,6 @@ export default function Governance() {
       <div className="grid gap-2">
         <CapIntro id="govern" />
         <p className="m-0 max-w-[70ch] text-soft">待人工的经验不作为规则使用，而是进入<Term id="queue">待审队列</Term>，由业务负责人决定。以下操作均在浏览器中<b className="text-ink">现场调用</b> Attest 的真实审批代码（attest/memory/review.py），作用于演示运行写入的记忆。</p>
-        <p className="m-0 max-w-[70ch] rounded-md bg-holdwash px-3 py-2 text-sm text-hold">身份是演示用的：切换身份只能演示"给定这个身份，规则会怎么判"。真正的身份认证、授权和持久化审计必须由可信的后端完成，这里不演示。</p>
       </div>
       <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-soft">我现在是</span>{WHO.map(([k, l]) => <button key={k} onClick={() => setWho(k)} className={cn("rounded-full border px-3 py-1 text-sm", who === k ? "border-pen bg-pen text-white" : "border-rule bg-sheet")}>{l}</button>)}</div>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
