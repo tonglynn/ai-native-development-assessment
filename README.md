@@ -18,6 +18,14 @@ Scope: payments, refunds and account adjustments in the migration of a B2B SaaS 
 repeating mistakes that code review already corrected. Attest makes it **grow only from verified experience, and
 proves the growth on tasks it never learned from.** 编码智能体总在重犯评审已经纠正过的错误；Attest 让它只从验证过的经验中成长，并在没学过的新任务上证明这种成长。
 
+**Three capabilities / 三项能力** (the names used in the demo, the video and the talk):
+
+| Capability | Features | Shown in | Evidence |
+|---|---|---|---|
+| **01 持续经验学习** Continuous Experience Learning | 经验采集与沉淀 Experience capture · 上下文检索与记忆注入 Context retrieval & injection | demo "能力 01", live video steps 1, 2, 5 and session 2 | preregistered main experiment, held-out pass@1 33% → 70% (`runs/main`); H04 3/3 with memory vs 0/3 without (`runs/demo`) |
+| **02 可信记忆与安全准入** Trusted Memory & Secure Admission | 证据验证与记忆准入 Evidence-based admission · 风险识别与分级处置 Risk detection & tiered handling | demo "能力 02" and "工作原理", video steps 3–4 | D70 poison stored as a rule: v4 0/60 vs 46/60 with no gate (`runs/poison_channels`); counterfactual check: trusted 7/8, wrong 0/4, undecidable 0/2 (`runs/counterfactual`) |
+| **03 人工治理与全生命周期管理** Human Governance & Memory Lifecycle | 人工审核与政策变更 Human review & policy change · 记忆版本管理与来源追溯 Versioning & provenance | demo "能力 03" and "来源追溯", video step 6 | `attest/memory/review.py`; agents and proposers cannot approve; approve, retract and supersede are command-line only (D77, D78) |
+
 ![Clean-stream pass@1 against poison applied, six memory systems in one session](docs/effect_safety.png)
 
 **Grows, is not taught wrong, and says why.** In one session where every system learned its own memory (D71, `runs/gate_confirm`,
@@ -45,7 +53,7 @@ not compared (runs shared one runner). 安全以外的指标：重复扣款、�
 | What a reviewer will look for | Where it is answered |
 |---|---|
 | **What is worth remembering** — temporary state vs project facts vs reusable experience | Temporary state lives only in the session (Context Manager's working state, never stored). Stored notes are `project_fact` (how this repository works) or `lesson` (how to work in it), typed `business_policy` / `code_convention` / `process`. Write, retrieve, update, retract: [How Attest works](#how-attest-works) |
-| **The loop**: task → result confirmed → experience distilled → reused in a new task, and why it applies | **Interactive demo** (D74): `python -m http.server 8778 -d docs/app`, then open http://127.0.0.1:8778 (browsers do not load the Python runtime from `file://`). Business background → how a note is written (five steps) → scene 1, a Langfuse-style trace of real main-experiment runs, memory on vs off → scene 2, attack presets replayed from D70 plus your own input checked live by the real Attest code in the browser (Pyodide) → scene 3, review, policy change and forged approval, decided live by `attest/memory/review.py` → evidence detail → results with their exact scope. Every view says whether it is a recorded replay, a live run or simulated. Acceptance: `demo-app/e2e/accept.py`, 34/34. **Live run in the Claude desktop app** (5 min, bilingual, waits sped up, each capability explained in plain language first): [`docs/attest_mcp_live.mp4`](docs/attest_mcp_live.mp4) — two sessions sharing one team memory: learn from a review, block a test-passing bad note, hold an unverifiable one for a person, reuse on a new task, a person approves and retracts (how it was cut: `scripts/mcp_live_video`). Backup video with captions: [`docs/attest_walkthrough.mp4`](docs/attest_walkthrough.mp4); mechanism film: [`docs/app/attest_film.mp4`](docs/app/attest_film.mp4). Earlier step-by-step replay: [`docs/demo/index.html`](docs/demo/index.html) and the 2.5-minute video [`docs/demo/attest_demo.mp4`](docs/demo/attest_demo.mp4) (D72; waits compressed, real durations shown): E04 corrected by review → passes hidden tests → notes with evidence → a person decides the uncertain ones → new task H04 passes 3/3 with memory vs 0/3 without (`runs/demo`). Offline, no model: `python scripts/mcp_demo.py` ([transcript](docs/mcp_demo_transcript.md)). A note is admitted only if the review comment it quotes was applied in the diff of a change that passed the hidden tests; it is retrieved for a new task only inside its repository and version range |
+| **The loop**: task → result confirmed → experience distilled → reused in a new task, and why it applies | **Interactive demo** (D74): `python -m http.server 8778 -d docs/app`, then open http://127.0.0.1:8778 (browsers do not load the Python runtime from `file://`). Business background → how it works (the three capabilities and the life of one note, with the counterfactual check explained on recorded cases) → capability 01, a Langfuse-style trace of real main-experiment runs, memory on vs off → capability 02, attack presets replayed from D70 plus your own input checked live by the real Attest code in the browser (Pyodide) → capability 03, review, policy change and forged approval, decided live by `attest/memory/review.py` → provenance → results, with what is not implemented yet. Every term opens a plain-language explanation in three layers (D79); every view says whether it is a live run, a recorded replay, precomputed, a demo identity, simulated or not implemented. Acceptance: `demo-app/e2e/accept.py`, 34/34. **Live run in the Claude desktop app** (5 min, bilingual, waits sped up, each capability explained in plain language first): [`docs/attest_mcp_live.mp4`](docs/attest_mcp_live.mp4) — two sessions sharing one team memory: learn from a review, block a test-passing bad note, hold an unverifiable one for a person, reuse on a new task, a person approves and retracts (how it was cut: `scripts/mcp_live_video`). Backup video with captions (recorded before the D79 renaming): [`docs/attest_walkthrough.mp4`](docs/attest_walkthrough.mp4); mechanism film: [`docs/app/attest_film.mp4`](docs/app/attest_film.mp4). Earlier step-by-step replay: [`docs/demo/index.html`](docs/demo/index.html) and the 2.5-minute video [`docs/demo/attest_demo.mp4`](docs/demo/attest_demo.mp4) (D72; waits compressed, real durations shown): E04 corrected by review → passes hidden tests → notes with evidence → a person decides the uncertain ones → new task H04 passes 3/3 with memory vs 0/3 without (`runs/demo`). Offline, no model: `python scripts/mcp_demo.py` ([transcript](docs/mcp_demo_transcript.md)). A note is admitted only if the review comment it quotes was applied in the diff of a change that passed the hidden tests; it is retrieved for a new task only inside its repository and version range |
 | **Growth is real**, on new tasks that produced no experience | Preregistered (frozen at `cf5d879`): held-out pass@1 **33% → 70%** with memory, **+36 pp [+21, +52]** (H1); not worse than ReasoningBank / ACE (H4). Exploratory, one session, every system learning its own memory: gateway v3.1 **82%**, better than ReasoningBank-style (60%, +22 pp [+4, +44]), not worse than ACE-style (65%, +16 pp [−4, +38]) (D71) |
 | **Regression is checked**, not claimed | Control repository: 100% in every condition, **0** foreign notes shown (H2, H5: 0 vs 54 without scope); stale tasks after a policy change not worse than no memory (H3). The cost is reported: the preregistered write gate costs **−15 pp** (H6, not supported); the evidence gateway v3.1 removes it in a same-session confirmation (D71) |
 | **Wrong, outdated and conflicting memory**, with source and scope | Poisoned review comment in the preregistered run: stored **0** times (ACE 10, ReasoningBank 12; their agents then applied it in 5 and 2 held-out runs), because the poisoned tasks failed verification. When the attacker makes the task pass (60 synthetic attacks, D70), poison becomes a rule in Attest 33/60, no gate 46, ACE 38, ReasoningBank 50, gateway v4 **0** (23 kept as unconfirmed notes, shown only in their own file). Version ranges and `superseded` notes; human-only retraction and supersession; wrong advice from a trusted reviewer: 0 critical errors in gateway v4 (D60) |
@@ -54,7 +62,7 @@ not compared (runs shared one runner). 安全以外的指标：重复扣款、�
 | **One design iteration** | [The gateway, v1 → v4](#one-design-iteration) below |
 | **A failure located and recovered** | Memory: a poison already in memory is quarantined and traced back to the runs it reached (shown in 23/33 held-out runs, applied in 14; quarantine removes it from retrieval and holds only the notes learned from it, D45). Engineering: [INC-2](INCIDENTS.md) (every context run crashed on unanswered tool calls; found, fixed, tested) |
 | **Real vs simulated** | Real: agent runs (DeepSeek), tests, logs in `runs/`. Simulated and labelled: the repositories, review comments, policies and all attack material. Every number in these documents is checked against `runs/` (`runs/audit_numbers`, D67) |
-| **AI involvement and my corrections** | [`AI_LOG.md`](AI_LOG.md): the decisions that shaped the work, with what the AI proposed and what I judged or corrected; [`DECISIONS.md`](DECISIONS.md) D1–D70 |
+| **AI involvement and my corrections** | [`AI_LOG.md`](AI_LOG.md): the decisions that shaped the work, with what the AI proposed and what I judged or corrected; [`DECISIONS.md`](DECISIONS.md) D1–D79 |
 
 ### Each module: the problem, why existing approaches fall short, the evidence
 
@@ -380,7 +388,10 @@ Long runs execute on GitHub Actions (`.github/workflows/experiment.yml`): push
 Use Attest with a real agent through MCP (`attest/mcp_server.py`, demo in
 [`docs/MCP_DEMO.md`](docs/MCP_DEMO.md)):
 `claude mcp add attest -- python -m attest.mcp_server`. The server computes the diff
-and runs the verification command itself; retraction is not exposed to agents.
+and runs the verification command itself, assesses every admitted note with gateway v4's deterministic checks
+(D75), never recalls an uncertain note until a person approves it (D78), and exposes no approve or retract tool:
+people use `python -m attest.admin review | approve | reject | retract | notes` (D77). Windows / Claude desktop setup
+and the rehearsed live script: `scripts/windows_demo/` (D76 fixed decoding on a Chinese-locale Windows).
 
 ## Limits
 
@@ -409,7 +420,7 @@ Sources for the industry and research context: [GitHub Copilot agentic memory](h
 | `runs/` | Every run: trajectories, diffs, `result.json`, memory event logs |
 | `report/index.html` | Interactive report of the main experiment |
 | `RESULTS.md`, `REAL_HISTORY.md` | Results |
-| `PREREGISTRATION.md`, `DECISIONS.md`, `AI_LOG.md`, `INCIDENTS.md` | Method, decisions D1–D74, AI collaboration log, incidents |
+| `PREREGISTRATION.md`, `DECISIONS.md`, `AI_LOG.md`, `INCIDENTS.md` | Method, decisions D1–D79, AI collaboration log, incidents |
 | `SCENARIO.md`, `scenario/history/` | Business scenario (synthetic) |
 | `ROADMAP.md`, `PROCESS_MEMORY.md` | Next steps (Attest 2.0), deliberately not added |
 
@@ -429,6 +440,8 @@ Sources for the industry and research context: [GitHub Copilot agentic memory](h
 | 每个模块：解决什么问题、现有方案为何不足、实验证据 | 见上方英文表 "Each module"：学习闭环与评估、写入门槛、作用域、门控 v4、人工生命周期、按重要程度注入、Context Manager、审计链；无效的尝试（遗忘、即时核验、混合检索、模型生成检查）单列，不进主线 |
 | 复用与自研、两项架构决策、一次设计迭代 | 见上方英文 Start here 一节 |
 | 失败定位与恢复 | 记忆层：隔离并追踪已入库的毒笔记（D45）；工程层：INC-2 |
+| 三项能力 | 持续经验学习、可信记忆与安全准入、人工治理与全生命周期管理（见上方英文 "Three capabilities" 表：子功能、演示位置与证据） |
+| 真实 Agent 现场运行 | Claude 桌面应用 + Attest MCP，两次会话共用一份团队记忆，5 分钟中英双语视频 `docs/attest_mcp_live.mp4`；人用的命令行 `python -m attest.admin` |
 | AI 参与与纠正 | `AI_LOG.md`、`DECISIONS.md` |
 
 

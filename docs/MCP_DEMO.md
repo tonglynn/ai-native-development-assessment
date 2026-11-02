@@ -15,8 +15,13 @@ Attest 以 MCP 服务器的形式运行，真实的编码 Agent 可以在任务�
   never by the agent.
 - **Notes** proposed by the agent go through the same write gate as in the
   experiment (source quote, applied changed line, verification).
-- **Retraction** is not an agent tool. A person withdraws a note from the command
-  line (`python -m attest retract`); it stays in the log as retired, with the reason.
+- **Admission** goes further than the write gate (D75): every admitted note is assessed with gateway v4's
+  deterministic checks (team code checks, registered policy and incident ids, trusted reviewer wording; no model,
+  no key). Approved notes become rules; uncertain ones are kept but never recalled until a person approves them
+  (D78); rejected ones are retired with the reason. The counterfactual check is not run on this path.
+- **Retraction and approval** are not agent tools. A person uses the command line:
+  `python -m attest.admin notes | review | approve | reject | retract` (D77; approvers come from
+  `ATTEST_APPROVERS`, and an agent or the note's proposer is refused). Retired notes stay in the log with the reason.
 
 ## Demo / 演示
 
@@ -60,3 +65,15 @@ python -m attest retract --repo . --note at-0001 --reason "why it no longer hold
 
 Distillation without proposed candidates uses DeepSeek (`DEEPSEEK_API_KEY`);
 agents that propose their own candidates need no key.
+
+## Live run in the Claude desktop app / Claude 桌面应用现场运行
+
+A real agent (Claude, in the Claude desktop app on Windows) used this server on the synthetic ledgerly repository in
+two conversations that share one team memory. The 5-minute bilingual video is
+[`attest_mcp_live.mp4`](attest_mcp_live.mp4) (subtitles: [`attest_mcp_live.srt`](attest_mcp_live.srt)); waits are sped up
+and every speed is shown. Review comments and the approver are simulated; the agent, the server and the tests ran
+for real. Step 6 approval and retraction were run by a person in PowerShell and not screen-recorded; the video shows
+the raw events from the memory log instead. Setup, the rehearsed prompts and reset scripts: `scripts/windows_demo/`;
+how the video was cut: `scripts/mcp_live_video/`.
+
+在 Windows 的 Claude 桌面应用里，真实的 Claude 通过本服务器在合成仓库 ledgerly 上完成了两次对话，两次共用一份团队记忆；视频见上。评审意见和审批人是模拟的，Agent、服务器和测试都是真实运行。
