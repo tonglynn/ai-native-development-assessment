@@ -50,12 +50,12 @@ export default function How({ go }) {
     <div className="grid gap-5">
       <div className="grid gap-2">
         <h2 className="m-0 text-2xl font-black">工作原理：三项能力</h2>
-        <p className="m-0 max-w-[70ch] text-soft">普通的 AI 记忆，是让模型自己总结"学到了什么"，然后直接存下来。Attest 把这件事拆成三项能力：会学、只学可信的、由人管着。点"Attest 怎么做"看每项能力的机制。</p>
+        <p className="m-0 max-w-[70ch] text-soft">朴素的 AI 记忆由模型自行总结所学内容并直接写入。Attest 将这一过程拆分为三项能力：持续经验学习、可信记忆与安全准入、人工治理与全生命周期管理。展开"Attest 怎么做"可查看各项能力的机制。</p>
       </div>
       <CapMap go={go} />
       <div className="grid gap-2">
         <h2 className="m-0 text-xl font-black">一条经验的生命周期</h2>
-        <p className="m-0 max-w-[70ch] text-soft">以演示运行里的任务 E04（部分退款）为例。点下面每一步，先看白话说明，再看这一步的真实数据。</p>
+        <p className="m-0 max-w-[70ch] text-soft">以演示运行中的任务 E04（部分退款）为例，依次查看每一步的说明与真实数据。</p>
       </div>
       <Panel title="一条经验从产生到被使用" aside={<Statuses kinds={["replay"]} />}>
         <div className="h-[120px]"><ReactFlow nodes={nodes} edges={edges} nodeTypes={{ n: Node }} fitView proOptions={{ hideAttribution: true }} panOnDrag={false} zoomOnScroll={false} zoomOnPinch={false} zoomOnDoubleClick={false} preventScrolling={false} nodesConnectable={false} onNodeClick={(_, n) => setSel(n.id)}><Grid gap={18} size={1} color="var(--rule)" /></ReactFlow></div>

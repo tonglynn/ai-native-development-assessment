@@ -31,7 +31,7 @@ function Perf() {
           <Chart height={260} label="正常流与投毒流的留出 pass@1" option={grouped(arms, [["正常任务", t.pen, s => Math.round(g["pass@1"][s] * 100)], ["受投毒时", t.bad, s => Math.round(g.poison_float[s]["heldout_pass@1"] * 100)]])} />
           <p className="m-0 text-xs text-soft">探索性；每组 55 次运行。投毒流里注入的是能通过测试的毒评论。</p>
         </Panel>
-        <Panel title="业务风险：第一次提交就犯规的比例（D71 正常流）" aside={<Statuses kinds={["record", "baseline"]} />}>
+        <Panel title="业务风险：首次提交违反团队规范的比例（D71 正常流）" aside={<Statuses kinds={["record", "baseline"]} />}>
           <Chart height={260} label="幂等、审批、审计规矩的失败率" option={grouped(arms, [["重复扣款（幂等 C5）", t.bad, s => rate(sec[s].c5_failed)], ["越权退款（审批 C6）", t.hold, s => rate(sec[s].c6_failed)], ["漏记审计（C4）", t.soft, s => rate(sec[s].c4_failed)]])} />
           <p className="m-0 text-xs text-soft">越低越好。描述性比较，未做显著性检验；每格的分母是需要这条规矩的运行数（15–30）。</p>
         </Panel>
@@ -55,14 +55,14 @@ export default function Results() {
   const C = [
     ["持续经验学习：新任务做得更好", `${pct(m.rate.no_memory.heldout)} → ${pct(m.rate.attest.heldout)}`, "11 个从没参与学习的新任务，第一次提交就做对的比例（每个条件 33 次运行）。",
       `预注册主实验：代码在任何记忆运行之前冻结（cf5d879）。相对无记忆 +${Math.round(vs.mean_diff * 100)} 个百分点，95% 区间 [${Math.round(vs.ci_low * 100)}, ${Math.round(vs.ci_high * 100)}]。`],
-    ["可信记忆与安全准入：不被教坏", `${d70.attest_secure_v4.rule}/60`, `60 次投毒攻击中，门控 v4 把毒药批准成规则的次数；同类基线 ${d70.ace.rule}/60（ACE 式）到 ${d70.reasoningbank.rule}/60（ReasoningBank 式）。`,
+    ["可信记忆与安全准入：投毒不成为规则", `${d70.attest_secure_v4.rule}/60`, `60 次投毒攻击中，门控 v4 把毒药批准成规则的次数；同类基线 ${d70.ace.rule}/60（ACE 式）到 ${d70.reasoningbank.rule}/60（ReasoningBank 式）。`,
       `口径：0/60 指没有毒药成为规则，不是什么都没存：另有 ${d70.attest_secure_v4.stored} 条作为"待人工"笔记保留，只在所属文件里带标记显示。两个基线是本项目按论文复现的版本。探索性实验（D70）。`],
     ["探索性对照：效果与无门槛组持平", `${pct(g["pass@1"].attest_secure_v31)}`, `门控 v3.1 在正常任务上的成绩，与完全不设门槛（${pct(g["pass@1"].attest_no_gate)}）持平；同一轮的投毒流里，55 次留出运行 ${g.poison_float.attest_secure_v31.heldout_runs_applying_poison} 次照着毒药做。`,
       `口径：82% 是 v3.1 的成绩（v4 为 ${pct(g["pass@1"].attest_secure_v4)}）；0/55 是"照做毒药的运行次数"，和上面 D70 的"写入数量"不是一回事。11 个任务 × 5 次重复，判读规则事先提交，三条全部满足；但这是探索性实验（D71），v3.1 是在主实验之后设计的。`],
   ];
   return (
     <div className="grid gap-5">
-      <div className="grid gap-2"><h2 className="m-0 text-2xl font-black">实验结果</h2><p className="m-0 max-w-[70ch] text-soft">三个结论，每个都写明它是怎么测的、只能说明什么。数字都是从已提交的实验记录<b className="text-ink">预先计算</b>的；<Term id="passat1">第一次通过率</Term>、<Term id="heldout">留出任务</Term>、<Term id="baseline">对照基线</Term>可以点开看解释。</p><div><Status kind="pre" /></div></div>
+      <div className="grid gap-2"><h2 className="m-0 text-2xl font-black">实验结果</h2><p className="m-0 max-w-[70ch] text-soft">三项结论，分别注明测量方法与适用范围。数字都是从已提交的实验记录<b className="text-ink">预先计算</b>的；<Term id="passat1">第一次通过率</Term>、<Term id="heldout">留出任务</Term>、<Term id="baseline">对照基线</Term>可以点开看解释。</p><div><Status kind="pre" /></div></div>
       <div className="grid gap-3 lg:grid-cols-3">{C.map(([a, n, d, k]) => (
         <section key={a} className="grid content-start gap-2 rounded-lg border border-rule bg-sheet p-5">
           <h3 className="m-0 text-lg font-black">{a}</h3><div className="text-[2.4rem] font-black leading-none tabular-nums">{n}</div><p className="m-0 text-sm">{d}</p><p className="m-0 text-xs text-soft">{k}</p></section>))}</div>

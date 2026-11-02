@@ -21,7 +21,7 @@ export default function Governance() {
     <div className="grid gap-5">
       <div className="grid gap-2">
         <CapIntro id="govern" />
-        <p className="m-0 max-w-[70ch] text-soft">演示：拿不准的经验不会当作规则用，而是进入<Term id="queue">待审队列</Term>，由业务负责人决定。下面每个按钮都在你的浏览器里<b className="text-ink">现场调用</b> Attest 的真实审批代码（attest/memory/review.py），作用在演示运行学到的记忆上。</p>
+        <p className="m-0 max-w-[70ch] text-soft">待人工的经验不作为规则使用，而是进入<Term id="queue">待审队列</Term>，由业务负责人决定。以下操作均在浏览器中<b className="text-ink">现场调用</b> Attest 的真实审批代码（attest/memory/review.py），作用于演示运行写入的记忆。</p>
         <p className="m-0 max-w-[70ch] rounded-md bg-holdwash px-3 py-2 text-sm text-hold">身份是演示用的：切换身份只能演示"给定这个身份，规则会怎么判"。真正的身份认证、授权和持久化审计必须由可信的后端完成，这里不演示。</p>
       </div>
       <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-soft">我现在是</span>{WHO.map(([k, l]) => <button key={k} onClick={() => setWho(k)} className={cn("rounded-full border px-3 py-1 text-sm", who === k ? "border-pen bg-pen text-white" : "border-rule bg-sheet")}>{l}</button>)}</div>
@@ -41,7 +41,7 @@ export default function Governance() {
                   <Button size="sm" onClick={() => act(`驳回 ${q.id}`, "G.reject(I, W, R)", { I: q.id, W: who, R: reason })}>驳回</Button></div>
               </li>))}</ul>
           </Panel>
-          <Panel title="现在给新任务 H04 检索，会注入哪些规则" aside={<Status kind="live" />}>
+          <Panel title="新任务 H04 的检索与注入结果" aside={<Status kind="live" />}>
             {ret && <div className="grid gap-2 text-sm"><div>注入：{ret.injected.map(i => <Tag key={i} tone={i === "at-0008" ? "ok" : "soft"} className="mr-1">{i}</Tag>)}</div>
               {Object.entries(ret.excluded).map(([k, v]) => <div key={k}><Tag tone="bad">{k}</Tag> 不注入：<span className="text-soft">{v}</span></div>)}</div>}
             <p className="m-0 mt-2 text-xs text-soft">每次操作后都重新调用真实的检索代码。</p>
@@ -60,13 +60,13 @@ export default function Governance() {
             </div>
             <p className="m-0 mt-2 text-xs text-soft">先以业务负责人身份批准 at-0008，再做第 2 步；换个身份试试会怎样。新阈值笔记是模拟的。</p>
           </Panel>
-          <Panel title="试试伪造批准" aside={<Statuses kinds={["live", "demo"]} />}>
+          <Panel title="伪造批准测试" aside={<Statuses kinds={["live", "demo"]} />}>
             <p className="m-0 text-sm">假设有人绕过审批接口，直接往日志里写一条"已批准"。</p>
             <div className="mt-3 flex flex-wrap gap-2"><Button size="sm" onClick={() => act("伪造：以当前身份直接写入批准 at-0003", "G.forge(I, W)", { I: "at-0003", W: who })}>伪造一条批准</Button><Button size="sm" tone="primary" onClick={runAudit}>运行审计</Button></div>
             {audit && (audit.length ? <div className="mt-3 grid gap-2 text-sm"><div><Stamp kind="refused" label="查出问题" /></div>{audit.map((a, i) => <div key={i} className="text-soft">日志第 {a.seq} 条：{a.id}，决定人 <code>{String(a.by)}</code>，问题：{a.problems.join("、")}</div>)}</div>
               : <div className="mt-3 flex items-center gap-2 text-sm"><Stamp kind="pass" label="0 处问题" /><span className="text-soft">每个决定都由登记的审批人、带依据做出</span></div>)}
           </Panel>
-          <div aria-live="polite"><Panel title="刚才发生了什么">
+          <div aria-live="polite"><Panel title="操作结果">
             {msgs.length === 0 && <p className="m-0 text-sm text-soft">还没有操作。</p>}
             <ol className="ruled m-0 list-none p-0">{msgs.map((m, i) => <li key={i} className="grid gap-1 py-2 text-sm"><div className="flex flex-wrap items-center gap-2"><Stamp kind={m.ok ? "done" : "refused"} /><b>{m.label}</b></div><div className="text-xs text-soft">身份 <code>{m.who}</code> · 代码返回：<code>{m.message}</code></div>{explain(m.message) && <div className="text-xs">{explain(m.message)}</div>}</li>)}</ol>
           </Panel></div>
