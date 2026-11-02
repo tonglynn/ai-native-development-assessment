@@ -2,11 +2,11 @@
 
 ## 演示前准备
 1. 托盘里右键 Claude 图标 → Quit，完全退出后重新打开（加载最新的 Attest 代码）。
-2. 开一个新对话，点输入框旁的"+" → Add folder，选 C:\Users\23778\Documents\AttestDemo。
+2. 开一个新对话，点输入框旁的"+" → Add folder，选 ~\Documents\AttestDemo。
 3. 确认工具列表里有 attest（recall、learn、report_outcome、list_notes）。
 4. 确认是干净状态：ledgerly-demo 是 v1.0.0 原样，记忆为空（见文末"演示后复原"）。
 
-说明：这是现场运行。评审意见、业务负责人是模拟的，代码仓库 ledgerly 是合成的。
+说明：路径里的 ~ 表示你的用户文件夹（例如 C:\Users\你的用户名），Attest 和 PowerShell 都能识别。这是现场运行。评审意见、业务负责人是模拟的，代码仓库 ledgerly 是合成的。
 每一步把"怎么问"里 > 后面的整段（英文和中文两段一起）原样粘贴给 Claude，让看视频的人不管读哪种语言都能看懂在问什么。两段说的是同一件事；Claude 一般会用中文回复，如果想让它用英文回复，在末尾加一句 "Please reply in English."。评审意见只有英文：它们模拟的是代码评审里的原话，Attest 要逐字核对证据，不翻译。经验编号按出现顺序：幂等 at-0001、float at-0002、工单 at-0003；以实际返回为准。
 
 ---
@@ -14,10 +14,10 @@
 ## 第 1 步：一开始没有经验（20 秒）
 
 **怎么问**
-> The repository is C:\Users\23778\Documents\AttestDemo\ledgerly-demo. The task: add refund(payment, amount, at) to ledgerly/adjustments.py; the support team uses it to refund customers. Only captured payments can be refunded. Partial refunds are allowed, but the total refunded must never exceed the captured amount. Keep the running total in payment.refunded_amount and set payment.status to "refunded" once the full amount has been refunded. Return the payment.
+> The repository is ~\Documents\AttestDemo\ledgerly-demo. The task: add refund(payment, amount, at) to ledgerly/adjustments.py; the support team uses it to refund customers. Only captured payments can be refunded. Partial refunds are allowed, but the total refunded must never exceed the captured amount. Keep the running total in payment.refunded_amount and set payment.status to "refunded" once the full amount has been refunded. Return the payment.
 > Before you start, call attest's recall for this repository's verified team experience, with the English task description above as the task argument. Only look it up for now; do not change any code.
 >
-> 仓库在 C:\Users\23778\Documents\AttestDemo\ledgerly-demo。我们要做的任务是：在 ledgerly/adjustments.py 里新增 refund(payment, amount, at)，客服用它给客户退款。只有已扣款（captured）的支付才能退款；允许部分退款，但累计退款不能超过扣款金额。累计金额记在 payment.refunded_amount，全部退完时把 payment.status 设为 "refunded"。返回 payment。
+> 仓库在 ~\Documents\AttestDemo\ledgerly-demo。我们要做的任务是：在 ledgerly/adjustments.py 里新增 refund(payment, amount, at)，客服用它给客户退款。只有已扣款（captured）的支付才能退款；允许部分退款，但累计退款不能超过扣款金额。累计金额记在 payment.refunded_amount，全部退完时把 payment.status 设为 "refunded"。返回 payment。
 > 动手前先用 attest 的 recall 查这个仓库的已验证团队经验，task 参数填上面那段英文任务描述。先只查，不要改代码。
 
 **为什么这么问**
@@ -130,7 +130,7 @@
 
 **怎么做**：打开 PowerShell 或命令提示符（不是在 Claude 里），逐行运行：
 ```
-cd C:\Users\23778\Documents\AttestDemo
+cd ~\Documents\AttestDemo
 .\admin.bat review
 .\admin.bat approve --note at-0003 --by agent:claude --reason "looks fine / 看起来没问题"
 .\admin.bat approve --note at-0003 --by owner:finance-lead --reason "Finance reconciliation needs a ticket per refund / 财务对账要求每笔退款对应工单"
@@ -167,7 +167,7 @@ cd C:\Users\23778\Documents\AttestDemo
 
 方法二：在 PowerShell 或命令提示符里运行：
 ```
-cd C:\Users\23778\Documents\AttestDemo\ledgerly-demo
+cd ~\Documents\AttestDemo\ledgerly-demo
 git checkout v1.0.0 -- .
 git clean -fd
 ```
@@ -179,4 +179,4 @@ git clean -fd
 - learn 返回 error：看它给的 hint；最常见的是没有提出 candidates，补一句 "Please propose a note in candidates and call learn again. 请在 candidates 里提出一条经验再调用 learn。"。
 - 第 2 步 state 是 uncertain 而不是 approved：说明证据没有引用 INC-204 那句。可以顺势讲"没有来源的经验不会自动成为规则，要等人审核"，或者让它重新用 INC-204 那句作证据再 learn 一次。
 - 第 4 步 state 不是 uncertain：把 assessed 的内容贴出来再判断，不要临场改口径。
-- 现场卡住：切到备用视频 attest_walkthrough.mp4。
+- 现场卡住：切到录好的现场运行视频 docs/attest_mcp_live.mp4。

@@ -10,4 +10,4 @@ set "ATTEST_HOME=%~dp0memory"
 set ATTEST_APPROVERS=owner:finance-lead
 set PYTHONUTF8=1
 set PYTHONIOENCODING=utf-8
-"C:\Users\23778\AppData\Local\Programs\Python\Python312\python.exe" -m attest.admin %1 --repo "%~dp0ledgerly-demo" %2 %3 %4 %5 %6 %7 %8 %9
+"%LOCALAPPDATA%\Programs\Python\Python312\python.exe" -m attest.admin %1 --repo "%~dp0ledgerly-demo" %2 %3 %4 %5 %6 %7 %8 %9
