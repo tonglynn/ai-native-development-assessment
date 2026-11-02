@@ -53,7 +53,7 @@ export function Drawer({ open, onOpenChange, title, children }) {
 }
 
 const STATUS = { replay: ["真实实验回放", "bg-penwash text-pen"], record: ["真实实验记录", "bg-penwash text-pen"], live: ["浏览器现场运行", "bg-okwash text-ok"],
-  notrun: ["未现场执行 · 依据不足", "bg-holdwash text-hold"], demo: ["演示身份", "bg-holdwash text-hold"], sim: ["模拟 / 合成", "bg-code text-soft"], baseline: ["复现基线，非官方产品", "bg-code text-soft"],
+  notrun: ["未现场执行 · 依据不足", "bg-holdwash text-hold"], demo: ["演示身份", "bg-holdwash text-hold"], sim: ["模拟 / 合成", "bg-code text-soft"], baseline: ["对照基线", "bg-code text-soft"],
   pre: ["预先计算", "bg-code text-ink"], notimpl: ["尚未实现", "bg-badwash text-bad"] };
 export const Status = ({ kind }) => { const [t, c] = STATUS[kind]; return <span className={cn("whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium", c)}>{t}</span>; };
 export const Statuses = ({ kinds }) => <span className="flex flex-wrap gap-1">{kinds.map(k => <Status key={k} kind={k} />)}</span>;

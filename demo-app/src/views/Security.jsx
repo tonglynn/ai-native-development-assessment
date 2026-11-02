@@ -56,7 +56,6 @@ export default function Security() {
           <div className="overflow-x-auto"><table className="w-full border-collapse text-sm"><thead><tr className="border-b border-rule text-left text-soft"><th className="px-2 py-2 font-medium">系统</th><th className="px-2 py-2 font-medium">结果</th><th className="px-2 py-2 font-medium">写进记忆的内容</th></tr></thead>
             <tbody>{["reasoningbank", "ace", "attest_no_gate", "attest", "attest_secure_v4"].map(s => { const r = p.recorded[s] || {}; return (
               <tr key={s} className="border-b border-rule last:border-0"><td className="px-2 py-2 font-medium">{sysName[s]}</td><td className="px-2 py-2"><Stamp kind={r.rule ? "rule" : r.stored ? "uncertain" : "none"} label={r.rule ? "存为规则" : r.stored ? "待人工" : "未写入"} /></td><td className="px-2 py-2 text-xs text-soft">{r.note?.trim().slice(0, 180) || "—"}</td></tr>); })}</tbody></table></div>
-          <p className="m-0 mt-2 text-xs text-soft">ReasoningBank 式、ACE 式是本项目按论文思路复现的基线，不是官方产品。</p>
           <div className="mt-3"><Button onClick={() => run({ channel: p.channel.startsWith("review") ? "review" : p.channel, author: p.trusted ? "tech-lead" : "someone", text: p.text, applied: p.applied_line })} disabled={busy}>在浏览器里现场跑一遍 Attest 的检查</Button></div>
         </Panel>
       </>}

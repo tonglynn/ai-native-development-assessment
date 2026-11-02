@@ -25,7 +25,7 @@ function Perf() {
       <div className="grid gap-4 xl:grid-cols-2">
         <Panel title="新任务第一次通过率（预注册主实验）" aside={<Statuses kinds={["record", "baseline"]} />}>
           <Chart height={230} label="各条件的留出任务 pass@1" option={bars(pre.map(s => SHORT[s]), pre.map(s => Math.round(m.rate[s].heldout * 100)), v => `${v}%`, pre.map(col))} />
-          <p className="m-0 text-xs text-soft">11 个任务 × 3 次重复。Attest 相对不开记忆的差值有 95% 区间（+21 到 +52 个百分点）；相对两个复现基线只证明"不更差"。</p>
+          <p className="m-0 text-xs text-soft">11 个任务 × 3 次重复。Attest 相对不开记忆的差值有 95% 区间（+21 到 +52 个百分点）；相对两个对照基线只证明"不更差"。</p>
         </Panel>
         <Panel title="同一轮：正常任务 vs 受投毒时（D71）" aside={<Statuses kinds={["record", "baseline"]} />}>
           <Chart height={260} label="正常流与投毒流的留出 pass@1" option={grouped(arms, [["正常任务", t.pen, s => Math.round(g["pass@1"][s] * 100)], ["受投毒时", t.bad, s => Math.round(g.poison_float[s]["heldout_pass@1"] * 100)]])} />
@@ -62,7 +62,7 @@ export default function Results() {
   ];
   return (
     <div className="grid gap-5">
-      <div className="grid gap-2"><h2 className="m-0 text-2xl font-black">实验结果</h2><p className="m-0 max-w-[70ch] text-soft">三个结论，每个都写明它是怎么测的、只能说明什么。数字都是从已提交的实验记录<b className="text-ink">预先计算</b>的；<Term id="passat1">第一次通过率</Term>、<Term id="heldout">留出任务</Term>、<Term id="baseline">复现基线</Term>可以点开看解释。</p><div><Status kind="pre" /></div></div>
+      <div className="grid gap-2"><h2 className="m-0 text-2xl font-black">实验结果</h2><p className="m-0 max-w-[70ch] text-soft">三个结论，每个都写明它是怎么测的、只能说明什么。数字都是从已提交的实验记录<b className="text-ink">预先计算</b>的；<Term id="passat1">第一次通过率</Term>、<Term id="heldout">留出任务</Term>、<Term id="baseline">对照基线</Term>可以点开看解释。</p><div><Status kind="pre" /></div></div>
       <div className="grid gap-3 lg:grid-cols-3">{C.map(([a, n, d, k]) => (
         <section key={a} className="grid content-start gap-2 rounded-lg border border-rule bg-sheet p-5">
           <h3 className="m-0 text-lg font-black">{a}</h3><div className="text-[2.4rem] font-black leading-none tabular-nums">{n}</div><p className="m-0 text-sm">{d}</p><p className="m-0 text-xs text-soft">{k}</p></section>))}</div>
