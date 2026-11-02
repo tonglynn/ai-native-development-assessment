@@ -2,12 +2,12 @@ import { useRef } from "react";
 import { CapMap, Term } from "../ui";
 const CH = [["能力 01 · 经验学习与准入", 10], ["能力 02 · 风险拦截", 70], ["待人工判定", 134], ["新任务复用经验", 150], ["能力 03 · 人工治理", 165], ["会话二 · 跨会话复用", 215], ["结果小结", 295]];
 const Q = [
-  ["为什么 AI 编程助手需要长期记忆？", "background"],
-  ["经验从哪里来？", "how"],
-  ["为什么不能直接相信 AI 学到的东西？", "security"],
-  ["怎么判断一条经验值得保留？", "how"],
-  ["为什么有些经验必须交给人审核？", "governance"],
-  ["这些机制是怎么实现的、证据在哪？", "evidence"],
+  ["业务场景与长期记忆的需求", "background"],
+  ["经验采集与写入路径", "how"],
+  ["风险识别：可通过测试的错误建议", "security"],
+  ["证据验证与三态判定", "how"],
+  ["人工审核与职责分离", "governance"],
+  ["实现依据与证据来源", "evidence"],
 ];
 export default function Opening({ go }) {
   const vid = useRef(null);
@@ -15,9 +15,8 @@ export default function Opening({ go }) {
   return (
     <div className="grid gap-7">
       <div className="grid gap-4">
-        <h1 className="m-0 max-w-[20ch] text-[2.5rem] font-black leading-[1.1] tracking-tight">AI 编程助手不记得评审教过它什么。</h1>
-        <p className="m-0 max-w-[62ch] text-xl font-bold">Attest：面向 MCP 兼容型 AI Agent 的统一记忆治理中间层。</p>
-        <p className="m-0 max-w-[62ch] text-lg text-soft">今天评审指出"重复的退款请求会退两次钱"，它改好了；下一个任务，它又犯同样的错。Attest 给 <Term id="agent">AI 编程助手</Term>一份团队的<Term id="memory">长期记忆</Term>：评审教过一次的经验，经过验证后记下来，下次自动用上；没有证据的、可能有害的，不让它记；拿不准的，交给人决定。</p>
+        <h1 className="m-0 max-w-[24ch] text-[2.5rem] font-black leading-[1.15] tracking-tight">Attest：面向 MCP 兼容型 AI Agent 的统一记忆治理中间层</h1>
+        <p className="m-0 max-w-[66ch] text-lg text-soft">代码评审中已纠正的问题，常在后续任务中重复出现；而未经验证的经验一旦写入<Term id="memory">长期记忆</Term>，又会被固化为规则。Attest 为 <Term id="agent">AI 编程智能体</Term>提供证据门控的团队记忆：经验须经来源核验与证据判定后方可写入，可信经验在后续任务中自动召回，证据不足的经验交由人工审核。</p>
         <p className="m-0 max-w-[62ch] text-sm text-soft">通过标准 MCP 接口提供经验学习、证据验证、记忆检索与生命周期管理，与具体模型解耦。已验证：Claude Desktop（MCP，真实运行）与 mini-swe-agent（基准实验）；其他 MCP 客户端可接入，尚未测试。</p>
       </div>
       <CapMap go={go} compact />
@@ -28,9 +27,9 @@ export default function Opening({ go }) {
       <p className="m-0 text-xs text-soft">真实运行录屏：Claude 桌面应用通过 MCP 使用 Attest，两次会话共用一份团队记忆；等待部分已加速并标出倍速。仓库是合成的，评审意见和审批人是模拟的。</p>
       <p className="m-0 -mt-4 text-sm">答辩幻灯片：<a className="text-pen underline" href="../slides/attest_defense_slides.pdf" target="_blank" rel="noopener">PDF</a> · <a className="text-pen underline" href="../slides/attest_defense_slides.pptx">PowerPoint</a>（正文 14 页 + 证据索引与附录；幻灯片中的演示视频即上方录屏）</p>
       <section className="grid gap-2">
-        <h2 className="m-0 text-lg font-black">这个演示依次回答六个问题</h2>
+        <h2 className="m-0 text-lg font-black">演示结构</h2>
         <ol className="m-0 grid gap-1 pl-5 text-sm">{Q.map(([q, v]) => <li key={q}><button onClick={() => go(v)} className="text-left hover:text-pen">{q}</button></li>)}</ol>
-        <p className="m-0 text-sm text-soft">每处都标着它是<b className="text-ink">浏览器现场运行</b>、<b className="text-ink">真实实验回放</b>、<b className="text-ink">预先计算</b>、<b className="text-ink">演示身份</b>还是<b className="text-ink">模拟</b>；带下划虚线的词可以点开，看一句话解释、为什么需要和具体实现。</p>
+        <p className="m-0 text-sm text-soft">各部分均标注材料类型：<b className="text-ink">浏览器现场运行</b>、<b className="text-ink">真实实验回放</b>、<b className="text-ink">预先计算</b>、<b className="text-ink">演示身份</b>或<b className="text-ink">模拟</b>。带下划虚线的术语可展开，查看定义、业务动机与具体实现。</p>
       </section>
     </div>
   );

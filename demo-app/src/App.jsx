@@ -11,7 +11,7 @@ const Evidence = lazy(() => import("./views/Evidence"));
 const Results = lazy(() => import("./views/Results"));
 
 const VIEWS = [
-  ["opening", "开场", "为什么 AI 需要长期记忆", Opening],
+  ["opening", "开场", "项目定位与演示结构", Opening],
   ["background", "业务背景", "计费系统和三条团队规矩", Background],
   ["how", "工作原理", "三项能力与一条经验的生命周期", How],
   ["growth", "能力 01 持续经验学习", "开记忆 vs 不开记忆的真实运行", Growth],
