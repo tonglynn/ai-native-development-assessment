@@ -1,4 +1,16 @@
-# Attest: verified, scoped, retractable memory for coding agents
+# Attest
+
+**AI 编码 Agent 的统一记忆治理：从评审反馈中学习可验证的经验（通过 MCP 接入）**
+*Verified, scoped, retractable memory for coding agents.*
+
+[![Live demo](https://img.shields.io/badge/demo-live-2648b8)](https://tonglynn.github.io/ai-native-development-assessment/)
+[![Slides](https://img.shields.io/badge/slides-PDF-1c5cab)](docs/slides/attest_defense_slides.pdf)
+[![Tests](https://img.shields.io/badge/tests-177%20passed-1d7448)](#)
+[![MCP](https://img.shields.io/badge/MCP-compatible-5b6a60)](#)
+
+| 持续经验学习 | 可信记忆与安全准入 | 人工治理与全生命周期 |
+|---|---|---|
+| 首次通过率 **33% → 70%**（预注册主实验） | 有害建议成为规则 **0/60**（D70） | 批准与撤回仅限登记审批人 |
 
 **English** · [中文说明](#中文说明)
 
