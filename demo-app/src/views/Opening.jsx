@@ -15,7 +15,7 @@ export default function Opening({ go }) {
   return (
     <div className="grid gap-7">
       <div className="grid gap-4">
-        <h1 className="m-0 max-w-[24ch] text-[2.5rem] font-black leading-[1.15] tracking-tight">Attest：AI 编码 Agent 的统一记忆治理——从评审反馈中学习可验证的经验</h1>
+        <h1 className="m-0 max-w-[40ch] text-[2rem] font-black leading-[1.25] tracking-tight">Attest：AI 编码 Agent 的统一记忆治理——<br className="hidden md:block" />从评审反馈中学习可验证的经验</h1>
         <p className="m-0 max-w-[66ch] text-lg text-soft">代码评审中已纠正的问题，常在后续任务中重复出现；而未经验证的经验一旦写入<Term id="memory">长期记忆</Term>，又会被固化为规则。Attest 为 <Term id="agent">AI 编程智能体</Term>提供证据门控的团队记忆：经验须经来源核验与证据判定后方可写入，可信经验在后续任务中自动召回，证据不足的经验交由人工审核。</p>
         <p className="m-0 max-w-[62ch] text-sm text-soft">通过标准 MCP 接口提供经验学习、证据验证、记忆检索与生命周期管理，与具体模型解耦。已验证：Claude Desktop（MCP，真实运行）与 mini-swe-agent（基准实验）；其他 MCP 客户端可接入，尚未测试。</p>
       </div>

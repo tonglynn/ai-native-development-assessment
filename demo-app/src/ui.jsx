@@ -28,7 +28,7 @@ export const Tag = ({ tone = "pen", children, className }) => {
 };
 export const Panel = ({ title, aside, children, className }) => (
   <section className={cn("rounded-lg border border-rule bg-sheet", className)}>
-    {title && <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-rule px-4 py-2.5"><h3 className="m-0 text-[15px] font-bold">{title}</h3>{aside}</header>}
+    {title && <header className="flex flex-wrap items-center justify-between gap-2 rounded-t-lg border-b border-rule bg-[color-mix(in_srgb,var(--code)_60%,var(--sheet))] px-4 py-2.5"><h3 className="m-0 text-[15px] font-bold">{title}</h3>{aside}</header>}
     <div className="min-w-0 p-4">{children}</div>
   </section>
 );
@@ -119,13 +119,13 @@ export function CapIntro({ id, scene }) {
   const c = CAPS.find(x => x.id === id);
   return (
     <div className="grid gap-2">
-      <span className="font-mono text-xs text-soft">能力 {c.n} · {c.en}</span>
+      <span className="font-mono text-xs font-medium tracking-wide text-pen">能力 {c.n} · {c.en}</span>
       <h2 className="m-0 text-2xl font-black">{c.zh}</h2>
       <p className="m-0 max-w-[70ch] text-[15px]">{c.l1}</p>
-      <div className="grid max-w-[900px] gap-2 rounded-lg border border-rule bg-sheet p-3 text-sm sm:grid-cols-3">
-        <div><b className="block text-xs text-soft">传统做法的问题</b>{c.why}</div>
-        <div><b className="block text-xs text-soft">数据和依据从哪来</b>{c.data}</div>
-        <div><b className="block text-xs text-soft">Attest 怎么实现</b>{c.how}<span className="mt-1 flex flex-wrap gap-1">{c.subs.map(s => <Term key={s} id={s}><span className="text-xs text-pen">{FEATURES[s].zh}</span></Term>)}</span></div>
+      <div className="mt-1 grid max-w-[960px] gap-4 rounded-lg border border-rule bg-sheet p-4 text-sm leading-relaxed sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-rule [&>div]:sm:px-4 [&>div:first-child]:sm:pl-0 [&>div:last-child]:sm:pr-0">
+        <div><b className="mb-1 block text-xs font-bold text-soft">传统做法的问题</b>{c.why}</div>
+        <div><b className="mb-1 block text-xs font-bold text-soft">数据和依据从哪来</b>{c.data}</div>
+        <div><b className="mb-1 block text-xs font-bold text-pen">Attest 怎么实现</b>{c.how}<span className="mt-1 flex flex-wrap gap-1">{c.subs.map(s => <Term key={s} id={s}><span className="text-xs text-pen">{FEATURES[s].zh}</span></Term>)}</span></div>
       </div>
       {scene && <p className="m-0 max-w-[70ch] text-soft">{scene}</p>}
     </div>);

@@ -38,7 +38,7 @@ export default function App() {
               <button key={k} onClick={() => go(k)} aria-current={view === k ? "page" : undefined} className={cn("grid shrink-0 rounded-md px-3 py-2 text-left", view === k ? "bg-sheet shadow-[inset_3px_0_0_var(--pen)]" : "hover:bg-sheet")}>
                 <span className="text-sm font-bold">{t}</span><span className="hidden text-xs text-soft lg:block">{d}</span></button>))}
           </nav>
-          <div className="hidden gap-2 border-t border-rule pt-4 text-xs text-soft lg:grid">
+          <div className="hidden gap-2.5 border-t border-rule pt-4 text-xs leading-snug text-soft lg:grid">
             <b className="text-ink">每处内容都标明它是什么</b>
             {HONESTY.map(([k, , d]) => <div key={k} className="grid gap-0.5"><Status kind={k} /><span>{d}</span></div>)}
           </div>
@@ -47,7 +47,7 @@ export default function App() {
         <main id="main" className="grid min-w-0 content-start gap-8" data-view={view}>
           <div className="flex justify-end lg:hidden"><button onClick={() => openTerm("*")} className="text-sm font-medium text-pen">术语与功能表</button></div>
           <Suspense fallback={<p className="text-soft">正在载入…</p>}><V go={go} /></Suspense>
-          {i < VIEWS.length - 1 && <div className="border-t border-rule pt-4"><button onClick={() => go(VIEWS[i + 1][0])} className="text-sm font-medium text-pen">下一步：{VIEWS[i + 1][1]}</button></div>}
+          {i < VIEWS.length - 1 && <div className="flex justify-end border-t border-rule pt-5"><button onClick={() => go(VIEWS[i + 1][0])} className="rounded-md border border-rule bg-sheet px-4 py-2 text-sm font-medium text-pen hover:border-pen">下一步：{VIEWS[i + 1][1]}</button></div>}
         </main>
       </div>
     </div>
