@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchJson } from "../py";
-import { Panel, Code, Stamp, Tag, Source, cn } from "../ui";
+import { Panel, Code, Stamp, Tag, Source, cn, CapIntro, Term } from "../ui";
 import { Status, Statuses } from "../ui";
 
 const COND = { attest: "开记忆（Attest）", no_memory: "不开记忆" };
@@ -29,7 +29,7 @@ const fmtMs = ms => ms == null ? "—" : ms < 1000 ? `${ms} ms` : `${(ms / 1000)
 function kindLabel(s) { return { retrieve: "记忆", llm: "模型", tool: "命令", tests: "测试", review: "评审" }[s.kind]; }
 function SpanDetail({ s }) {
   if (!s) return null;
-  if (s.kind === "retrieve") return <div className="grid gap-2"><p className="m-0 text-sm">任务开始前，Attest 按仓库、版本和相关度检索，把 {s.injected.length} 条笔记（约 {s.memory_tokens} token）加进 AI 收到的提示里：</p><Code className="max-h-[420px] overflow-auto">{s.context}</Code></div>;
+  if (s.kind === "retrieve") return <div className="grid gap-2"><p className="m-0 text-sm"><b>上下文检索与记忆注入：</b>任务开始前，Attest 按仓库、版本和相关度检索，把 {s.injected.length} 条笔记（约 {s.memory_tokens} token）加进 AI 收到的提示里：</p><Code className="max-h-[420px] overflow-auto">{s.context}</Code></div>;
   if (s.kind === "llm") return <div className="grid gap-3 text-sm">
     <div className="flex flex-wrap gap-2"><Tag tone="soft">输入 {s.prompt_tokens ?? "—"} token</Tag><Tag tone="soft">其中缓存 {s.cached_tokens ?? 0}</Tag><Tag tone="soft">输出 {s.completion_tokens ?? "—"} token</Tag><Tag tone="soft">${(s.cost ?? 0).toFixed(5)}</Tag><Tag tone="soft">{fmtMs(s.ms)}</Tag></div>
     {s.input.length > 0 && <div className="grid gap-1"><span className="text-xs text-soft">这次调用新收到的内容（上一条命令的输出或评审意见；更早的对话省略）</span>{s.input.map((x, i) => <Code key={i} className="max-h-48 overflow-auto">{x}</Code>)}</div>}
@@ -54,10 +54,8 @@ export default function Growth() {
   const overall = c => { const rs = all.filter(r => r.condition === c); return `${rs.filter(r => r.first_pass).length}/${rs.length}`; };
   return (
     <div className="grid gap-5">
-      <div className="grid gap-2">
-        <h2 className="m-0 text-2xl font-black">场景一：AI 如何成长</h2>
-        <p className="m-0 max-w-[70ch] text-soft">11 个"留出任务"都没参与过经验学习。同一个任务，开记忆和不开记忆各跑 3 次，看 AI 每一步做了什么。全部是预注册主实验的<b className="text-ink">真实运行回放</b>；只展示模型可见的输入、输出和它执行的命令，不展示也没有开启思考过程。</p>
-      </div>
+      <CapIntro id="learn" />
+      <p className="m-0 max-w-[70ch] text-soft">演示：11 个<Term id="heldout">留出任务</Term>都没参与过经验学习。同一个任务，开记忆和不开记忆各跑 3 次，看 AI 每一步做了什么、<Term id="passat1">第一次</Term>有没有做对。全部是预注册主实验的<b className="text-ink">真实实验回放</b>；只展示模型可见的输入、输出和它执行的命令，不展示也没有开启思考过程。</p>
       <div className="flex flex-wrap items-end gap-4 rounded-lg border border-rule bg-sheet px-4 py-3">
         <label className="grid gap-1 text-xs text-soft" htmlFor="task">任务
           <select id="task" value={task} onChange={e => setTask(e.target.value)} className="rounded border border-rule bg-sheet px-2 py-1.5 text-sm text-ink">{tasks.map(([id, t]) => <option key={id} value={id}>{id}：{t}</option>)}</select></label>

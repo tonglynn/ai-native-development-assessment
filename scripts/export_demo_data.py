@@ -123,6 +123,7 @@ def main():
             "events": [{k: e.get(k) for k in ("seq", "type", "id", "reason")} | {"item_id": (e.get("item") or {}).get("id")} for e in events],
             "reuse_files": reuse_files, "learn_files": learn_files, "poison_downstream": poison_down,
             "d70": pc_sum, "d71": gc, "d71_secondary": sec, "main": main_experiment(),
+            "counterfactual": json.loads((ROOT / "runs/counterfactual/results.json").read_text()),
             "source_commit": __import__("subprocess").run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, cwd=ROOT).stdout.strip()}
     out = ROOT / "demo-app/src/data.json"
     out.write_text(json.dumps(data, ensure_ascii=False, default=str))

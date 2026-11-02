@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { call, fetchJson } from "../py";
-import { Panel, Stamp, Button, Code, Source, Tag, cn } from "../ui";
+import { Panel, Stamp, Button, Code, Source, Tag, cn, CapIntro, Term } from "../ui";
 import { Status, Statuses } from "../ui";
 
 const WHO = [["agent:coder", "AI 智能体"], ["agent:distiller", "提出这条经验的提炼程序"], ["dev:alice", "未登记的员工"], ["owner:finance-lead", "业务负责人（登记的审批人）"]];
@@ -16,12 +16,12 @@ export default function Governance() {
     await call("(globals().__setitem__('G', web_engine.Governance(EV)), 'null')[1]", { EV: JSON.stringify(ev) }, setStatus); setReady(true); await refresh(); })(); }, []);
   const act = async (label, expr, args) => { const { result, ms } = await call(expr, args); setMsgs(m => [{ label, who, ...result, ms }, ...m].slice(0, 8)); await refresh(); return result; };
   const runAudit = async () => setAudit((await call("G.audit()")).result);
-  if (!ready) return <div className="grid gap-2"><h2 className="m-0 text-2xl font-black">场景三：人如何管理 AI</h2><p className="text-soft">{status || "正在准备"}…</p></div>;
+  if (!ready) return <div className="grid gap-2"><CapIntro id="govern" /><p className="text-soft">{status || "正在准备"}…</p></div>;
   return (
     <div className="grid gap-5">
       <div className="grid gap-2">
-        <h2 className="m-0 text-2xl font-black">场景三：人如何管理 AI</h2>
-        <p className="m-0 max-w-[70ch] text-soft">拿不准的经验不会当作规则用，而是进入待审队列，由业务负责人决定。下面每个按钮都在你的浏览器里<b className="text-ink">现场调用</b> Attest 的真实审批代码（attest/memory/review.py），作用在演示运行学到的记忆上。</p>
+        <CapIntro id="govern" />
+        <p className="m-0 max-w-[70ch] text-soft">演示：拿不准的经验不会当作规则用，而是进入<Term id="queue">待审队列</Term>，由业务负责人决定。下面每个按钮都在你的浏览器里<b className="text-ink">现场调用</b> Attest 的真实审批代码（attest/memory/review.py），作用在演示运行学到的记忆上。</p>
         <p className="m-0 max-w-[70ch] rounded-md bg-holdwash px-3 py-2 text-sm text-hold">身份是演示用的：切换身份只能演示"给定这个身份，规则会怎么判"。真正的身份认证、授权和持久化审计必须由可信的后端完成，这里不演示。</p>
       </div>
       <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-soft">我现在是</span>{WHO.map(([k, l]) => <button key={k} onClick={() => setWho(k)} className={cn("rounded-full border px-3 py-1 text-sm", who === k ? "border-pen bg-pen text-white" : "border-rule bg-sheet")}>{l}</button>)}</div>
@@ -46,12 +46,12 @@ export default function Governance() {
               {Object.entries(ret.excluded).map(([k, v]) => <div key={k}><Tag tone="bad">{k}</Tag> 不注入：<span className="text-soft">{v}</span></div>)}</div>}
             <p className="m-0 mt-2 text-xs text-soft">每次操作后都重新调用真实的检索代码。</p>
           </Panel>
-          <Panel title="审计日志（只追加，最新 10 条）" aside={<Status kind="live" />}>
+          <Panel title="审计日志：记忆版本管理与来源追溯（只追加，最新 10 条）" aside={<Status kind="live" />}>
             <ol className="ruled m-0 list-none p-0 text-sm">{log.slice().reverse().map(e => <li key={e.seq} className="flex gap-3 py-1.5"><span className="w-10 shrink-0 font-mono text-xs text-soft">#{e.seq}</span><span className="w-12 shrink-0">{e.type}</span><span className="w-16 shrink-0 font-mono text-xs">{e.id || e.item}</span><span className="min-w-0 text-soft">{e.reason}</span></li>)}</ol>
           </Panel>
         </div>
         <div className="grid content-start gap-5">
-          <Panel title="政策变更" aside={<Statuses kinds={["live", "sim"]} />}>
+          <Panel title="人工审核与政策变更" aside={<Statuses kinds={["live", "sim"]} />}>
             <p className="m-0 text-sm">FIN-2026-11 把超额退款的审批阈值从 500.00 提到 1000.00。</p>
             <div className="mt-3 grid gap-2">
               <Button size="sm" onClick={() => act("新政策生效：新阈值笔记进入队列（模拟）", "G.new_threshold_note()", {})}>1 新政策生效，新阈值笔记进入队列</Button>

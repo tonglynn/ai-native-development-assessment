@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { cn } from "./ui";
+import { cn, GlossaryDrawer, openTerm, Status } from "./ui";
+import { HONESTY } from "./glossary";
 import Opening from "./views/Opening";
 import Background from "./views/Background";
 import How from "./views/How";
@@ -10,14 +11,14 @@ const Evidence = lazy(() => import("./views/Evidence"));
 const Results = lazy(() => import("./views/Results"));
 
 const VIEWS = [
-  ["opening", "开场", "这个项目解决什么问题", Opening],
-  ["background", "业务背景", "计费系统和三条规矩", Background],
-  ["how", "它怎么工作", "经验的写入流程", How],
-  ["growth", "场景一：成长", "开记忆 vs 不开记忆的运行过程", Growth],
-  ["security", "场景二：防学坏", "毒药建议进来会怎样", Security],
-  ["governance", "场景三：人来管", "审批、政策变更、审计", Governance],
-  ["evidence", "证据详情", "为什么相信一条经验", Evidence],
-  ["results", "表现如何", "三个结论和局限", Results],
+  ["opening", "开场", "为什么 AI 需要长期记忆", Opening],
+  ["background", "业务背景", "计费系统和三条团队规矩", Background],
+  ["how", "工作原理", "三项能力与一条经验的生命周期", How],
+  ["growth", "能力 01 持续经验学习", "开记忆 vs 不开记忆的真实运行", Growth],
+  ["security", "能力 02 可信记忆与安全准入", "能通过测试的坏建议进来会怎样", Security],
+  ["governance", "能力 03 人工治理与全生命周期", "审批、政策变更、审计", Governance],
+  ["evidence", "来源追溯", "每条经验的 8 项证据", Evidence],
+  ["results", "实验结果", "效果、安全、局限与尚未实现", Results],
 ];
 const fromHash = () => VIEWS.find(v => v[0] === location.hash.slice(1))?.[0] || "opening";
 export default function App() {
@@ -37,16 +38,20 @@ export default function App() {
               <button key={k} onClick={() => go(k)} aria-current={view === k ? "page" : undefined} className={cn("grid shrink-0 rounded-md px-3 py-2 text-left", view === k ? "bg-sheet shadow-[inset_3px_0_0_var(--pen)]" : "hover:bg-sheet")}>
                 <span className="text-sm font-bold">{t}</span><span className="hidden text-xs text-soft lg:block">{d}</span></button>))}
           </nav>
-          <div className="hidden gap-1.5 border-t border-rule pt-4 text-xs text-soft lg:grid">
-            <div><b className="text-ink">真实回放</b>：已提交的运行记录</div><div><b className="text-ink">现场运行</b>：在你的浏览器里执行 Attest 的真实代码</div><div><b className="text-ink">模拟 / 合成</b>：评审意见、负责人决定、代码仓库与毒药</div>
+          <div className="hidden gap-2 border-t border-rule pt-4 text-xs text-soft lg:grid">
+            <b className="text-ink">每处内容都标明它是什么</b>
+            {HONESTY.map(([k, , d]) => <div key={k} className="grid gap-0.5"><Status kind={k} /><span>{d}</span></div>)}
           </div>
+          <button onClick={() => openTerm("*")} className="hidden rounded-md border border-rule bg-sheet px-3 py-2 text-left text-sm font-medium text-pen hover:border-pen lg:block">术语与功能表<span className="block text-xs font-normal text-soft">带下划虚线的词都可以点开</span></button>
         </aside>
         <main id="main" className="grid min-w-0 content-start gap-8" data-view={view}>
+          <div className="flex justify-end lg:hidden"><button onClick={() => openTerm("*")} className="text-sm font-medium text-pen">术语与功能表</button></div>
           <Suspense fallback={<p className="text-soft">正在载入…</p>}><V go={go} /></Suspense>
           {i < VIEWS.length - 1 && <div className="border-t border-rule pt-4"><button onClick={() => go(VIEWS[i + 1][0])} className="text-sm font-medium text-pen">下一步：{VIEWS[i + 1][1]}</button></div>}
         </main>
       </div>
     </div>
+    <GlossaryDrawer />
     </>
   );
 }

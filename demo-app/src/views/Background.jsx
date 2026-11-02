@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Panel, Code, Tag } from "../ui";
+import { Panel, Code, Tag, Term } from "../ui";
 import { Status, Statuses } from "../ui";
 const RULES = [
   { k: "幂等", title: "同一个退款请求只能执行一次", story: "客户网络抖动，退款按钮点了两次，系统退了两次钱。", rule: "每笔动钱的操作都带一个唯一的请求编号（idempotency_key）；同一个编号再来一次，直接返回第一次的结果，不再退钱。",
@@ -15,7 +15,7 @@ export default function Background() {
     <div className="grid gap-6">
       <div className="grid gap-2">
         <h2 className="m-0 text-2xl font-black">业务背景：一家 SaaS 公司的计费系统</h2>
-        <p className="m-0 max-w-[68ch] text-soft">这家公司把老的计费系统迁移到新代码库 ledgerly，客服在里面处理退款、调账。AI 编程助手负责写这些功能，团队工程师做代码评审。公司、代码库和下面的事故都是为实验<b className="text-ink">合成</b>的业务情境，不是真实事故。</p>
+        <p className="m-0 max-w-[68ch] text-soft">这家公司把老的计费系统迁移到新代码库 ledgerly，客服在里面处理退款、调账。<Term id="agent">AI 编程助手</Term>负责写这些功能，团队工程师做<Term id="review">代码评审</Term>。公司、代码库和下面的事故都是为实验<b className="text-ink">合成</b>的业务情境，不是真实事故。</p>
       </div>
       <div className="grid gap-3 lg:grid-cols-3">
         {RULES.map((r, i) => (
@@ -27,9 +27,9 @@ export default function Background() {
       </div>
       <Panel title={`在代码里长什么样：${RULES[open].title}`} aside={<Status kind="sim" />}>
         <p className="m-0 mb-3 text-sm">{RULES[open].rule}</p><Code>{RULES[open].code}</Code>
-        <p className="m-0 mt-2 text-xs text-soft">代码为示意，根据演示运行中 AI 写出的最终代码简化。C4、C5、C6 是实验给这几条规矩的编号，隐藏测试会逐条检查。</p>
+        <p className="m-0 mt-2 text-xs text-soft">代码为示意，根据演示运行中 AI 写出的最终代码简化。C4、C5、C6 是实验给这几条规矩的编号，<Term id="tests">隐藏测试</Term>会逐条检查。</p>
       </Panel>
-      <Panel title="问题出在哪">
+      <Panel title="问题出在哪：为什么需要长期记忆">
         <p className="m-0 max-w-[70ch]">这些业务规则可能分散在代码、测试、历史评审和团队规范中。每次遇到新任务，AI 不一定能找到并正确复用过去的经验，评审只好一遍遍重复。Attest 要解决的，是把<b>经过验证的</b>经验沉淀下来，并在<b>合适的</b>任务中重新使用；同时不让未经验证或有害的"经验"混进来。</p>
       </Panel>
     </div>

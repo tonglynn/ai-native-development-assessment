@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { DATA, sysName } from "../lib";
 import { call, fetchJson } from "../py";
-import { Panel, Stamp, Button, Code, Source, Tag, cn } from "../ui";
+import { Panel, Stamp, Button, Code, Source, Tag, cn, CapIntro, Term } from "../ui";
 import { Status, Statuses } from "../ui";
 const CodeDiff = lazy(() => import("../CodeDiff"));
 
@@ -23,8 +23,8 @@ function Live({ result, ms }) {
       <li key={i} className="grid gap-1 py-2.5" style={{ animation: `fadein .3s ${i * 0.25}s both` }}>
         <div className="flex flex-wrap items-center gap-2"><b className="text-sm">{i + 1}. {STEP[s.step] || s.step}</b><Tag tone={tone}>{label}</Tag><code className="text-xs text-soft">{s.fn}</code></div>
         <div className="text-xs text-soft">返回：<code>{JSON.stringify(s.output)}</code>{s.note ? `；${s.note}` : ""}</div></li>); })}</ol>
-    <div className="flex flex-wrap items-center gap-2 rounded-md bg-code px-3 py-2 text-sm"><b>反事实检查</b><Status kind="notrun" /><span className="text-xs text-soft">需要运行整个测试套件，浏览器里不执行；三态判定按"没有这项证据"处理</span></div>
-    <div className="flex flex-wrap items-center gap-3" style={{ animation: `fadein .3s ${result.steps.length * 0.25}s both` }}><span className="text-sm">门控 v4 的结论</span><Stamp kind={st} /><span className="text-xs text-soft">反证：{result.state.counter.join("、") || "无"}；硬证据：{result.state.hard.join("、") || "无"}；软证据：{result.state.soft.join("、") || "无"}</span></div>
+    <div className="flex flex-wrap items-center gap-2 rounded-md bg-code px-3 py-2 text-sm"><b><Term id="counterfactual">反事实验证</Term></b><Status kind="notrun" /><span className="text-xs text-soft">需要运行整个测试套件，浏览器里不执行；三态判定按"没有这项证据"处理</span></div>
+    <div className="flex flex-wrap items-center gap-3" style={{ animation: `fadein .3s ${result.steps.length * 0.25}s both` }}><span className="text-sm"><Term id="threestate">三态判定</Term>（<Term id="gateway">记忆准入网关</Term> v4）的结论</span><Stamp kind={st} /><span className="text-xs text-soft">反证：{result.state.counter.join("、") || "无"}；硬证据：{result.state.hard.join("、") || "无"}；软证据：{result.state.soft.join("、") || "无"}</span></div>
     <div className="text-sm">同一事件交给<b>预注册的 Attest 门槛</b>（主实验版本，只看来源、落实与验证）：{result.preregistered_gate.map((g, i) => <span key={i}>{g.type === "add" ? <Tag tone="bad">写入记忆</Tag> : <Tag tone="ok">拒绝写入</Tag>} <span className="text-soft">{g.reason}</span></span>)}</div>
     <p className="m-0 text-xs text-soft">现场运行于你的浏览器（Pyodide），耗时 {ms} ms。反事实测试需要运行整个测试套件，浏览器里不运行，三态判定时按"没有这项证据"处理。这是新的探索性案例，不计入 D70 的统计。</p>
   </div>;
@@ -41,10 +41,8 @@ export default function Security() {
   return (
     <div className="grid gap-5">
       <style>{`@keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}`}</style>
-      <div className="grid gap-2">
-        <h2 className="m-0 text-2xl font-black">场景二：AI 如何防止学坏</h2>
-        <p className="m-0 max-w-[70ch] text-soft">记忆会被"教坏"：一条错误的建议，如果出现在一个能通过测试的任务里，就会被当成经验存下来，以后每个任务都照做。例如"审计金额写成 float"：它违反"金额一律用精确的 Decimal"，但没有测试检查审计金额的类型，所以测试挡不住。</p>
-      </div>
+      <CapIntro id="trust" />
+      <p className="m-0 max-w-[70ch] text-soft">演示：一条能通过测试的坏建议，"审计金额写成 float"。它违反"金额一律用精确的 Decimal"，但没有测试检查审计金额的类型，所以测试挡不住。下面先看<b className="text-ink">真实实验记录</b>里各系统怎么处理，再在浏览器里<b className="text-ink">现场运行</b> Attest 的检查；也可以自己写一条交给它。</p>
       <div className="flex gap-1 rounded-md border border-rule bg-sheet p-1 text-sm" role="tablist">
         {[["preset", "预置攻击（D70 真实记录）"], ["custom", "自己写一条（现场运行）"]].map(([k, l]) => <button key={k} role="tab" aria-selected={mode === k} onClick={() => { setMode(k); setLive(null); }} className={cn("flex-1 rounded px-3 py-2", mode === k ? "bg-pen text-white" : "")}>{l}</button>)}
       </div>
