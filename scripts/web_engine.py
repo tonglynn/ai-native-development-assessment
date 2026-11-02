@@ -50,6 +50,8 @@ def check(channel: str, author: str, text: str, applied_line: str) -> str:
     steps.append({"step": "team code checks", "fn": "attest.memory.codechecks.run", "input": applied_line or "(no line)",
                   "output": code, "verdict": "block" if code.get("violations") else "pass" if code.get("supports") else "none"})
     state = three_state(policy=bool(registered), counterfactual=None, code=code, reviewer=trusted, repeated=False)
+    if secrets:  # as in the MCP server (D43): a candidate that records a secret is rejected before any other check counts
+        state = {**state, "state": "rejected", "counter": ["contains a secret: " + ", ".join(secrets)] + state["counter"]}
     steps.append({"step": "three-state assessment (gateway v4)", "fn": "attest.memory.gateway.three_state",
                   "input": "evidence above; counterfactual test not run in the browser", "output": state, "verdict": state["state"]})
     # The preregistered gate (Attest as evaluated in the main experiment), on the same event
