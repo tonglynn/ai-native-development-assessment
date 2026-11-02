@@ -16,6 +16,8 @@ Scope: payments, refunds and account adjustments in the migration of a B2B SaaS 
 
 **Open the demo / 在线演示：** https://tonglynn.github.io/ai-native-development-assessment/ (interactive, runs the real Attest code in your browser; the opening page plays the 5-minute live-run video / 可交互，在浏览器里运行 Attest 真实代码；首页播放 5 分钟现场运行视频)
 
+**Defense slides / 答辩幻灯片：** [PDF](docs/slides/attest_defense_slides.pdf) · [PowerPoint](docs/slides/attest_defense_slides.pptx) (14 main slides, then an evidence index with core evidence B01–B14 and an extended appendix C01–C10 / 正文 14 页，其后为证据索引、核心证据 B01–B14 与扩展附录 C01–C10；the demo videos in the slides are the live-run video above / 幻灯片中的演示视频即上面的现场运行录屏)
+
 **Who and what.** A coding agent on a team's billing codebase (synthetic: payments, refunds, adjustments) keeps
 repeating mistakes that code review already corrected. Attest makes it **grow only from verified experience, and
 proves the growth on tasks it never learned from.** 编码智能体总在重犯评审已经纠正过的错误；Attest 让它只从验证过的经验中成长，并在没学过的新任务上证明这种成长。

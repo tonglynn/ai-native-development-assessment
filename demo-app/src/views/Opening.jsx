@@ -19,6 +19,7 @@ export default function Opening({ go }) {
         <track kind="subtitles" src="attest_mcp_live.vtt" srcLang="zh" label="中文 / English" />
       </video>
       <p className="m-0 -mt-4 text-xs text-soft">真实运行录屏：Claude 桌面应用通过 MCP 使用 Attest，两次会话共用一份团队记忆；等待部分已加速并标出倍速。仓库是合成的，评审意见和审批人是模拟的。</p>
+      <p className="m-0 -mt-4 text-sm">答辩幻灯片：<a className="text-pen underline" href="../slides/attest_defense_slides.pdf" target="_blank" rel="noopener">PDF</a> · <a className="text-pen underline" href="../slides/attest_defense_slides.pptx">PowerPoint</a>（正文 14 页 + 证据索引与附录；幻灯片中的演示视频即上方录屏）</p>
       <section className="grid gap-2">
         <h2 className="m-0 text-lg font-black">这个演示依次回答六个问题</h2>
         <ol className="m-0 grid gap-1 pl-5 text-sm">{Q.map(([q, v]) => <li key={q}><button onClick={() => go(v)} className="text-left hover:text-pen">{q}</button></li>)}</ol>
