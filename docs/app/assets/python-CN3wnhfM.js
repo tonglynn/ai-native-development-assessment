@@ -1,4 +1,4 @@
-import{m as o}from"./CodeDiff-Z37R_ZvS.js";import"./index-D8j4f2oW.js";/*!-----------------------------------------------------------------------------
+import{m as o}from"./CodeDiff-d2k_Hhve.js";import"./index-Dq62RtSr.js";/*!-----------------------------------------------------------------------------
  * Copyright (c) Microsoft Corporation. All rights reserved.
  * Version: 0.52.2(404545bded1df6ffa41ea0af4e8ddb219018c6c1)
  * Released under the MIT license

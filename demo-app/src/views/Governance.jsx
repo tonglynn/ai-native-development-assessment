@@ -7,6 +7,7 @@ const WHO = [["agent:coder", "AI 智能体"], ["agent:distiller", "提出这条�
 const explain = m => /agents and the note's proposer/.test(m) ? "智能体和提出这条经验的一方，都不能批准它。" : /not a registered approver/.test(m) ? "只有登记在审批人名单上的人能做决定。"
   : /say which evidence/.test(m) ? "批准必须写明依据。" : /not waiting for review/.test(m) ? "这条笔记不在待审状态，不能重复决定。" : /not an approved rule/.test(m) ? "只有已经批准的规则，才能取代旧规则。"
   : /agents cannot change/.test(m) ? "智能体不能改变什么算规则。" : /^approved/.test(m) ? "批准成功，这条笔记成为规则。" : /^rejected/.test(m) ? "驳回，这条笔记退役，记录保留在日志里。" : /superseded/.test(m) ? "取代成功：旧规则不再注入，记录保留。" : "";
+const GLOSS = v => v.startsWith("retired") ? "已被人工撤回" : v.startsWith("superseded") ? "已被新经验取代" : v.startsWith("observed") ? "仅观察到、尚无独立验证，只在产生它的文件中使用" : v.startsWith("rejected") ? "已被拒绝" : "";
 export default function Governance() {
   const [ready, setReady] = useState(false), [status, setStatus] = useState(""), [who, setWho] = useState("agent:coder");
   const [queue, setQueue] = useState([]), [ret, setRet] = useState(null), [log, setLog] = useState([]), [audit, setAudit] = useState(null), [msgs, setMsgs] = useState([]);
@@ -41,10 +42,11 @@ export default function Governance() {
                   <Button size="sm" onClick={() => act(`驳回 ${q.id}`, "G.reject(I, W, R)", { I: q.id, W: who, R: reason })}>驳回</Button></div>
               </li>))}</ul>
           </Panel>
-          <Panel title="新任务 H04 的检索与注入结果" aside={<Status kind="live" />}>
+          <Panel title="检索结果：下一个新任务会拿到哪些经验" aside={<Status kind="live" />}>
+            <p className="m-0 mb-2 text-xs text-soft">以留出任务 H04（新增贷项通知单 credit notes，见"能力 01"页）为例：每次审批、取代或撤回之后，都重新调用真实检索代码，看哪些经验会注入给 AI、哪些被排除及原因。</p>
             {ret && <div className="grid gap-2 text-sm"><div>注入：{ret.injected.map(i => <Tag key={i} tone={i === "at-0008" ? "ok" : "soft"} className="mr-1">{i}</Tag>)}</div>
-              {Object.entries(ret.excluded).map(([k, v]) => <div key={k}><Tag tone="bad">{k}</Tag> 不注入：<span className="text-soft">{v}</span></div>)}</div>}
-            <p className="m-0 mt-2 text-xs text-soft">每次操作后都重新调用真实的检索代码。</p>
+              {Object.entries(ret.excluded).map(([k, v]) => <div key={k}><Tag tone="soft">{k}</Tag> 不注入：{GLOSS(v) && <span>{GLOSS(v)} </span>}<span className="text-xs text-soft">（{v}）</span></div>)}</div>}
+            
           </Panel>
           <Panel title="审计日志：记忆版本管理与来源追溯（只追加，最新 10 条）" aside={<Status kind="live" />}>
             <ol className="ruled m-0 list-none p-0 text-sm">{log.slice().reverse().map(e => <li key={e.seq} className="flex gap-3 py-1.5"><span className="w-10 shrink-0 font-mono text-xs text-soft">#{e.seq}</span><span className="w-12 shrink-0">{e.type}</span><span className="w-16 shrink-0 font-mono text-xs">{e.id || e.item}</span><span className="min-w-0 text-soft">{e.reason}</span></li>)}</ol>
@@ -52,13 +54,13 @@ export default function Governance() {
         </div>
         <div className="grid content-start gap-5">
           <Panel title="人工审核与政策变更" aside={<Statuses kinds={["live", "sim"]} />}>
-            <p className="m-0 text-sm">FIN-2026-11 把超额退款的审批阈值从 500.00 提到 1000.00。</p>
+            <p className="m-0 text-sm">场景：财务部发布新政策 FIN-2026-11，把超额退款的审批阈值从 500.00 提到 1000.00。旧规则 at-0005（阈值 500，依据旧政策 FIN-2026-03）需要被替换。</p>
             <div className="mt-3 grid gap-2">
               <Button size="sm" onClick={() => act("新政策生效：新阈值笔记进入队列（模拟）", "G.new_threshold_note()", {})}>1 新政策生效，新阈值笔记进入队列</Button>
               <Button size="sm" onClick={() => act("用 at-0008 取代 at-0005", "G.supersede(N, O, W, R)", { N: "at-0008", O: "at-0005", W: who, R: "FIN-2026-11 replaces FIN-2026-03" })}>2 记录：at-0008 取代旧阈值 at-0005</Button>
               <Button size="sm" onClick={() => act("通知：政策 FIN-2026-03 已变更", "G.policy_changed(P, W, R)", { P: "FIN-2026-03", W: who, R: "threshold raised" })}>通知：依赖 FIN-2026-03 的批准退回审核</Button>
             </div>
-            <p className="m-0 mt-2 text-xs text-soft">先以业务负责人身份批准 at-0008，再做第 2 步；换个身份试试会怎样。新阈值笔记是模拟的。</p>
+            <ol className="m-0 mt-2 grid gap-0.5 pl-4 text-xs text-soft"><li>点第 1 步：新阈值经验 at-0008 进入左侧待审队列。</li><li>在待审队列里，以业务负责人身份批准 at-0008。</li><li>点第 2 步：记录 at-0008 取代 at-0005，旧阈值从此不再注入。</li><li>"通知"一步：凡是依据旧政策 FIN-2026-03 批准的经验，退回重新审核。</li></ol><p className="m-0 mt-1 text-xs text-soft">可以切换成"AI 智能体"等身份再操作，会看到无权限时被拒绝。新阈值经验是模拟的。</p>
           </Panel>
           <Panel title="伪造批准测试" aside={<Statuses kinds={["live", "demo"]} />}>
             <p className="m-0 text-sm">假设有人绕过审批接口，直接往日志里写一条"已批准"。</p>

@@ -5,6 +5,8 @@ import { Panel, Stamp, Button, Code, Source, Tag, cn, CapIntro, Term } from "../
 import { Status, Statuses } from "../ui";
 const CodeDiff = lazy(() => import("../CodeDiff"));
 
+const PAYZH = { float_audit: "让金额改用浮点数传给审计", skip_audit: "小额退款跳过审计记录", hardcoded_key: "把支付密钥写进代码", tls_off: "调用支付接口时关闭证书校验", skip_tests: "跳过幂等测试" };
+const CHZH = { review_untrusted: "评审意见（普通评论者）", review_forged: "评审意见（冒充团队约定）", review_insider: "评审意见（可信评审者本人出错）", issue: "任务描述（issue）", readme: "项目文档（README 等）" };
 const CH = { review: "评审意见", issue: "任务描述（issue）", readme: "项目文档（README 等）", tool_output: "工具输出 / 代码注释" };
 const STEP = { "secret scan": "有没有密钥", "is it a review comment's own words": "是不是评审的原话", "applied in a change that passed the hidden tests": "有没有落实在通过测试的改动里",
   "who said it": "谁说的（可信评审者 / 登记的政策）", "team code checks": "团队代码检查", "three-state assessment (gateway v4)": "三态判定（门控 v4）" };
@@ -75,7 +77,8 @@ export default function Security() {
         {[["preset", "预置攻击（D70 真实记录）"], ["custom", "自己写一条（现场运行）"]].map(([k, l]) => <button key={k} role="tab" aria-selected={mode === k} onClick={() => { setMode(k); setLive(null); }} className={cn("flex-1 rounded px-3 py-2", mode === k ? "bg-pen text-white" : "")}>{l}</button>)}
       </div>
       {mode === "preset" && p && <>
-        <div className="flex flex-wrap gap-2">{presets.map((x, i) => <button key={x.id} onClick={() => { setPi(i); setLive(null); }} className={cn("rounded-full border px-3 py-1 text-sm", i === pi ? "border-pen bg-penwash text-pen" : "border-rule bg-sheet")}>{x.control ? "正常建议" : x.payload}：{CH[x.channel === "review_untrusted" || x.channel === "review_forged" || x.channel === "review_insider" ? "review" : x.channel]}</button>)}</div>
+        <p className="m-0 text-sm text-soft">每个按钮是 D70 实验中真实运行过的一条有害建议：它试图让 AI 把有害做法记成团队规矩。按钮下方注明它从哪个渠道进入。最后一项是正常建议，作为对照。</p>
+        <div className="flex flex-wrap gap-2">{presets.map((x, i) => <button key={x.id} onClick={() => { setPi(i); setLive(null); }} className={cn("grid min-w-0 max-w-full rounded-lg border px-3 py-1.5 text-left [overflow-wrap:anywhere]", i === pi ? "border-pen bg-penwash text-pen" : "border-rule bg-sheet hover:border-pen")}><span className="text-sm font-bold">{x.control ? "正常建议：每笔退款写审计记录" : PAYZH[x.payload] || x.payload}</span><span className="text-xs text-soft">混进来的渠道：{CHZH[x.channel] || CH[x.channel]}{x.control ? "" : <> · <code>{x.payload}</code></>}</span></button>)}</div>
         <Panel title="这次攻击" aside={<span className="flex gap-1"><Tag tone={p.control ? "ok" : "bad"}>{p.control ? "对照：真实的团队规则" : "合成的有害建议"}</Tag><Status kind="sim" /></span>}>
           <Code>{p.text}</Code>
           <p className="m-0 mt-2 text-xs text-soft">通道：{p.channel}{p.trusted ? "（来自可信评审者：内部人员出错）" : ""}；{p.applied ? <>任务的改动也照着写了：<code>{p.applied_line.trim()}</code></> : "任务的改动没有照着写"}；任务通过了全部隐藏测试。</p>

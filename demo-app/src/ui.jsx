@@ -14,12 +14,12 @@ const button = cva("inline-flex items-center gap-2 rounded-md text-sm font-mediu
 });
 export const Button = ({ tone, size, className, ...p }) => <button className={cn(button({ tone, size }), className)} {...p} />;
 
-const STAMP = { approved: ["text-ok", "批准"], uncertain: ["text-hold", "待人工"], rejected: ["text-bad", "拒绝"], rule: ["text-bad", "存为规则"],
-  none: ["text-ok", "未写入"], pass: ["text-ok", "通过"], fail: ["text-bad", "未通过"], refused: ["text-bad", "拒绝"], done: ["text-ok", "完成"],
+const STAMP = { approved: ["text-ok", "批准"], uncertain: ["text-hold", "待人工"], rejected: ["text-bad", "拒绝"], rule: ["text-pen", "存为规则"],
+  none: ["text-soft", "未写入"], pass: ["text-ok", "通过"], fail: ["text-bad", "未通过"], refused: ["text-bad", "拒绝"], done: ["text-ok", "完成"],
   superseded: ["text-soft", "已取代"], retired: ["text-soft", "已撤回"] };
 export function Stamp({ kind, label, className }) {
   const [c, t] = STAMP[kind] || ["text-soft", kind];
-  const icon = { approved: "✓", pass: "✓", none: "✓", done: "✓", rejected: "✕", fail: "✕", refused: "✕", rule: "!", uncertain: "‖", superseded: "↻", retired: "–" }[kind] || "•";
+  const icon = { approved: "✓", pass: "✓", none: "○", done: "✓", rejected: "✕", fail: "✕", refused: "✕", rule: "●", uncertain: "‖", superseded: "↻", retired: "–" }[kind] || "•";
   return <span className={cn("stamp text-xs", c, className)}><span aria-hidden="true" className="stamp-i">{icon}</span>{label || t}</span>;
 }
 export const Tag = ({ tone = "pen", children, className }) => {
@@ -27,7 +27,7 @@ export const Tag = ({ tone = "pen", children, className }) => {
   return <span className={cn("rounded px-1.5 py-0.5 text-xs font-medium font-mono", m[tone], className)}>{children}</span>;
 };
 export const Panel = ({ title, aside, children, className }) => (
-  <section className={cn("rounded-lg border border-rule bg-sheet", className)}>
+  <section className={cn("min-w-0 rounded-lg border border-rule bg-sheet", className)}>
     {title && <header className="flex flex-wrap items-center justify-between gap-2 rounded-t-lg border-b border-rule bg-[color-mix(in_srgb,var(--code)_60%,var(--sheet))] px-4 py-2.5"><h3 className="m-0 text-[15px] font-bold">{title}</h3>{aside}</header>}
     <div className="min-w-0 p-4">{children}</div>
   </section>
@@ -53,10 +53,10 @@ export function Drawer({ open, onOpenChange, title, children }) {
   );
 }
 
-const STATUS = { replay: ["真实实验回放", "bg-penwash text-pen"], record: ["真实实验记录", "bg-penwash text-pen"], live: ["浏览器现场运行", "bg-okwash text-ok"],
-  notrun: ["未现场执行 · 依据不足", "bg-holdwash text-hold"], demo: ["演示身份", "bg-holdwash text-hold"], sim: ["模拟 / 合成", "bg-code text-soft"], baseline: ["对照基线", "bg-code text-soft"],
-  pre: ["预先计算", "bg-code text-ink"], notimpl: ["尚未实现", "bg-badwash text-bad"] };
-export const Status = ({ kind }) => { const [t, c] = STATUS[kind]; return <span className={cn("whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium", c)}>{t}</span>; };
+const STATUS = { replay: ["真实实验回放", "text-pen"], record: ["真实实验记录", "text-pen"], live: ["浏览器现场运行", "text-pen"],
+  notrun: ["未现场执行 · 依据不足", "text-soft"], demo: ["演示身份", "text-soft"], sim: ["模拟 / 合成", "text-soft"], baseline: ["对照基线", "text-soft"],
+  pre: ["预先计算", "text-soft"], notimpl: ["尚未实现", "text-soft"] };
+export const Status = ({ kind }) => { const [t, c] = STATUS[kind]; return <span className={cn("w-fit whitespace-nowrap rounded-full border border-rule bg-sheet px-2 py-0.5 text-[11px] font-medium", c)}>{t}</span>; };
 export const Statuses = ({ kinds }) => <span className="flex flex-wrap gap-1">{kinds.map(k => <Status key={k} kind={k} />)}</span>;
 
 // ---- plain-language layers (glossary.js): a term opens a drawer with what / why / how-it-is-built
