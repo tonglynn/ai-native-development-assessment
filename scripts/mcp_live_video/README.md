@@ -1,0 +1,3 @@
+# MCP live-run video (docs/attest_mcp_live.mp4)
+
+Built from two screen recordings of the Claude desktop app on Windows using the Attest MCP server, plus the step-6 recall clip and a PowerShell screenshot (`ps_crop.png`). The recordings are not committed (they are the user's screen captures). `plan.py` lists every cut: source, time span, speed and the bilingual narration; `build.py render compose` draws the side panel and cards with Playwright and joins the cuts with ffmpeg. Step 6 approval and retraction were run by a person and not screen-recorded; the video shows the raw events from the memory log (`memory.db` events 10–15) instead. Session 2 started with the memory of session 1 (not reset), which the video states.
