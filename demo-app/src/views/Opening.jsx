@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { Button, CapMap, Term } from "../ui";
+import { CapMap, Term } from "../ui";
 const CH = [["能力 01 · 经验学习与准入", 10], ["能力 02 · 风险拦截", 70], ["待人工判定", 134], ["新任务复用经验", 150], ["能力 03 · 人工治理", 165], ["会话二 · 跨会话复用", 215], ["结果小结", 295]];
 const Q = [
   ["为什么 AI 编程助手需要长期记忆？", "background"],
@@ -32,7 +32,6 @@ export default function Opening({ go }) {
         <ol className="m-0 grid gap-1 pl-5 text-sm">{Q.map(([q, v]) => <li key={q}><button onClick={() => go(v)} className="text-left hover:text-pen">{q}</button></li>)}</ol>
         <p className="m-0 text-sm text-soft">每处都标着它是<b className="text-ink">浏览器现场运行</b>、<b className="text-ink">真实实验回放</b>、<b className="text-ink">预先计算</b>、<b className="text-ink">演示身份</b>还是<b className="text-ink">模拟</b>；带下划虚线的词可以点开，看一句话解释、为什么需要和具体实现。</p>
       </section>
-      <div className="flex flex-wrap gap-3"><Button tone="primary" onClick={() => go("background")}>先看业务背景</Button><Button onClick={() => go("how")}>直接看工作原理</Button></div>
     </div>
   );
 }
