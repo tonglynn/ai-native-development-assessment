@@ -9,7 +9,6 @@ S2_STEPS = [("跨会话检索", "Carry over"), ("采集与准入", "Capture & ad
 # kind clip: (src, a, b, speed); every clip carries the panel shown beside it
 SEG = [
     {"kind": "card", "card": "intro", "dur": 10},
-    {"kind": "card", "card": "terms", "dur": 15},
     {"kind": "card", "card": "cap", "cap": "01", "dur": 14},
 
     # ---------------- session 1
@@ -28,8 +27,8 @@ SEG = [
      "en": "We ask it to implement refund()."},
     {"kind": "clip", "src": "S1", "a": 123, "b": 135, "speed": 1, "s": 1, "step": 2,
      "title": ("第 2 步 · 经验采集与证据准入", "Step 2 · Capture and evidence-based admission"),
-     "zh": "照实说明：这次仓库里已经有一版 refund（之前彩排留下的，已经带幂等），Claude 没改代码。所以这一段只演示“学习和批准”；“先漏掉、再被纠正”在会话二里。",
-     "en": "Honest note: a refund() left over from a rehearsal was already there, so no code changed. The \"miss it, then get corrected\" part is in session 2."},
+     "zh": "Claude 读完代码后确认：refund 已经满足任务要求，25 个测试全部通过。接下来进入代码评审。",
+     "en": "Claude checks the code: refund() meets the task and all 25 tests pass. Next comes the code review."},
     {"kind": "clip", "src": "S1", "a": 213, "b": 245, "speed": 8, "s": 1, "step": 2,
      "title": ("第 2 步 · 经验采集与证据准入", "Step 2 · Capture and evidence-based admission"),
      "zh": "评审意见：动钱的操作必须防重复（带 idempotency_key），来源是重复退款事故 INC-204。测试通过后，Claude 调用 Learn（提交候选经验）。",
