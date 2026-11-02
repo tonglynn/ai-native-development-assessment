@@ -50,6 +50,8 @@ def check(channel: str, author: str, text: str, applied_line: str) -> str:
     steps.append({"step": "team code checks", "fn": "attest.memory.codechecks.run", "input": applied_line or "(no line)",
                   "output": code, "verdict": "block" if code.get("violations") else "pass" if code.get("supports") else "none"})
     state = three_state(policy=bool(registered), counterfactual=None, code=code, reviewer=trusted, repeated=False)
+    by_id = {ck.id: ck for ck in codechecks.CHECKS}
+    state["violated"] = [{"id": v, "rule": by_id[v].rule, "line": applied_line.strip()} for v in code.get("violations") or [] if v in by_id]
     if secrets:  # as in the MCP server (D43): a candidate that records a secret is rejected before any other check counts
         state = {**state, "state": "rejected", "counter": ["contains a secret: " + ", ".join(secrets)] + state["counter"]}
     steps.append({"step": "three-state assessment (gateway v4)", "fn": "attest.memory.gateway.three_state",

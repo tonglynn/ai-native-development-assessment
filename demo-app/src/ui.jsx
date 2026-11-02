@@ -19,7 +19,8 @@ const STAMP = { approved: ["text-ok", "批准"], uncertain: ["text-hold", "待�
   superseded: ["text-soft", "已取代"], retired: ["text-soft", "已撤回"] };
 export function Stamp({ kind, label, className }) {
   const [c, t] = STAMP[kind] || ["text-soft", kind];
-  return <span className={cn("stamp text-xs", c, className)}>{label || t}</span>;
+  const icon = { approved: "✓", pass: "✓", none: "✓", done: "✓", rejected: "✕", fail: "✕", refused: "✕", rule: "!", uncertain: "‖", superseded: "↻", retired: "–" }[kind] || "•";
+  return <span className={cn("stamp text-xs", c, className)}><span aria-hidden="true" className="stamp-i">{icon}</span>{label || t}</span>;
 }
 export const Tag = ({ tone = "pen", children, className }) => {
   const m = { pen: "bg-penwash text-pen", ok: "bg-okwash text-ok", hold: "bg-holdwash text-hold", bad: "bg-badwash text-bad", soft: "bg-code text-soft" };
