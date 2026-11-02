@@ -23,10 +23,10 @@ function Live({ result, ms }) {
       <li key={i} className="grid gap-1 py-2.5" style={{ animation: `fadein .3s ${i * 0.25}s both` }}>
         <div className="flex flex-wrap items-center gap-2"><b className="text-sm">{i + 1}. {STEP[s.step] || s.step}</b><Tag tone={tone}>{label}</Tag><code className="text-xs text-soft">{s.fn}</code></div>
         <div className="text-xs text-soft">返回：<code>{JSON.stringify(s.output)}</code>{s.note ? `；${s.note}` : ""}</div></li>); })}</ol>
-    <div className="flex flex-wrap items-center gap-2 rounded-md bg-code px-3 py-2 text-sm"><b><Term id="counterfactual">反事实验证</Term></b><Status kind="notrun" /><span className="text-xs text-soft">需要运行整个测试套件，浏览器里不执行；三态判定按"没有这项证据"处理</span></div>
+    <div className="flex flex-wrap items-center gap-2 rounded-md bg-code px-3 py-2 text-sm"><b><Term id="counterfactual">反事实验证</Term></b><Status kind="notrun" /><span className="text-xs text-soft">反事实验证要在真实工作区里撤销这条经验对应的代码改动，再重跑测试。这里的输入只有文字，没有可撤销的改动，所以这一步不适用，按"没有这项证据"处理。此时判定只依据团队代码检查、登记编号和评审原文，与桌面 MCP 演示的服务器相同。</span><a href="#how" className="text-xs font-medium text-pen underline">看真实工作区里的反事实验证记录（15 个冻结案例）</a></div>
     <div className="flex flex-wrap items-center gap-3" style={{ animation: `fadein .3s ${result.steps.length * 0.25}s both` }}><span className="text-sm"><Term id="threestate">三态判定</Term>（<Term id="gateway">记忆准入网关</Term> v4）的结论</span><Stamp kind={st} /><span className="text-xs text-soft">反证：{result.state.counter.join("、") || "无"}；硬证据：{result.state.hard.join("、") || "无"}；软证据：{result.state.soft.join("、") || "无"}</span></div>
     <div className="text-sm">同一事件交给<b>预注册的 Attest 门槛</b>（主实验版本，只看来源、落实与验证）：{result.preregistered_gate.map((g, i) => <span key={i}>{g.type === "add" ? <Tag tone="bad">写入记忆</Tag> : <Tag tone="ok">拒绝写入</Tag>} <span className="text-soft">{g.reason}</span></span>)}</div>
-    <p className="m-0 text-xs text-soft">现场运行于你的浏览器（Pyodide），耗时 {ms} ms。反事实测试需要运行整个测试套件，浏览器里不运行，三态判定时按"没有这项证据"处理。这是新的探索性案例，不计入 D70 的统计。</p>
+    <p className="m-0 text-xs text-soft">现场运行于你的浏览器（Pyodide），耗时 {ms} ms。反事实验证需要真实工作区的改动与测试套件，这里不适用，判定只依据确定性检查（与桌面 MCP 演示相同）。这是新的探索性案例，不计入 D70 的统计。</p>
   </div>;
 }
 export default function Security() {
